@@ -1,0 +1,3549 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>DegustAPP by EB</title>
+
+  <style>
+/* =========================
+   CSS
+   ========================= */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bordeaux:#7a2938;
+  --bordeaux-light:#9d3d4f;
+  --crema:#f5f0e8;
+  --grigio:#4a4a4a;
+  --grigio-light:#e0e0e0;
+  --rosso:#c84343;
+}
+
+body{
+  font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;
+  background:var(--crema);
+  color:var(--grigio);
+  height:100vh;
+  overflow:hidden;
+}
+
+/* Menu top (scroll orizzontale) */
+.menu-bar{
+  background:var(--bordeaux);
+  color:#fff;
+  padding:0 10px;
+  height:54px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  box-shadow:0 2px 5px rgba(0,0,0,.2);
+  z-index:100;
+  user-select:none;
+  -webkit-user-select:none;
+
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+}
+.menu-left{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex:0 0 auto;
+}
+.menu-actions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  flex:0 0 auto;
+}
+.menu-btn{
+  flex:0 0 auto;
+  padding:10px 14px;
+  background:rgba(255,255,255,.15);
+  border:none;
+  border-radius:6px;
+  color:#fff;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:800;
+  transition:all .15s;
+  white-space:nowrap;
+}
+.menu-btn:active{background:var(--bordeaux-light);transform:scale(.98)}
+.menu-btn.active{background:#fff;color:var(--bordeaux)}
+.app-title{
+  margin-left:auto;
+  font-size:13px;
+  opacity:.92;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:45vw;
+  text-align:right;
+  font-weight:900;
+  flex:1 1 auto;
+}
+
+/* Zen mode */
+body.zen .menu-bar{display:none}
+body.zen .container{height:100vh;padding:8px}
+body.zen #page-degustazione .header{display:none}
+body.zen #page-degustazione .detail-header{display:none}
+.zen-bar{
+  position:fixed;
+  top:8px;
+  right:8px;
+  z-index:250;
+  display:none;
+  gap:8px;
+}
+body.zen .zen-bar{display:flex}
+
+/* Layout pagine */
+.container{
+  display:flex;
+  flex-direction:column;
+  height:calc(100vh - 54px);
+  padding:10px;
+  gap:10px;
+  overflow:hidden;
+}
+.page{display:none;height:100%;overflow:hidden}
+.page.active{display:block}
+.panel{display:flex;flex-direction:column;height:100%;gap:10px;overflow:hidden}
+
+.header{
+  background:var(--bordeaux);
+  color:#fff;
+  padding:10px 14px;
+  border-radius:10px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  height:54px;
+  flex:0 0 auto;
+  gap:10px;
+}
+.header h1{font-size:16px;font-weight:950;line-height:1.05}
+.header-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pill{
+  background:rgba(255,255,255,.18);
+  padding:6px 10px;
+  border-radius:8px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+  font-weight:900;
+}
+.card{
+  background:#fff;
+  border-radius:10px;
+  padding:12px;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+.muted{color:#777;font-size:13px}
+
+.btn,.filter-btn,.sort-btn{
+  padding:7px 12px;
+  border:1px solid var(--grigio-light);
+  background:#fff;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:950;
+  transition:all .15s;
+  user-select:none;
+  -webkit-user-select:none;
+  white-space:nowrap;
+}
+.btn.primary{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+.btn.primary:active{background:var(--bordeaux-light)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.filter-btn.active,.sort-btn.active{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+
+.banner{
+  background:rgba(122,41,56,.08);
+  border:1px solid rgba(122,41,56,.25);
+  color:var(--bordeaux);
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:13px;
+  font-weight:950;
+}
+
+/* Sezioni degustazione */
+.grid-section{height:48%;flex:0 0 auto;display:flex;flex-direction:column;overflow:hidden}
+.detail-section{height:42%;flex:0 0 auto;display:flex;flex-direction:column;overflow:hidden}
+
+@media (orientation:portrait){
+  .grid-section{height:33%}
+  .detail-section{height:67%}
+}
+
+.grid-controls{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:10px;
+  flex:0 0 auto;
+}
+
+/* Strip prodotti (cieca) */
+.products-strip{
+  display:none;
+  gap:8px;
+  align-items:center;
+  overflow-x:auto;
+  overflow-y:hidden;
+  white-space:nowrap;
+  padding:6px 2px 10px 2px;
+  border-bottom:1px dashed rgba(122,41,56,.25);
+  margin-bottom:6px;
+}
+.products-strip.active{display:flex}
+.pchip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:7px 12px;
+  border-radius:999px;
+  background:rgba(122,41,56,.07);
+  border:1px solid rgba(122,41,56,.2);
+  color:var(--bordeaux);
+  font-weight:950;
+  font-size:13px;
+  cursor:grab;
+  user-select:none;
+  -webkit-user-select:none;
+}
+.pchip.assigned{opacity:.35;cursor:not-allowed}
+
+/* Griglia campioni */
+.samples-grid{
+  display:grid;
+  grid-template-columns:repeat(6, minmax(0, 1fr));
+  gap:8px;
+  flex:1;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding-right:2px;
+  max-width:100%;
+}
+@media (orientation:portrait){
+  .samples-grid{grid-template-columns:repeat(4, minmax(0, 1fr))}
+}
+
+.sample-card{
+  border:2px solid var(--grigio-light);
+  border-radius:12px;
+  padding:9px;
+  cursor:pointer;
+  transition:all .12s;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-height:126px;
+  justify-content:space-between;
+  user-select:none;
+  -webkit-user-select:none;
+  background:#fff;
+  min-width:0;
+}
+.sample-card.selected{
+  border-color:var(--bordeaux);
+  border-width:3px;
+  background:rgba(122,41,56,.05);
+}
+.sample-card.dragging{opacity:.25}
+.sample-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;min-width:0}
+.sample-id-col{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.sample-id{font-size:20px;font-weight:950;color:var(--bordeaux);line-height:1}
+
+/* Cuore: grande e rosso quando selezionato */
+.fav-heart{
+  font-size:28px;
+  line-height:1;
+  width:32px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:8px;
+  color:#d6d6d6;
+  cursor:pointer;
+  user-select:none;
+}
+.fav-heart.on{color:#ff0000}
+.fav-heart.disabled{opacity:.55;pointer-events:none}
+
+.sample-meta{flex:1;min-width:0}
+.sample-lines{display:flex;flex-direction:column;gap:2px}
+.sample-line{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.15;overflow-wrap:anywhere;word-break:break-word;}
+.sample-line.first{font-size:12.5px;font-weight:950;color:var(--grigio)}
+.sample-line.other{font-size:11.5px;color:#666}
+
+/* Chip: profilo sempre leggibile (nero su trasparenza) */
+.chips-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:3px 10px;
+  border-radius:999px;
+  font-size:11.5px;
+  font-weight:950;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.chip.profile{
+  color:#000;
+  background:rgba(0,0,0,.06);
+  border:1px solid rgba(0,0,0,.12);
+}
+.chip.group{color:#fff;background:var(--bordeaux)}
+.assigned-tag{
+  font-size:11.5px;
+  font-weight:950;
+  color:#fff;
+  background:var(--bordeaux);
+  border-radius:999px;
+  padding:3px 10px;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* Evoluzione */
+.evo-row{display:flex;align-items:center;justify-content:flex-start;gap:8px}
+.evo-label{font-size:11px;font-weight:950;color:#666}
+.dots{display:flex;gap:4px;justify-content:flex-start}
+.dot{
+  width:10px;height:10px;border-radius:50%;
+  background:var(--grigio-light);
+  border:1px solid #9a9a9a;
+}
+.dot.on{background:var(--bordeaux);border-color:var(--bordeaux)}
+.dot.disabled{opacity:.55;pointer-events:none}
+
+.progress{width:100%;height:5px;background:var(--grigio-light);border-radius:4px;overflow:hidden}
+.progress>div{height:100%;background:var(--bordeaux)}
+
+/* Dettaglio */
+.detail-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:10px;
+  padding-bottom:8px;
+  border-bottom:2px solid var(--grigio-light);
+  flex:0 0 auto;
+  gap:10px;
+}
+.detail-title{display:flex;align-items:center;gap:12px;min-width:0}
+.detail-id{font-size:26px;font-weight:950;color:var(--bordeaux)}
+.detail-info{min-width:0}
+.detail-info h2{
+  font-size:15px;
+  margin-bottom:3px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.detail-info p{
+  font-size:12px;
+  color:#888;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.nav-buttons{display:flex;gap:8px}
+
+.fiche-content{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  flex:1;
+  overflow:hidden;
+}
+@media (orientation:portrait){
+  .fiche-content{grid-template-columns:1fr;grid-template-rows:1.05fr .95fr}
+}
+.params-column{display:flex;flex-direction:column;gap:10px;overflow:auto;padding-right:2px}
+.notes-column{display:flex;flex-direction:column;overflow:hidden}
+
+.fiche-box{background:var(--crema);padding:10px;border-radius:12px}
+.fiche-box h3{
+  font-size:12px;
+  margin-bottom:8px;
+  color:var(--bordeaux);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-weight:950;
+}
+
+/* Profilo: sempre leggibile (nero), sfondo trasparente del colore */
+.profile-options{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.profile-option{
+  padding:9px;
+  border:2px solid var(--grigio-light);
+  border-radius:11px;
+  cursor:pointer;
+  text-align:center;
+  font-size:12px;
+  font-weight:950;
+  transition:all .12s;
+  user-select:none;
+
+  --pcol:#777;
+  background:rgba(0,0,0,.04);
+  color:#000;
+}
+.profile-option[data-hascolor="1"]{
+  background:rgba(var(--pcol-r), var(--pcol-g), var(--pcol-b), 0.18);
+  border-color:rgba(0,0,0,.12);
+}
+.profile-option.selected{
+  border-width:3px;
+  border-color:var(--bordeaux);
+  background:rgba(var(--pcol-r), var(--pcol-g), var(--pcol-b), 0.35);
+  color:#000;
+}
+
+/* Gruppi */
+.group-options{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.group-option{
+  padding:9px;
+  border:2px solid var(--grigio-light);
+  border-radius:11px;
+  background:#fff;
+  cursor:pointer;
+  text-align:left;
+  font-size:12px;
+  font-weight:950;
+  transition:all .12s;
+  user-select:none;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+.group-option.selected{border-color:var(--bordeaux);border-width:3px}
+.group-swatch{
+  width:14px;height:14px;border-radius:5px;
+  border:1px solid rgba(0,0,0,.15);
+  flex:0 0 auto;
+}
+
+/* Descrittori */
+.desc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:860px){.desc-grid{grid-template-columns:1fr}}
+.desc-col-title{font-size:11px;font-weight:950;color:#666;margin-bottom:6px}
+.desc-list{display:flex;flex-wrap:wrap;gap:6px}
+.desc-pill{
+  padding:6px 10px;
+  border-radius:999px;
+  border:2px solid var(--grigio-light);
+  background:#fff;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:950;
+  user-select:none;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.desc-pill.selected{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+
+/* Slider */
+.slider-group{margin-bottom:10px}
+.slider-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;color:var(--grigio);font-weight:900}
+.slider{
+  width:100%;
+  height:6px;
+  border-radius:4px;
+  background:var(--grigio-light);
+  outline:none;
+  -webkit-appearance:none;
+}
+.slider::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:15px;height:15px;border-radius:50%;
+  background:var(--bordeaux);
+  cursor:pointer;
+}
+
+/* Canvas */
+.canvas-section{background:var(--crema);padding:10px;border-radius:12px;flex:1;display:flex;flex-direction:column;overflow:hidden}
+.canvas-tools{display:flex;gap:8px;align-items:center;flex-wrap:nowrap}
+.tool-btn{padding:6px 10px;background:#fff;border:1px solid var(--grigio-light);border-radius:9px;cursor:pointer;font-size:12px;font-weight:950}
+.tool-btn.active{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+.canvas-container{
+  flex:1;
+  background:#fff;
+  border:2px solid var(--grigio-light);
+  border-radius:12px;
+  position:relative;
+  overflow:hidden;
+}
+.canvas-lines-bg{
+  position:absolute;inset:0;
+  background-image:repeating-linear-gradient(transparent,transparent 24px,var(--grigio-light) 24px,var(--grigio-light) 25px);
+  pointer-events:none;
+  z-index:1;
+}
+#drawingCanvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair;z-index:2}
+
+/* Filtri overlay */
+.filters-overlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  z-index:180;
+}
+.filters-overlay.active{display:block}
+.filters-panel{
+  position:fixed;
+  top:10px;
+  right:10px;
+  width:min(420px, calc(100vw - 20px));
+  max-height:calc(100vh - 20px);
+  background:#fff;
+  border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+  z-index:200;
+  display:none;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.filters-panel.active{display:block}
+.filters-head{
+  position:sticky;
+  top:0;
+  background:#fff;
+  padding:12px;
+  border-bottom:1px solid var(--grigio-light);
+  border-top-left-radius:14px;
+  border-top-right-radius:14px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  z-index:1;
+}
+.filters-title{font-size:14px;font-weight:950;color:var(--bordeaux)}
+.filters-body{padding:12px;display:flex;flex-direction:column;gap:12px}
+.help{font-size:12px;color:#666;line-height:1.35}
+.pill2{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  background:rgba(122,41,56,.07);
+  border:1px solid rgba(122,41,56,.18);
+  color:var(--bordeaux);
+  font-weight:950;
+  font-size:12px;
+}
+
+/* Tabelle / pagine */
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{
+  padding:8px 12px;
+  border-radius:10px;
+  border:1px solid var(--grigio-light);
+  background:#fff;
+  color:var(--grigio);
+  cursor:pointer;
+  font-size:13px;
+  font-weight:900;
+  user-select:none;
+  word-wrap:break-word;
+  overflow-wrap:break-word;
+  white-space:normal;
+}
+.tab.active{background:var(--bordeaux);border-color:var(--bordeaux);color:#fff}
+
+.content-scroll{height:100%;overflow:auto;padding-right:2px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:860px){.grid-2{grid-template-columns:1fr}}
+
+.form-group{margin-bottom:12px}
+.form-group label{display:block;margin-bottom:6px;font-size:12px;font-weight:950;color:var(--grigio)}
+.input,.textarea,.select{
+  width:100%;
+  padding:10px;
+  border:1px solid var(--grigio-light);
+  border-radius:12px;
+  font-family:inherit;
+  font-size:14px;
+}
+.textarea{min-height:110px;resize:vertical}
+
+#tasterSelect{
+  background:#fff !important;
+  color:#000 !important;
+  border-color:rgba(255,255,255,.5) !important;
+}
+#tasterSelect option{color:#000 !important;background:#fff !important}
+
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{padding:10px;border-bottom:1px solid var(--grigio-light);text-align:left;font-size:13px;vertical-align:top}
+th{background:var(--bordeaux);color:#fff;position:sticky;top:0}
+tr:hover td{background:rgba(245,240,232,.7)}
+
+.row-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.list-card{border:2px solid var(--grigio-light);background:#fff;border-radius:12px;padding:12px;margin-bottom:10px}
+.list-card h3{color:var(--bordeaux);font-size:16px;margin-bottom:6px;font-weight:950}
+.list-card .meta{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:#555;margin-bottom:10px}
+
+.checkbox-list{max-height:240px;overflow:auto;border:1px solid var(--grigio-light);border-radius:12px;padding:10px;background:#fff}
+.checkbox-list label{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;font-size:13px;cursor:pointer}
+
+/* Draft table excel-like */
+.draft-wrap{
+  border:1px solid var(--grigio-light);
+  border-radius:12px;
+  overflow:hidden;
+}
+.draft-scroll{
+  overflow:auto;
+  max-width:100%;
+}
+.draft-scroll table{margin:0;min-width:860px} /* evita compressione e resta dentro ai margini */
+.draft-input{
+  width:100%;
+  padding:7px 8px;
+  border:1px solid var(--grigio-light);
+  border-radius:10px;
+  font-size:13px;
+}
+.draft-cell{min-width:140px}
+.draft-cell.id{min-width:90px}
+.col-shiftbar{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+  margin:8px 0 10px 0;
+}
+.col-drag{
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px dashed rgba(0,0,0,.25);
+  background:rgba(0,0,0,.04);
+  cursor:grab;
+  font-weight:950;
+  font-size:12px;
+  user-select:none;
+}
+
+.toast{
+  position:fixed;
+  bottom:14px;
+  left:50%;
+  transform:translateX(-50%);
+  background:#222;
+  color:#fff;
+  padding:10px 14px;
+  border-radius:12px;
+  display:none;
+  z-index:400;
+  font-size:13px;
+}
+.toast.show{display:block}
+
+.sep-row td{padding:6px;border:none;background:transparent}
+
+
+
+/* =========================
+   Splash screen (solo al lancio)
+   ========================= */
+#splashScreen{
+  position:fixed;
+  inset:0;
+  background:var(--bordeaux);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:9999;
+  font-size:28px;
+  font-weight:950;
+  letter-spacing:.6px;
+}
+#splashScreen.hide{
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .25s ease;
+}
+
+/* Preparazione: non distinguere Bozze/Attive */
+#page-preparazione .tabs{display:none}
+
+
+/* =========================
+   HTML BODY
+   ========================= */
+  </style>
+</head>
+
+<body>
+  <!-- Splash screen: visibile solo 1s al lancio -->
+  <div id="splashScreen">DegustAPP</div>
+  <!-- Zen quick bar -->
+  <div id="zenBar" class="zen-bar">
+    <button class="btn primary" onclick="toggleFiltersPanel()">Filtri</button>
+    <button class="btn" onclick="toggleZen(false)">Esci ZEN</button>
+  </div>
+
+  <!-- Top bar -->
+  <div class="menu-bar">
+    <div class="menu-left">
+      <button id="btnMenuDeg" class="menu-btn" onclick="go('degustazione', this)">Degustazione</button>
+      <button id="btnMenuPrep" class="menu-btn active" onclick="go('preparazione', this)">Preparazione</button>
+      <button id="btnMenuAna" class="menu-btn" onclick="go('anagrafiche', this)">Anagrafiche</button>
+      <button id="btnMenuArc" class="menu-btn" onclick="go('archivio', this)">Archivio</button>
+      <button id="btnMenuRes" class="menu-btn" onclick="go('risultati', this)">Confronto</button>
+    </div>
+
+    <div class="app-title">DegustAPP by EB</div>
+
+    <div class="menu-actions">
+      <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
+      <button id="btnTopFilters" class="menu-btn action" style="font-weight:950" onclick="toggleFiltersPanel()">Filtri</button>
+      <button id="btnTopZen" class="menu-btn action" style="font-weight:950" onclick="toggleZen()">ZEN</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- DEGUSTAZIONE -->
+    <div id="page-degustazione" class="page">
+      <div class="panel">
+        <div class="header">
+          <div>
+            <h1 id="headerTitle">Degustazione: seleziona o crea in Preparazione</h1>
+            <div id="readonlyBanner" class="banner" style="display:none;margin-top:6px;">
+              Degustazione archiviata: modalità sola lettura.
+            </div>
+          </div>
+
+          <div class="header-right">
+            <div class="pill">
+              <select id="tasterSelect" class="select" style="padding:6px 10px;border:1px solid rgba(255,255,255,.35)" onchange="onSelectTaster()">
+                <option value="">Seleziona degustatore...</option>
+              </select>
+            </div>
+            <button id="btnBlindInfo" class="btn" style="display:none" onclick="openBlindInfo()">Info cieca</button>
+          </div>
+        </div>
+
+        <div class="card grid-section">
+          <div class="grid-controls">
+            <div class="muted" style="font-weight:950">TAB Campioni</div>
+            <div class="muted" style="font-weight:950">Usa Filtri per profili/gruppi/ordine</div>
+          </div>
+
+          <div id="productsStrip" class="products-strip"></div>
+          <div class="samples-grid" id="samplesGrid"></div>
+        </div>
+
+        <div class="card detail-section">
+          <div class="detail-header">
+            <div class="detail-title">
+              <div class="detail-id" id="detailId">--</div>
+              <div class="detail-info">
+                <h2 id="detailName">Seleziona un campione</h2>
+                <p id="detailSub">-</p>
+              </div>
+            </div>
+            <div class="nav-buttons">
+              <button class="btn" onclick="navSample(-1)">←</button>
+              <button class="btn" onclick="navSample(1)">→</button>
+            </div>
+          </div>
+
+          <div class="fiche-content">
+            <div class="params-column">
+              <div class="fiche-box">
+                <h3>Profilo sensoriale</h3>
+                <div id="profileOptions" class="profile-options"></div>
+              </div>
+
+              <div class="fiche-box">
+                <h3>Gruppo campione</h3>
+                <div class="muted" style="margin-bottom:6px;">Suggerimento: long-press (650ms) per rinominare un gruppo.</div>
+                <div id="groupOptions" class="group-options"></div>
+              </div>
+
+              <div class="fiche-box">
+                <h3>Vista</h3>
+                <div class="slider-group">
+                  <div class="slider-label"><span>Intensità</span><span id="lblvistaintensita">0</span></div>
+                  <input id="slvistaintensita" class="slider" type="range" min="0" max="5" value="0" oninput="uiSlider('vista','intensita', this.value)">
+                </div>
+                <div class="slider-group">
+                  <div class="slider-label"><span>Limpidezza</span><span id="lblvistalimpidezza">0</span></div>
+                  <input id="slvistalimpidezza" class="slider" type="range" min="0" max="5" value="0" oninput="uiSlider('vista','limpidezza', this.value)">
+                </div>
+                <div id="pickvista" class="desc-grid"></div>
+              </div>
+
+              <div class="fiche-box">
+                <h3>Olfatto</h3>
+                <div class="slider-group">
+                  <div class="slider-label"><span>Intensità</span><span id="lblolfattointensita">0</span></div>
+                  <input id="slolfattointensita" class="slider" type="range" min="0" max="5" value="0" oninput="uiSlider('olfatto','intensita', this.value)">
+                </div>
+                <div class="slider-group">
+                  <div class="slider-label"><span>Complessità</span><span id="lblolfattocomplessita">0</span></div>
+                  <input id="slolfattocomplessita" class="slider" type="range" min="0" max="5" value="0" oninput="uiSlider('olfatto','complessita', this.value)">
+                </div>
+                <div id="pickolfatto" class="desc-grid"></div>
+              </div>
+
+              <div class="fiche-box">
+                <h3>Gusto</h3>
+                <div class="slider-group">
+                  <div class="slider-label"><span>Corpo</span><span id="lblgustocorpo">0</span></div>
+                  <input id="slgustocorpo" class="slider" type="range" min="0" max="5" value="0" oninput="uiSlider('gusto','corpo', this.value)">
+                </div>
+                <div class="slider-group">
+                  <div class="slider-label"><span>Acidità</span><span id="lblgustoacidita">0</span></div>
+                  <input id="slgustoacidita" class="slider" type="range" min="0" max="5" value="0" oninput="uiSlider('gusto','acidita', this.value)">
+                </div>
+                <div class="slider-group">
+                  <div class="slider-label"><span>Persistenza</span><span id="lblgustopersistenza">0</span></div>
+                  <input id="slgustopersistenza" class="slider" type="range" min="0" max="5" value="0" oninput="uiSlider('gusto','persistenza', this.value)">
+                </div>
+                <div id="pickgusto" class="desc-grid"></div>
+              </div>
+            </div>
+
+            <div class="notes-column">
+              <div class="canvas-section">
+                <h3 style="display:flex;justify-content:space-between;align-items:center;">
+                  <span>Note e appunti</span>
+                  <span class="canvas-tools">
+                    <button class="tool-btn active" onclick="setTool('pen', this)">Penna</button>
+                    <button class="tool-btn" onclick="setTool('eraser', this)">Gomma</button>
+                    <button class="tool-btn" onclick="clearCanvas()">Pulisci</button>
+                  </span>
+                </h3>
+                <div class="canvas-container">
+                  <div class="canvas-lines-bg"></div>
+                  <canvas id="drawingCanvas"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /detail card -->
+      </div>
+    </div>
+
+    <!-- PREPARAZIONE -->
+    <div id="page-preparazione" class="page active">
+      <div class="card" style="height:100%;overflow:hidden;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:20px;font-weight:950;color:var(--bordeaux)">Preparazione degustazioni</div>
+            <div class="muted">Crea, apri, modifica o elimina degustazioni. Nel modal puoi incollare da Excel direttamente nella tabella (ID opzionale).</div>
+          </div>
+          <div class="row-actions">
+            <button class="btn primary" onclick="openCreateModal()">Nuova degustazione</button>
+            <button class="btn" onclick="resetDemo()">Ripristina demo</button>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" onclick="showPrepTab('attive', this)">Attive</button>
+          <button class="tab" onclick="showPrepTab('bozze', this)">Bozze</button>
+        </div>
+
+        <div class="content-scroll" style="padding-top:4px;">
+          <div id="prep-attive" class="prep-tab"></div>
+          <div id="prep-bozze" class="prep-tab" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANAGRAFICHE -->
+    <div id="page-anagrafiche" class="page">
+      <div class="card" style="height:100%;overflow:hidden;display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <div style="font-size:20px;font-weight:950;color:var(--bordeaux)">Anagrafiche</div>
+          <div class="muted">Descrittori, profili (con colore), gruppi e degustatori.</div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" onclick="showAnaTab('descrittori', this)">Descrittori</button>
+          <button class="tab" onclick="showAnaTab('profili', this)">Profili</button>
+          <button class="tab" onclick="showAnaTab('gruppi', this)">Gruppi</button>
+          <button class="tab" onclick="showAnaTab('degustatori', this)">Degustatori</button>
+        </div>
+
+        <div class="content-scroll">
+          <div id="ana-descrittori" class="ana-tab">
+            <div id="descriptorsWrap"></div>
+          </div>
+
+          <div id="ana-profili" class="ana-tab" style="display:none">
+            <div class="grid-2">
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light)">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Aggiungi profilo</div>
+                <div class="form-group">
+                  <label>Nome profilo</label>
+                  <input class="input" id="newProfileName" placeholder="es. Minerale">
+                </div>
+                <div class="form-group">
+                  <label>Colore (RRGGBB)</label>
+                  <input class="input" id="newProfileColor" placeholder="5a8e3a" value="5a8e3a">
+                </div>
+                <button class="btn primary" onclick="addProfile()">Aggiungi</button>
+              </div>
+
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light)">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Profili attuali</div>
+                <div id="profilesList"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="ana-gruppi" class="ana-tab" style="display:none">
+            <div class="grid-2">
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light)">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Aggiungi gruppo</div>
+                <div class="form-group">
+                  <label>Nome gruppo</label>
+                  <input class="input" id="newGroupName" placeholder="es. Lotto 1">
+                </div>
+                <div class="form-group">
+                  <label>Colore (RRGGBB)</label>
+                  <input class="input" id="newGroupColor" placeholder="6b8fd6" value="6b8fd6">
+                </div>
+                <button class="btn primary" onclick="addGroup()">Aggiungi</button>
+              </div>
+
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light)">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Gruppi attuali</div>
+                <div id="groupsList"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="ana-degustatori" class="ana-tab" style="display:none">
+            <div class="grid-2">
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light)">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Aggiungi degustatore</div>
+                <div class="form-group">
+                  <label>Nome</label>
+                  <input class="input" id="newTasterName" placeholder="Nome Cognome">
+                </div>
+                <div class="form-group">
+                  <label>Email (opzionale)</label>
+                  <input class="input" id="newTasterEmail" placeholder="email@example.com">
+                </div>
+                <button class="btn primary" onclick="addTaster()">Aggiungi</button>
+              </div>
+
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light)">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Elenco degustatori</div>
+                <table>
+                  <thead>
+                    <tr><th>ID</th><th>Nome</th><th>Email</th><th>Azione</th></tr>
+                  </thead>
+                  <tbody id="tastersTbody"></tbody>
+                </table>
+                <div class="muted" style="margin-top:10px;">
+                  Nota: Terminare una degustazione la archivia per tutti i degustatori.
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /content scroll -->
+      </div>
+    </div>
+
+    <!-- ARCHIVIO -->
+    <div id="page-archivio" class="page">
+      <div class="card" style="height:100%;overflow:hidden;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:20px;font-weight:950;color:var(--bordeaux)">Archivio degustazioni</div>
+            <div class="muted">Le degustazioni terminate vengono spostate qui. Import/Export disponibili solo qui.</div>
+          </div>
+
+          <div class="row-actions">
+            <button class="btn" onclick="exportJson()">Export</button>
+            <button class="btn" onclick="triggerImportJson()">Import</button>
+            <label style="font-size:12px;font-weight:950">Cerca</label>
+            <input class="input" style="padding:8px 10px" placeholder="testo libero..." oninput="onArchiveSearch(this.value)">
+          </div>
+        </div>
+
+        <div class="content-scroll">
+          <div id="archiveList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RISULTATI -->
+    <div id="page-risultati" class="page">
+      <div class="card" style="height:100%;overflow:hidden;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:20px;font-weight:950;color:var(--bordeaux)">Confronto degustatori</div>
+            <div class="muted">Vista tabellare per campione e degustatore.</div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <label style="font-size:12px;font-weight:950">Degustazione</label>
+            <select id="resultsDegSelect" class="select" onchange="renderResultsTable()"></select>
+
+            <label style="font-size:12px;font-weight:950">Cerca</label>
+            <input class="input" style="padding:8px 10px" placeholder="testo libero..." oninput="onResultsSearch(this.value)">
+          </div>
+        </div>
+
+        <div class="content-scroll">
+          <div id="resultsTableWrap" class="muted">Seleziona una degustazione.</div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /container -->
+
+  <!-- Filters overlay -->
+  <div id="filtersOverlay" class="filters-overlay" onclick="closeFiltersPanel()"></div>
+  <div id="filtersPanel" class="filters-panel">
+    <div class="filters-head">
+      <div class="filters-title">Filtri & Ordine</div>
+      <button class="btn" onclick="closeFiltersPanel()">Chiudi</button>
+    </div>
+    <div class="filters-body">
+      <div class="help">Suggerimento: per riordinare i TAB trascinando, imposta Ordine = “Ordine” e filtri su “Tutti”.</div>
+
+      <div class="pill2">Ordina</div>
+      <div id="sortBtnsWrap" class="row-actions"></div>
+
+      <div class="pill2">Filtro profilo</div>
+      <div id="profileFilterBtns" class="row-actions"></div>
+
+      <div class="pill2">Filtro gruppo</div>
+      <div id="groupFilterBtns" class="row-actions"></div>
+
+      <div class="row-actions" style="justify-content:flex-end;">
+        <button class="btn" onclick="toggleZen()">ZEN</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal pick taster -->
+  <div id="modalPickTaster" class="filters-overlay" style="z-index:260;display:none;">
+    <div class="card" style="max-width:520px;margin:60px auto;background:#fff;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div style="font-size:16px;font-weight:950;color:var(--bordeaux)">Seleziona degustatore</div>
+        <button class="btn" onclick="closeModal('modalPickTaster')">×</button>
+      </div>
+
+      <div style="margin-top:10px;">
+        <select id="modalPickTasterSelect" class="select"></select>
+      </div>
+
+      <div class="row-actions" style="justify-content:flex-end;margin-top:12px;">
+        <button class="btn primary" onclick="confirmPickTasterAndOpen()">Apri</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal create/edit tasting -->
+  <div id="modalTasting" class="filters-overlay" style="z-index:260;display:none;overflow:auto;">
+    <div class="card" style="max-width:1100px;margin:30px auto;background:#fff;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div id="tastingModalTitle" style="font-size:18px;font-weight:950;color:var(--bordeaux)">Nuova degustazione</div>
+        <button class="btn" onclick="closeModal('modalTasting')">×</button>
+      </div>
+
+      <!-- campi sopra, tabella sotto (come richiesto) -->
+      <div style="margin-top:12px;">
+        <div class="grid-2">
+          <div>
+            <div class="form-group">
+              <label>Titolo</label>
+              <input class="input" id="degTitle" placeholder="es. Franciacorta panel interno">
+            </div>
+
+            <div class="form-group">
+              <label>Modalità</label>
+              <select class="select" id="degMode" onchange="onModeChanged()">
+                <option value="scoperta">Scoperta (campioni noti)</option>
+                <option value="cieca">Alla cieca (TAB solo ID + associazione prodotti)</option>
+              </select>
+            </div>
+
+            <div class=\"form-group\" style=\"display:none\">
+      <label>Stato</label>
+              <select class="select" id="degStatus">
+                <option value="attiva">Attiva</option>
+                <option value="bozza">Bozza</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div class="form-group">
+              <label>Seleziona degustatori</label>
+              <div id="draftTasters" class="checkbox-list"></div>
+            </div>
+            <div class="help">Incolla da Excel direttamente nella tabella: puoi partire da una cella qualsiasi (anche ID).</div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:10px;">
+          <label>Campioni / Prodotti (tabella “Excel-like” modificabile)</label>
+
+          <div class="col-shiftbar">
+            <span class="muted" style="font-weight:950;">Sposta valori Col1–Col4:</span>
+            <span class="col-drag" draggable="true" data-col="0">Col1</span>
+            <span class="col-drag" draggable="true" data-col="1">Col2</span>
+            <span class="col-drag" draggable="true" data-col="2">Col3</span>
+            <span class="col-drag" draggable="true" data-col="3">Col4</span>
+            <span class="muted">Trascina ColX su ColY per scambiare i valori (i titoli non cambiano).</span>
+            <button class="btn" onclick="addDraftRow()">Riga</button>
+          </div>
+
+          <div class="draft-wrap">
+            <div class="draft-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Includi</th>
+                    <th>ID</th>
+                    <th>Col1</th>
+                    <th>Col2</th>
+                    <th>Col3</th>
+                    <th>Col4</th>
+                    <th>Azioni</th>
+                  </tr>
+                </thead>
+                <tbody id="draftTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="row-actions" style="justify-content:flex-end;margin-top:12px;">
+          <button id="modalPrimaryBtn" class="btn primary" onclick="createOrUpdateTasting()">Crea</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal blind info -->
+  <div id="modalInfoBlind" class="filters-overlay" style="z-index:260;display:none;overflow:auto;">
+    <div class="card" style="max-width:920px;margin:30px auto;background:#fff;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div style="font-size:18px;font-weight:950;color:var(--bordeaux)">Info prodotti (modalità cieca)</div>
+        <button class="btn" onclick="closeModal('modalInfoBlind')">×</button>
+      </div>
+      <div class="help" style="margin:10px 0;">
+        In modalità “alla cieca”, i TAB mostrano solo l’ID. Qui trovi l’elenco completo dei prodotti presenti.
+      </div>
+      <div id="blindInfoList"></div>
+    </div>
+  </div>
+
+  <!-- Hidden input import -->
+  <input id="importJsonInput" type="file" accept="application/json" style="display:none">
+
+  <div id="toast" class="toast"></div>
+
+<script>
+/* =========================
+   JS
+   ========================= */
+const STORAGEKEY = "degustapp_state_v7";
+
+/* ---------- Helpers ---------- */
+function uid(){ return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,10); }
+function nowIso(){ return new Date().toISOString(); }
+function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
+function esc(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+function fmtSampleId(id){
+  const s = String(id ?? '').trim();
+  if(/^\d+$/.test(s)) return s.padStart(2,'0');
+  return s;
+}
+
+function cmpSampleId(a,b){
+  return String(a??'').localeCompare(String(b??''), 'it', {numeric:true, sensitivity:'base'});
+}
+function toast(msg){
+  const t = document.getElementById("toast");
+  if(!t) return;
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"), 1600);
+}
+function parseIntSafe(v, def=0){
+  const n = parseInt(String(v ?? "").trim(), 10);
+  return Number.isFinite(n) ? n : def;
+}
+function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
+function slugify(s){
+  return String(s??"").trim().toLowerCase()
+    .replace(/\s+/g,"-")
+    .replace(/[^a-z0-9\-]/g,"")
+    .replace(/\-+/g,"-");
+}
+function safeCssEscape(s){
+  try{ return CSS.escape(String(s)); }catch{ return String(s).replaceAll('"',''); }
+}
+function hexToRgba(hex, alpha){
+  const h = String(hex||"").trim().replace("#","");
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) return `rgba(0,0,0,${alpha})`;
+  const r = parseInt(h.slice(0,2),16);
+  const g = parseInt(h.slice(2,4),16);
+  const b = parseInt(h.slice(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function hexToRgbParts(hex){
+  const h = String(hex||"").trim().replace("#","");
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) return {r:0,g:0,b:0};
+  return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16) };
+}
+function downloadBlob(filename, text, mime="text/plain"){
+  const blob = new Blob([text], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* ---------- Data ---------- */
+function blankEval(){
+  return {
+    profileKey:null,
+    evolution:0,
+    favourite:false,
+    overall:0,
+    progress:0,
+    data:{
+      vista:{intensita:0, limpidezza:0, desc:[], canvas:null},
+      olfatto:{intensita:0, complessita:0, desc:[]},
+      gusto:{corpo:0, acidita:0, persistenza:0, desc:[]},
+    }
+  };
+}
+
+function defaultProfiles(){
+  return [
+    {key:"floreale", label:"Floreale", color:"5a8e3a"},
+    {key:"agrumato", label:"Agrumato", color:"d4a938"},
+    {key:"fruttato", label:"Fruttato", color:"c84343"},
+    {key:"maturo", label:"Maturo", color:"8b5a3c"},
+  ];
+}
+function defaultGroups(){
+  return [
+    {key:"gruppo-a", label:"Gruppo A", color:"6b8fd6"},
+    {key:"gruppo-b", label:"Gruppo B", color:"72b37e"},
+    {key:"gruppo-c", label:"Gruppo C", color:"d6a26b"},
+    {key:"gruppo-d", label:"Gruppo D", color:"b56bd6"},
+  ];
+}
+function defaultDescriptors(){
+  return {
+    vista:{white:["Paglierino","Dorato"], red:["Ambrato"]},
+    olfatto:{white:["Agrumi","Fiori bianchi"], red:["Tostato"]},
+    gusto:{white:["Fresco","Sapido"], red:["Morbido","Caldo"]},
+  };
+}
+
+function demoTasting(){
+  const cols = ["Prodotto","Annata","Zona","Extra"];
+  const rows = [
+    ["Cuvée Prestige","2021","Franciacorta",""],
+    ["Cuvée Prestige","2020","Franciacorta",""],
+    ["Cuvée Prestige","2019","Franciacorta",""],
+    ["Satèn","2021","Franciacorta",""],
+    ["Satèn","2020","Franciacorta",""],
+    ["Rosé","2021","Franciacorta",""],
+    ["Annamaria Clementi","2015","Franciacorta",""],
+    ["Riserva Dosage Zéro","2016","Franciacorta",""],
+  ];
+
+  return {
+    id: uid(),
+    title: "Panel Demo 2025",
+    status: "attiva",
+    mode: "scoperta",
+    createdAt: nowIso(),
+    finishedAt: null,
+    columns: cols.slice(0,4),
+    groups: clone(defaultGroups()),
+    samples: rows.map((r,i)=>({id:i+1, cols:r.slice(0,4), groupKey:null})),
+    products: null,
+    blindMap: {},
+    tasterIds: [1,2,3,4],
+    evaluations: {}
+  };
+}
+
+function defaultState(){
+  const d = demoTasting();
+  return {
+    tasters:[
+      {id:1, name:"Mario Rossi", email:"mario@panel.local"},
+      {id:2, name:"Laura Bianchi", email:"laura@panel.local"},
+      {id:3, name:"Giovanni Verdi", email:"giovanni@panel.local"},
+      {id:4, name:"Anna Neri", email:"anna@panel.local"},
+    ],
+    profiles: defaultProfiles(),
+    groups: defaultGroups(),
+    descriptors: defaultDescriptors(),
+    tastings: [d],
+    currentTastingId: d.id,
+    ui:{
+      prepTab:"attive",
+      filterProfile:"tutti",
+      filterGroup:"tutti",
+      sort:"custom",
+      archiveSearch:"",
+      resultsSearch:"",
+      zen:false
+    }
+  };
+}
+
+let state = null;
+
+/* ---------- Storage ---------- */
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGEKEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch{ return null; }
+}
+function saveState(){
+  localStorage.setItem(STORAGEKEY, JSON.stringify(state));
+}
+function migrate(s){
+  if(!s || typeof s!=="object") return defaultState();
+
+  s.tasters = Array.isArray(s.tasters) ? s.tasters : defaultState().tasters;
+  s.profiles = Array.isArray(s.profiles) ? s.profiles.map(p=>({
+    key:p.key,
+    label:p.label ?? p.name ?? p.key,
+    color:(p.color ?? "7a2938").replace("#","")
+  })) : defaultProfiles();
+
+  s.groups = Array.isArray(s.groups) ? s.groups.map(g=>({
+    key:g.key,
+    label:g.label ?? g.name ?? g.key,
+    color:(g.color ?? "6b8fd6").replace("#","")
+  })) : defaultGroups();
+
+  s.descriptors = s.descriptors || defaultDescriptors();
+  ["vista","olfatto","gusto"].forEach(sec=>{
+    s.descriptors[sec] = s.descriptors[sec] || {white:[], red:[]};
+    s.descriptors[sec].white = Array.isArray(s.descriptors[sec].white) ? s.descriptors[sec].white : [];
+    s.descriptors[sec].red = Array.isArray(s.descriptors[sec].red) ? s.descriptors[sec].red : [];
+  });
+
+  s.tastings = Array.isArray(s.tastings) ? s.tastings : [demoTasting()];
+  s.tastings.forEach(t=>{
+    t.columns = cols4(t.columns || []);
+    t.groups = Array.isArray(t.groups) && t.groups.length ? t.groups : clone(s.groups);
+    t.samples = Array.isArray(t.samples) ? t.samples : [];
+    t.samples.forEach(sm=>{ if(!("groupKey" in sm)) sm.groupKey = null; });
+    t.mode = t.mode || "scoperta";
+    t.products = (t.mode==="cieca") ? (Array.isArray(t.products)?t.products:[]) : null;
+    t.blindMap = t.blindMap || {};
+    t.tasterIds = Array.isArray(t.tasterIds) ? t.tasterIds : [];
+    t.evaluations = t.evaluations || {};
+  });
+
+  s.currentTastingId = s.currentTastingId || s.tastings[0]?.id || null;
+  s.ui = s.ui || {};
+  s.ui.prepTab = s.ui.prepTab || "attive";
+  s.ui.filterProfile = s.ui.filterProfile || "tutti";
+  s.ui.filterGroup = s.ui.filterGroup || "tutti";
+  s.ui.sort = s.ui.sort || "custom";
+  s.ui.archiveSearch = s.ui.archiveSearch || "";
+  s.ui.resultsSearch = s.ui.resultsSearch || "";
+  s.ui.zen = !!s.ui.zen;
+
+  return s;
+}
+
+/* ---------- Domain helpers ---------- */
+function cols4(cols){
+  const c = (cols || []).slice(0,4).map(x=>String(x ?? "").trim());
+  while(c.length<4) c.push("");
+  return c;
+}
+function getTasting(){
+  return state.tastings.find(t=>t.id===state.currentTastingId) || null;
+}
+function isArchived(){
+  const t = getTasting();
+  return !!t && t.status==="archiviata";
+}
+function groupsForTasting(t){
+  return (t && Array.isArray(t.groups) && t.groups.length) ? t.groups : state.groups;
+}
+function groupDef(t, key){
+  if(!key) return null;
+  return groupsForTasting(t).find(x=>x.key===key) || null;
+}
+function profileDef(key){
+  if(!key) return null;
+  return state.profiles.find(p=>p.key===key) || null;
+}
+function productById(t, pid){
+  return (t.products||[]).find(p=>String(p.id)===String(pid)) || null;
+}
+
+/* ---------- Evaluations ---------- */
+function getEval(tasting, tasterId, sampleId){
+  tasting.evaluations = tasting.evaluations || {};
+  tasting.evaluations[tasterId] = tasting.evaluations[tasterId] || {};
+  if(!tasting.evaluations[tasterId][sampleId]){
+    tasting.evaluations[tasterId][sampleId] = blankEval();
+  }
+  return tasting.evaluations[tasterId][sampleId];
+}
+function calcProgress(ev){
+  let total=0, filled=0;
+  const sliders = [
+    ev.data.vista.intensita, ev.data.vista.limpidezza,
+    ev.data.olfatto.intensita, ev.data.olfatto.complessita,
+    ev.data.gusto.corpo, ev.data.gusto.acidita, ev.data.gusto.persistenza
+  ];
+  sliders.forEach(v=>{ total++; if((v??0)>0) filled++; });
+  total++; if(ev.profileKey) filled++;
+  total++; if((ev.evolution??0)>0) filled++;
+  total+=3;
+  if(ev.data.vista.desc.length) filled++;
+  if(ev.data.olfatto.desc.length) filled++;
+  if(ev.data.gusto.desc.length) filled++;
+  return Math.round((filled/Math.max(1,total))*100);
+}
+function calcOverall(ev){
+  const sliders = [
+    ev.data.vista.intensita, ev.data.vista.limpidezza,
+    ev.data.olfatto.intensita, ev.data.olfatto.complessita,
+    ev.data.gusto.corpo, ev.data.gusto.acidita, ev.data.gusto.persistenza
+  ];
+  const avg = sliders.reduce((a,b)=>a+(b??0),0)/sliders.length;
+  const bonus = (ev.profileKey ? 0.35 : 0) + ((ev.evolution??0)>0 ? 0.35 : 0)
+    + ((ev.data.vista.desc.length || ev.data.olfatto.desc.length || ev.data.gusto.desc.length) ? 0.2 : 0);
+  return Math.round(clamp(avg+bonus,0,5)*10)/10;
+}
+function recalc(){
+  if(isArchived()) return;
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(!t || !tId || !selectedSampleId) return;
+  const ev = getEval(t, tId, selectedSampleId);
+  ev.progress = calcProgress(ev);
+  ev.overall = calcOverall(ev);
+}
+
+/* ---------- UI helpers ---------- */
+function openModal(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = "block";
+  el.classList.add("active");
+}
+function closeModal(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = "none";
+  el.classList.remove("active");
+}
+function closeFiltersPanel(){
+  document.getElementById("filtersPanel")?.classList.remove("active");
+  document.getElementById("filtersOverlay")?.classList.remove("active");
+}
+function openFiltersPanel(){
+  if(!document.getElementById("page-degustazione")?.classList.contains("active")) return;
+  document.getElementById("filtersPanel")?.classList.add("active");
+  document.getElementById("filtersOverlay")?.classList.add("active");
+}
+function toggleFiltersPanel(){
+  const p = document.getElementById("filtersPanel");
+  if(!p) return;
+  if(p.classList.contains("active")) closeFiltersPanel();
+  else openFiltersPanel();
+}
+
+/* ---------- Zen ---------- */
+function setZenUI(on){
+  document.body.classList.toggle("zen", !!on);
+  state.ui.zen = !!on;
+  saveState();
+  updateTopActions(document.querySelector(".page.active")?.id?.replace("page-","") || "preparazione");
+  setTimeout(()=>{ initCanvas(); loadCanvasFromEval(); }, 50);
+}
+async function toggleZen(force){
+  const want = (typeof force==="boolean") ? force : !document.body.classList.contains("zen");
+  if(want){
+    setZenUI(true);
+    try{
+      if(!document.fullscreenElement) await document.documentElement.requestFullscreen();
+    }catch{}
+  }else{
+    setZenUI(false);
+    try{
+      if(document.fullscreenElement) await document.exitFullscreen();
+    }catch{}
+  }
+}
+document.addEventListener("fullscreenchange", ()=>{
+  const fs = !!document.fullscreenElement;
+  if(document.body.classList.contains("zen") && !fs) setZenUI(false);
+});
+
+/* ---------- Navigation pages ---------- */
+function updateTopActions(pageId){
+  const t = getTasting();
+  const isDeg = (pageId==="degustazione");
+  const btnF = document.getElementById("btnTopFilters");
+  const btnT = document.getElementById("btnTopFinish");
+  const btnZ = document.getElementById("btnTopZen");
+
+  if(btnF) btnF.disabled = !isDeg || !t;
+  if(btnT) btnT.disabled = !isDeg || !t || isArchived();
+  if(btnZ) btnZ.disabled = !isDeg || !t;
+
+  const zenBar = document.getElementById("zenBar");
+  if(zenBar) zenBar.style.display = (document.body.classList.contains("zen") && isDeg) ? "flex" : "none";
+  if(!isDeg) closeFiltersPanel();
+}
+function go(pageId, btnEl){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".menu-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById("page-"+pageId)?.classList.add("active");
+  btnEl?.classList.add("active");
+  updateTopActions(pageId);
+
+  if(pageId==="degustazione") setTimeout(()=>{ initCanvas(); renderTastingPage(); }, 0);
+  if(pageId==="preparazione") renderPreparation();
+  if(pageId==="anagrafiche") renderAnagrafiche();
+  if(pageId==="archivio") renderArchive();
+  if(pageId==="risultati"){ renderResultsSelect(); renderResultsTable(); }
+}
+
+/* ---------- Disable inputs when needed ---------- */
+function disableInputs(disabled){
+  document.querySelectorAll("#page-degustazione input[type=range]").forEach(el=>{ el.disabled = disabled; });
+  document.querySelectorAll("#page-degustazione .profile-option, #page-degustazione .group-option, #page-degustazione .desc-pill, #page-degustazione .tool-btn, #page-degustazione .dot, #page-degustazione .fav-heart")
+    .forEach(el=>{
+      el.style.pointerEvents = disabled ? "none" : "auto";
+      el.style.opacity = disabled ? "0.65" : "1";
+    });
+  // il select degustatore resta sempre modificabile (serve anche in sola lettura)
+  const sel = document.getElementById("tasterSelect");
+  if(sel) sel.disabled = false;
+}
+
+/* ---------- Taster select ---------- */
+function currentTasterId(){
+  const v = document.getElementById("tasterSelect")?.value;
+  const id = parseIntSafe(v, 0);
+  return id ? id : null;
+}
+function hydrateTasterSelect(){
+  const sel = document.getElementById("tasterSelect");
+  const t = getTasting();
+  if(!sel) return;
+
+  const ids = new Set(t?.tasterIds || []);
+  sel.innerHTML =
+    `<option value="">Seleziona degustatore...</option>` +
+    state.tasters.filter(x=>ids.has(x.id)).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+}
+function onSelectTaster(){
+  state.currentTaster = currentTasterId();
+  saveState();
+  renderGrid();
+  updateDetail();
+  loadCanvasFromEval();
+  disableInputs(isArchived() || !currentTasterId());
+}
+
+/* ---------- Sort & filters ---------- */
+function eligibleForReorder(){
+  return state.ui.sort==="custom" && state.ui.filterProfile==="tutti" && state.ui.filterGroup==="tutti";
+}
+function setFilterProfile(profileKey, btnEl){
+  state.ui.filterProfile = profileKey;
+  saveState();
+  document.querySelectorAll("#profileFilterBtns .filter-btn").forEach(b=>b.classList.remove("active"));
+  btnEl?.classList.add("active");
+  renderGrid(); updateDetail();
+}
+function setFilterGroup(groupKey, btnEl){
+  state.ui.filterGroup = groupKey;
+  saveState();
+  document.querySelectorAll("#groupFilterBtns .filter-btn").forEach(b=>b.classList.remove("active"));
+  btnEl?.classList.add("active");
+  renderGrid(); updateDetail();
+}
+function setSort(kind, btnEl){
+  state.ui.sort = kind;
+  saveState();
+  document.querySelectorAll("#sortBtnsWrap .sort-btn").forEach(b=>b.classList.remove("active"));
+  btnEl?.classList.add("active");
+  renderGrid();
+}
+function renderSortButtons(){
+  const wrap = document.getElementById("sortBtnsWrap");
+  if(!wrap) return;
+  const current = state.ui.sort || "custom";
+  const btn = (key,label)=>`<button class="sort-btn ${current===key?"active":""}" onclick="setSort('${esc(key)}', this)">${esc(label)}</button>`;
+  wrap.innerHTML = btn("custom","Ordine") + btn("group","Gruppo") + btn("profile","Profilo") + btn("evolution","Evoluzione") + btn("reset","Reset");
+}
+function renderProfileFilterBtns(){
+  const wrap = document.getElementById("profileFilterBtns");
+  if(!wrap) return;
+  const current = state.ui.filterProfile || "tutti";
+
+  const btn = (key,label)=>`<button class="filter-btn ${current===key?"active":""}" onclick="setFilterProfile('${esc(key)}', this)">${esc(label)}</button>`;
+
+  let html = btn("tutti","Tutti");
+  state.profiles.forEach(p=>{ html += btn(p.key, p.label); });
+  wrap.innerHTML = html;
+}
+function renderGroupFilterBtns(){
+  const wrap = document.getElementById("groupFilterBtns");
+  const t = getTasting();
+  if(!wrap) return;
+  const groups = t ? groupsForTasting(t) : state.groups;
+  const current = state.ui.filterGroup || "tutti";
+
+  const btn = (key,label)=>`<button class="filter-btn ${current===key?"active":""}" onclick="setFilterGroup('${esc(key)}', this)">${esc(label)}</button>`;
+
+  let html = btn("tutti","Tutti");
+  groups.forEach(g=>{ html += btn(g.key, g.label); });
+  wrap.innerHTML = html;
+}
+
+/* ---------- Profile / Group options detail ---------- */
+function renderProfileOptions(){
+  const wrap = document.getElementById("profileOptions");
+  if(!wrap) return;
+
+  wrap.innerHTML = state.profiles.map(p=>{
+    const rgb = hexToRgbParts(p.color);
+    return `
+      <div class="profile-option"
+           data-profile="${esc(p.key)}"
+           data-hascolor="1"
+           style="--pcol-r:${rgb.r};--pcol-g:${rgb.g};--pcol-b:${rgb.b};"
+           onclick="toggleProfile('${esc(p.key)}')">
+        ${esc(p.label)}
+      </div>
+    `;
+  }).join("");
+}
+
+function renderGroupOptions(){
+  const wrap = document.getElementById("groupOptions");
+  const t = getTasting();
+  if(!wrap || !t) return;
+  const groups = groupsForTasting(t);
+
+  wrap.innerHTML = groups.map(g=>`
+    <div class="group-option"
+         data-group="${esc(g.key)}"
+         onclick="toggleGroup('${esc(g.key)}')">
+      <span class="group-swatch" style="background:#${esc(g.color)}"></span>
+      <span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.label)}</span>
+    </div>
+  `).join("");
+
+  attachGroupRenameLongPress(); // long-press rinomina
+}
+
+/* ---------- Descriptor pickers ---------- */
+function renderDescriptorPickers(){
+  ["vista","olfatto","gusto"].forEach(sec=>{
+    const el = document.getElementById("pick"+sec);
+    if(!el) return;
+    const w = state.descriptors[sec].white;
+    const r = state.descriptors[sec].red;
+    el.innerHTML = `
+      <div>
+        <div class="desc-col-title">Bianchi</div>
+        <div class="desc-list">${w.map(d=>`<div class="desc-pill" data-sec="${sec}" data-desc="${esc(d)}" onclick="toggleDesc('${sec}','${esc(d)}', this)">${esc(d)}</div>`).join("")}</div>
+      </div>
+      <div>
+        <div class="desc-col-title">Rossi</div>
+        <div class="desc-list">${r.map(d=>`<div class="desc-pill" data-sec="${sec}" data-desc="${esc(d)}" onclick="toggleDesc('${sec}','${esc(d)}', this)">${esc(d)}</div>`).join("")}</div>
+      </div>
+    `;
+  });
+}
+
+/* ---------- Degustazione rendering ---------- */
+function renderTastingPage(){
+  const t = getTasting();
+
+  renderSortButtons();
+  renderProfileFilterBtns();
+  renderGroupFilterBtns();
+  renderProfileOptions();
+  renderDescriptorPickers();
+  hydrateTasterSelect();
+  // apply remembered taster
+  try{
+    const sel = document.getElementById('tasterSelect');
+    const t0 = getTasting();
+    if(sel && t0){
+      const ok = (t0.tasterIds||[]).map(x=>String(x));
+      if(state.currentTaster && ok.includes(String(state.currentTaster))) sel.value = String(state.currentTaster);
+    }
+  }catch{}
+
+  const ro = !!t && isArchived();
+  const b = document.getElementById("readonlyBanner");
+  if(b) b.style.display = ro ? "block" : "none";
+
+  const blindBtn = document.getElementById("btnBlindInfo");
+  if(blindBtn) blindBtn.style.display = (t && t.mode==="cieca") ? "inline-block" : "none";
+
+  if(!t){
+    document.getElementById("headerTitle").textContent = "Degustazione: seleziona o crea in Preparazione";
+    document.getElementById("samplesGrid").innerHTML = `<div class="muted" style="padding:10px;">Nessuna degustazione selezionata.</div>`;
+    selectedSampleId = null;
+    renderProductsStrip();
+    updateDetail();
+    disableInputs(true);
+    return;
+  }
+
+  document.getElementById("headerTitle").textContent =
+    `${t.title} — ${t.mode==="cieca" ? "Alla cieca" : "Scoperta"}${ro ? " — Sola lettura" : ""}`;
+
+  renderGroupOptions();
+  renderProductsStrip();
+  renderGrid();
+  updateDetail();
+
+  disableInputs(isArchived() || !currentTasterId());
+
+  if(state.ui.zen) setZenUI(true);
+}
+
+function renderProductsStrip(){
+  const strip = document.getElementById("productsStrip");
+  const t = getTasting();
+  if(!strip) return;
+
+  if(!t || t.mode!=="cieca" || isArchived()){
+    strip.classList.remove("active");
+    strip.innerHTML = "";
+    return;
+  }
+
+  strip.classList.add("active");
+  const assigned = new Set(Object.values(t.blindMap||{}).map(x=>String(x)));
+
+  strip.innerHTML = (t.products||[]).map(p=>{
+    const c = cols4(p.cols);
+    const main = c[0] || c[1] || "vuoto";
+    const isAss = assigned.has(String(p.id));
+    return `<span class="pchip ${isAss?"assigned":""}" draggable="${isAss?"false":"true"}" data-productid="${esc(p.id)}">${esc(main)}</span>`;
+  }).join("");
+
+  strip.querySelectorAll(".pchip").forEach(ch=>{
+    if(ch.classList.contains("assigned")) return;
+    ch.addEventListener("dragstart", (e)=>{
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(ch.dataset.productid));
+    });
+  });
+}
+
+function renderGrid(){
+  const grid = document.getElementById("samplesGrid");
+  const t = getTasting();
+  if(!grid) return;
+  if(!t){ grid.innerHTML = ""; return; }
+
+  const tId = currentTasterId();
+  const filterProfile = state.ui.filterProfile || "tutti";
+  const filterGroup = state.ui.filterGroup || "tutti";
+
+  let list = t.samples.slice();
+
+  if(filterGroup!=="tutti"){
+    list = list.filter(s=>String(s.groupKey||"")===String(filterGroup));
+  }
+  if(filterProfile!=="tutti"){
+    if(tId){
+      list = list.filter(s=>{
+        const ev = getEval(t, tId, s.id);
+        return String(ev.profileKey||"")===String(filterProfile);
+      });
+    }else{
+      list = []; // senza degustatore non si filtra per profilo
+    }
+  }
+
+  const viewSort = state.ui.sort || "custom";
+  if(viewSort==="group"){
+    const ord = {};
+    groupsForTasting(t).forEach((g,i)=>{ ord[g.key]=i+1; });
+    list.sort((a,b)=>{
+      const oa = ord[a.groupKey] ?? 9999;
+      const ob = ord[b.groupKey] ?? 9999;
+      return oa-ob || (cmpSampleId(a.id,b.id));
+    });
+  }else if(viewSort==="profile" && tId){
+    const ord = {};
+    state.profiles.forEach((p,i)=>{ ord[p.key]=i+1; });
+    list.sort((a,b)=>{
+      const ea = getEval(t, tId, a.id);
+      const eb = getEval(t, tId, b.id);
+      const oa = ord[ea.profileKey] ?? 9999;
+      const ob = ord[eb.profileKey] ?? 9999;
+      return oa-ob || (cmpSampleId(a.id,b.id));
+    });
+  }else if(viewSort==="evolution" && tId){
+    list.sort((a,b)=>{
+      const ea = getEval(t, tId, a.id);
+      const eb = getEval(t, tId, b.id);
+      return (eb.evolution||0)-(ea.evolution||0) || (cmpSampleId(a.id,b.id));
+    });
+  }else if(viewSort==="reset"){
+    list.sort((a,b)=>cmpSampleId(a.id,b.id));
+  }
+
+  const blind = (t.mode==="cieca");
+  const dragOk = (!isArchived() && eligibleForReorder());
+
+  grid.innerHTML = list.map(s=>{
+    const ev = tId ? getEval(t, tId, s.id) : blankEval();
+    ev.progress = calcProgress(ev);
+    ev.overall = calcOverall(ev);
+
+    const c = cols4(s.cols);
+    const group = groupDef(t, s.groupKey);
+    const groupBg = group ? hexToRgba(group.color, 0.14) : "#fff";
+
+    const groupChip = group
+      ? `<span class="chip group" style="background:#${esc(group.color)}">${esc(group.label)}</span>`
+      : "";
+
+    const profKey = ev.profileKey || null;
+    let profileChip = "";
+    if(profKey){
+      const p = profileDef(profKey);
+      const label = p ? p.label : profKey;
+      const color = p ? p.color : "7a2938";
+      profileChip = `<span class="chip profile" style="background:${hexToRgba(color,0.22)}">${esc(label)}</span>`;
+    }
+
+    let assignedHtml = "";
+    if(blind){
+      const pid = (t.blindMap||{})[String(s.id)];
+      if(pid){
+        const p = productById(t, pid);
+        const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
+        const pm = pc[0] || pc[1] || "Prodotto?";
+        assignedHtml = `<div class="assigned-tag" title="Prodotto associato">${esc(pm)}</div>`;
+      }
+    }
+
+    const evo = ev.evolution || 0;
+    const dots = Array.from({length:5}, (_,i)=>{
+      const v = i+1;
+      return `<span class="dot ${v<=evo?"on":""}" data-dot-evo="${v}" data-dot-sample="${s.id}"></span>`;
+    }).join("");
+
+    const favOn = !!ev.favourite;
+    const heartChar = favOn ? "♥" : "♡";
+    return `
+      <div class="sample-card ${selectedSampleId===s.id ? "selected" : ""}"
+           data-sampleid="${esc(s.id)}"
+           draggable="${dragOk ? "true" : "false"}"
+           style="background:${groupBg}">
+        <div class="sample-top">
+          <div class="sample-id-col">
+            <div class="sample-id">${String(s.id).padStart(2,"0")}</div>
+          </div>
+
+          <div class="sample-meta">
+            <div class="sample-lines">
+              <div class="sample-line first">${blind ? "Campione" : esc(c[0])}</div>
+              <div class="sample-line other">${blind ? "Alla cieca" : esc(c[1])}</div>
+              <div class="sample-line other">${esc(c[2])}</div>
+              <div class="sample-line other">${esc(c[3])}</div>
+            </div>
+          </div>
+
+          <div class="fav-heart ${favOn ? "on" : ""} ${(!tId || isArchived()) ? "disabled" : ""}"
+               data-fav-sample="${esc(s.id)}"
+               title="Campione preferito">
+            ${heartChar}
+          </div>
+        </div>
+
+        <div class="chips-row">
+          ${profileChip}
+          ${groupChip}
+          ${assignedHtml}
+        </div>
+
+        <div class="evo-row">
+          <span class="evo-label">Evoluzione</span>
+          <span class="dots">${dots}</span>
+        </div>
+
+        <div class="progress"><div style="width:${ev.progress||0}%"></div></div>
+      </div>
+    `;
+  }).join("");
+
+  // click card => select sample
+  grid.querySelectorAll(".sample-card").forEach(card=>{
+    card.addEventListener("click", ()=>{
+      const sid = String(card.dataset.sampleid || '');
+      if(sid) selectSample(sid);
+    });
+  });
+
+  // favourite: togglable only when selected sample (per richiesta)
+  grid.querySelectorAll(".fav-heart[data-fav-sample]").forEach(h=>{
+    if(isArchived() || !currentTasterId()){
+      h.classList.add("disabled");
+      return;
+    }
+    h.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const sid = String(h.dataset.favSample || '');
+      if(!sid) return;
+      if(selectedSampleId !== sid){
+        toast("Seleziona prima il campione");
+        return;
+      }
+      toggleFavourite(sid);
+    });
+  });
+
+  // evolution dots: editable only when selected; re-click clears
+  grid.querySelectorAll(".dot[data-dot-evo]").forEach(dot=>{
+    if(isArchived() || !currentTasterId()){
+      dot.classList.add("disabled");
+      return;
+    }
+    dot.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const sid = String(dot.dataset.dotSample || '');
+      const evo = parseIntSafe(dot.dataset.dotEvo, 0);
+      setEvolutionForSample(sid, evo);
+    });
+  });
+
+  if(!isArchived() && eligibleForReorder()) attachReorderDnD();
+  if(!isArchived() && t.mode==="cieca") attachBlindDrop();
+}
+
+/* ---------- Favourite ---------- */
+function toggleFavourite(sampleId){
+  if(isArchived()) return;
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(!t || !tId){ toast("Seleziona un degustatore"); return; }
+  const ev = getEval(t, tId, sampleId);
+  ev.favourite = !ev.favourite;
+  saveState();
+  renderGrid();
+  if(selectedSampleId === sampleId) updateDetail();
+}
+
+/* ---------- Evolution dots ---------- */
+function setEvolutionForSample(sampleId, evo){
+  if(isArchived()) return;
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(!t || !tId){ toast("Seleziona un degustatore"); return; }
+  if(selectedSampleId !== sampleId){
+    toast("Seleziona prima il campione");
+    return;
+  }
+  const ev = getEval(t, tId, sampleId);
+  const next = clamp(parseIntSafe(evo,0), 1, 5);
+  ev.evolution = ((ev.evolution||0) === next) ? 0 : next; // re-click clears
+  ev.progress = calcProgress(ev);
+  ev.overall = calcOverall(ev);
+  saveState();
+  renderGrid();
+  updateDetail();
+}
+
+/* ---------- Reorder DnD ---------- */
+function attachReorderDnD(){
+  const grid = document.getElementById('samplesGrid');
+  const t = getTasting();
+  if(!grid || !t) return;
+  let fromId = null;
+
+  grid.querySelectorAll('.sample-card').forEach(card=>{
+    card.addEventListener('dragstart', e=>{
+      fromId = String(card.dataset.sampleid || '');
+      if(!fromId) return;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('application/x-sampleid', fromId);
+      try{ e.dataTransfer.setData('text/plain', fromId); }catch{}
+    });
+
+    card.addEventListener('dragend', ()=>{
+      card.classList.remove('dragging');
+      fromId = null;
+    });
+
+    card.addEventListener('dragover', e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    });
+
+    card.addEventListener('drop', e=>{
+      e.preventDefault();
+      const toId = String(card.dataset.sampleid || '');
+      const src = String(e.dataTransfer.getData('application/x-sampleid') || fromId || '');
+      if(!src || !toId || src===toId) return;
+
+      const arr = t.samples.slice();
+      const a = arr.findIndex(x=>String(x.id)===String(src));
+      const b = arr.findIndex(x=>String(x.id)===String(toId));
+      if(a<0 || b<0) return;
+      const moved = arr.splice(a,1)[0];
+      arr.splice(b,0,moved);
+      t.samples = arr;
+      saveState();
+      renderGrid();
+      toast('Ordine aggiornato');
+    });
+  });
+}
+
+/* ---------- Blind assignment drop ---------- */
+function attachBlindDrop(){
+  const grid = document.getElementById('samplesGrid');
+  const t = getTasting();
+  if(!grid || !t) return;
+
+  grid.querySelectorAll('.sample-card').forEach(card=>{
+    card.addEventListener('dragover', e=>{ e.preventDefault(); });
+    card.addEventListener('drop', e=>{
+      e.preventDefault();
+      const sid = String(card.dataset.sampleid || '');
+      const pid = String(e.dataTransfer.getData('application/x-productid') || e.dataTransfer.getData('text/plain') || '');
+      if(!sid || !pid) return;
+      setBlindMap(sid, pid);
+    });
+  });
+}
+function setBlindMap(sampleId, productId){
+  const t = getTasting();
+  if(!t) return;
+
+  // remove any previous assignment of that product
+  Object.keys(t.blindMap||{}).forEach(sid=>{
+    if(String(t.blindMap[sid]) === String(productId)) delete t.blindMap[sid];
+  });
+
+  t.blindMap[String(sampleId)] = productId;
+  saveState();
+  renderProductsStrip();
+  renderGrid();
+  toast("Prodotto associato");
+}
+
+/* ---------- Detail view ---------- */
+let selectedSampleId = null;
+
+function selectSample(sampleId){
+  // save current canvas before switching (if possible)
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(!isArchived() && t && tId && selectedSampleId && canvas){
+    try{
+      const prev = getEval(t, tId, selectedSampleId);
+      prev.data.vista.canvas = canvas.toDataURL();
+      saveState();
+    }catch{}
+  }
+
+  selectedSampleId = sampleId;
+  renderGrid();
+  updateDetail();
+  loadCanvasFromEval();
+}
+
+function updateDetail(){
+  const t = getTasting();
+  const tId = currentTasterId();
+  const s = t ? t.samples.find(x=>x.id===selectedSampleId) : null;
+
+  if(!t || !s){
+    document.getElementById("detailId").textContent = "--";
+    document.getElementById("detailName").textContent = "Seleziona un campione";
+    document.getElementById("detailSub").textContent = "-";
+    disableInputs(true);
+    clearCanvasVisualOnly();
+    return;
+  }
+
+  document.getElementById("detailId").textContent = String(s.id).padStart(2,"0");
+
+  const c = cols4(s.cols);
+
+  if(t.mode==="cieca"){
+    document.getElementById("detailName").textContent = "Campione";
+    const pid = (t.blindMap||{})[String(s.id)];
+    if(pid){
+      const p = productById(t, pid);
+      const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
+      const main = pc[0] || pc[1] || "Prodotto?";
+      const sub = [pc[2],pc[3]].filter(Boolean).join(" - ");
+      document.getElementById("detailSub").textContent = `Associato: ${main}${sub ? " - "+sub : ""}`;
+    }else{
+      document.getElementById("detailSub").textContent = "Non associato";
+    }
+  }else{
+    const main = c[0] || c[1] || "vuoto";
+    const sub = [c[2],c[3]].filter(Boolean).join(" - ");
+    document.getElementById("detailName").textContent = main;
+    document.getElementById("detailSub").textContent = sub || "-";
+  }
+
+  if(!tId){
+    disableInputs(true);
+    clearCanvasVisualOnly();
+    return;
+  }
+
+  disableInputs(isArchived());
+
+  const ev = getEval(t, tId, s.id);
+  ev.progress = calcProgress(ev);
+  ev.overall = calcOverall(ev);
+
+  // profile selection
+  document.querySelectorAll(".profile-option").forEach(o=>o.classList.remove("selected"));
+  if(ev.profileKey){
+    document.querySelector(`.profile-option[data-profile="${safeCssEscape(ev.profileKey)}"]`)?.classList.add("selected");
+  }
+
+  // group selection (group is on sample, not on evaluation)
+  document.querySelectorAll(".group-option").forEach(o=>o.classList.remove("selected"));
+  if(s.groupKey){
+    document.querySelector(`.group-option[data-group="${safeCssEscape(s.groupKey)}"]`)?.classList.add("selected");
+  }
+
+  const set = (sec, key, val)=>{
+    const lbl = document.getElementById(`lbl${sec}${key}`);
+    const sl = document.getElementById(`sl${sec}${key}`);
+    if(lbl) lbl.textContent = String(val ?? 0);
+    if(sl) sl.value = String(val ?? 0);
+  };
+  set("vista","intensita", ev.data.vista.intensita);
+  set("vista","limpidezza", ev.data.vista.limpidezza);
+  set("olfatto","intensita", ev.data.olfatto.intensita);
+  set("olfatto","complessita", ev.data.olfatto.complessita);
+  set("gusto","corpo", ev.data.gusto.corpo);
+  set("gusto","acidita", ev.data.gusto.acidita);
+  set("gusto","persistenza", ev.data.gusto.persistenza);
+
+  // descriptors selection
+  document.querySelectorAll(".desc-pill").forEach(p=>p.classList.remove("selected"));
+  ["vista","olfatto","gusto"].forEach(sec=>{
+    (ev.data[sec].desc || []).forEach(d=>{
+      document.querySelector(`.desc-pill[data-sec="${sec}"][data-desc="${safeCssEscape(d)}"]`)?.classList.add("selected");
+    });
+  });
+
+  loadCanvasFromEval();
+}
+
+/* ---------- Sliders / toggles ---------- */
+function uiSlider(sec, key, value){
+  document.getElementById(`lbl${sec}${key}`).textContent = String(value);
+  if(isArchived()) return;
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(!t || !tId || !selectedSampleId) return;
+  const ev = getEval(t, tId, selectedSampleId);
+  ev.data[sec][key] = parseIntSafe(value, 0);
+  recalc();
+  saveState();
+  renderGrid();
+}
+
+function toggleProfile(key){
+  if(isArchived()) return;
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(!t || !tId || !selectedSampleId){
+    toast("Seleziona degustatore e campione");
+    return;
+  }
+  const ev = getEval(t, tId, selectedSampleId);
+  ev.profileKey = (ev.profileKey === key) ? null : key;
+  recalc();
+  saveState();
+  renderGrid();
+  updateDetail();
+}
+
+function toggleGroup(groupKey){
+  if(isArchived()) return;
+  const t = getTasting();
+  if(!t || !selectedSampleId){ toast("Seleziona un campione"); return; }
+  const s = t.samples.find(x=>x.id===selectedSampleId);
+  if(!s) return;
+  s.groupKey = (s.groupKey === groupKey) ? null : groupKey;
+  saveState();
+  renderGroupFilterBtns();
+  renderGrid();
+  updateDetail();
+}
+
+function toggleDesc(sec, desc, el){
+  if(isArchived()) return;
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(!t || !tId || !selectedSampleId){
+    toast("Seleziona degustatore e campione");
+    return;
+  }
+  const ev = getEval(t, tId, selectedSampleId);
+  const arr = ev.data[sec].desc || (ev.data[sec].desc = []);
+  const i = arr.indexOf(desc);
+  if(i>=0) arr.splice(i,1);
+  else arr.push(desc);
+  el?.classList.toggle("selected");
+  recalc();
+  saveState();
+  renderGrid();
+}
+
+/* ---------- Nav sample ---------- */
+function navSample(dir){
+  const t = getTasting();
+  if(!t || !t.samples.length) return;
+  const ids = t.samples.map(s=>s.id);
+  if(!selectedSampleId){ selectSample(ids[0]); return; }
+  const i = ids.indexOf(selectedSampleId);
+  let n = i + dir;
+  if(n<0) n = ids.length - 1;
+  if(n>=ids.length) n = 0;
+  selectSample(ids[n]);
+}
+
+/* ---------- Finish / Archive ---------- */
+function finishTasting(){
+  const t = getTasting();
+  if(!t){ toast("Nessuna degustazione selezionata"); return; }
+  if(isArchived()){ toast("Già archiviata"); return; }
+  if(!confirm("Terminare la degustazione per TUTTI i degustatori e spostarla in Archivio?")) return;
+
+  // save canvas for current taster & sample (if any)
+  const tId = currentTasterId();
+  if(tId && selectedSampleId && canvas){
+    try{
+      const ev = getEval(t, tId, selectedSampleId);
+      ev.data.vista.canvas = canvas.toDataURL();
+    }catch{}
+  }
+
+  t.status = "archiviata";
+  t.finishedAt = nowIso();
+  saveState();
+  closeFiltersPanel();
+  toast("Degustazione archiviata");
+
+  renderPreparation();
+  renderArchive();
+  renderResultsSelect();
+  renderTastingPage();
+}
+
+/* ---------- Rename gruppi: long-press ---------- */
+function attachGroupRenameLongPress(){
+  const wrap = document.getElementById("groupOptions");
+  if(!wrap) return;
+
+  wrap.querySelectorAll(".group-option").forEach(btn=>{
+    if(btn.dataset.lpAttached === "1") return;
+    btn.dataset.lpAttached = "1";
+
+    let timer = null;
+    let moved = false;
+
+    const start = ()=>{
+      if(isArchived()) return;
+      moved = false;
+
+      const key = btn.dataset.group;
+      if(!key) return;
+
+      timer = setTimeout(()=>{
+        timer = null;
+        const t = getTasting();
+        if(!t) return;
+        const groups = groupsForTasting(t);
+        const g = groups.find(x=>x.key===key);
+        if(!g) return;
+
+        const name = prompt("Rinomina gruppo:", g.label);
+        if(name === null) return;
+        const v = name.trim();
+        if(!v){ toast("Nome non valido"); return; }
+
+        g.label = v;
+        saveState();
+
+        // update immediate (TAB chips, filtri, bottoni)
+        renderGroupOptions();
+        renderGroupFilterBtns();
+        renderGrid();
+        updateDetail();
+        toast("Gruppo rinominato");
+      }, 650);
+    };
+
+    const cancel = ()=>{
+      if(timer){ clearTimeout(timer); timer=null; }
+    };
+
+    btn.addEventListener("pointerdown", start);
+    btn.addEventListener("pointerup", cancel);
+    btn.addEventListener("pointercancel", cancel);
+    btn.addEventListener("pointermove", ()=>{ moved=true; if(moved) cancel(); });
+    btn.addEventListener("contextmenu", (e)=>e.preventDefault());
+  });
+}
+
+/* ---------- Blind info modal ---------- */
+function openBlindInfo(){
+  renderBlindInfo();
+  openModal("modalInfoBlind");
+}
+function renderBlindInfo(){
+  const t = getTasting();
+  const wrap = document.getElementById("blindInfoList");
+  if(!wrap) return;
+  if(!t || t.mode!=="cieca"){
+    wrap.innerHTML = `<div class="muted">Nessuna degustazione “alla cieca” selezionata.</div>`;
+    return;
+  }
+  wrap.innerHTML = (t.products||[]).length ? (t.products||[]).map(p=>{
+    const c = cols4(p.cols);
+    const main = c[0] || c[1] || "vuoto";
+    const sub = [c[2],c[3]].filter(Boolean).join(" - ");
+    return `
+      <div class="list-card" style="margin:8px 0;">
+        <div style="font-weight:950;color:var(--bordeaux)">${esc(main)}</div>
+        <div class="muted">${esc(sub || "-")}</div>
+        <div class="muted">ID prodotto: ${esc(p.id)}</div>
+      </div>
+    `;
+  }).join("") : `<div class="muted">Nessun prodotto.</div>`;
+}
+
+/* ---------- Canvas ---------- */
+let canvas = null;
+let ctx = null;
+let isDrawing = false;
+let lastX = 0;
+let lastY = 0;
+let currentTool = "pen";
+
+function initCanvas(){
+  const c = document.getElementById("drawingCanvas");
+  if(!c) return;
+  canvas = c;
+  ctx = canvas.getContext("2d");
+
+  const container = canvas.parentElement;
+  // dimensioni CSS -> canvas pixels (semplice e stabile)
+  canvas.width = Math.max(10, container.clientWidth - 2);
+  canvas.height = Math.max(10, container.clientHeight - 2);
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if(canvas.dataset.attached==="1"){
+    loadCanvasFromEval();
+    return;
+  }
+  canvas.dataset.attached="1";
+
+  canvas.addEventListener("pointerdown", startDrawing);
+  canvas.addEventListener("pointermove", draw);
+  canvas.addEventListener("pointerup", stopDrawing);
+  canvas.addEventListener("pointercancel", stopDrawing);
+  canvas.addEventListener("pointerleave", stopDrawing);
+
+  loadCanvasFromEval();
+}
+function getCanvasPos(e){
+  const r = canvas.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+function startDrawing(e){
+  if(isArchived()) return;
+  if(!currentTasterId() || !selectedSampleId) return;
+  if(!canvas || !ctx) return;
+  isDrawing = true;
+  const p = getCanvasPos(e);
+  lastX = p.x; lastY = p.y;
+  canvas.setPointerCapture?.(e.pointerId);
+}
+function draw(e){
+  if(isArchived()) return;
+  if(!isDrawing || !ctx || !canvas) return;
+
+  const p = getCanvasPos(e);
+
+  ctx.beginPath();
+  ctx.moveTo(lastX, lastY);
+  ctx.lineTo(p.x, p.y);
+
+  if(currentTool==="pen"){
+    ctx.strokeStyle = "#4a4a4a";
+    ctx.lineWidth = 2.2;
+    ctx.globalCompositeOperation = "source-over";
+  }else{
+    ctx.lineWidth = 20;
+    ctx.globalCompositeOperation = "destination-out";
+  }
+  ctx.stroke();
+
+  lastX = p.x;
+  lastY = p.y;
+}
+function stopDrawing(){
+  if(!canvas || !ctx) return;
+  if(!isDrawing) return;
+
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(t && tId && selectedSampleId){
+    const ev = getEval(t, tId, selectedSampleId);
+    try{
+      ev.data.vista.canvas = canvas.toDataURL();
+      saveState();
+    }catch{}
+  }
+
+  isDrawing = false;
+  ctx.globalCompositeOperation = "source-over";
+}
+function setTool(tool, btnEl){
+  if(isArchived()) return;
+  currentTool = tool;
+  document.querySelectorAll(".tool-btn").forEach(b=>b.classList.remove("active"));
+  btnEl?.classList.add("active");
+}
+function clearCanvas(){
+  if(isArchived()) return;
+  if(!ctx || !canvas) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(t && tId && selectedSampleId){
+    const ev = getEval(t, tId, selectedSampleId);
+    ev.data.vista.canvas = null;
+    saveState();
+  }
+}
+function clearCanvasVisualOnly(){
+  if(!ctx || !canvas) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+function loadCanvasFromEval(){
+  if(!ctx || !canvas) return;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const t = getTasting();
+  const tId = currentTasterId();
+  if(!t || !tId || !selectedSampleId) return;
+
+  const ev = getEval(t, tId, selectedSampleId);
+  const dataUrl = ev?.data?.vista?.canvas;
+  if(!dataUrl) return;
+
+  const img = new Image();
+  img.onload = ()=>ctx.drawImage(img, 0, 0);
+  img.src = dataUrl;
+}
+
+/* =========================
+   PREPARAZIONE (senza "Copia" qui)
+   ========================= */
+function showPrepTab(tab, btnEl){
+  state.ui.prepTab = tab;
+  saveState();
+  document.querySelectorAll("#page-preparazione .tab").forEach(b=>b.classList.remove("active"));
+  btnEl?.classList.add("active");
+  document.getElementById("prep-attive").style.display = (tab==="attive") ? "block" : "none";
+  document.getElementById("prep-bozze").style.display = (tab==="bozze") ? "block" : "none";
+  renderPreparation();
+}
+function showPrepTabNoRecurse(tab){
+  document.getElementById("prep-attive").style.display = (tab==="attive") ? "block" : "none";
+  document.getElementById("prep-bozze").style.display = (tab==="bozze") ? "block" : "none";
+  const tabsI = Array.from(document.querySelectorAll("#page-preparazione .tab")); /* FIX */
+  tabsI.forEach(b=>b.classList.remove("active"));
+  if(tab==="attive") tabsI[0]?.classList.add("active");
+  if(tab==="bozze") tabsI[1]?.classList.add("active");
+}
+
+function renderPreparation(){
+  const att = document.getElementById("prep-attive");
+  if(!att) return;
+
+  const nonArchiviate = state.tastings.filter(t=>!t.archived);
+
+  const card = (t)=>{
+    const created = t.createdAt ? new Date(t.createdAt).toLocaleString("it-IT") : "-";
+    return `
+      <div class="list-card">
+        <h3>${esc(t.title)}</h3>
+        <div class="meta">
+          <div><b>ID</b> ${esc(t.id)}</div>
+          <div><b>Creata</b> ${esc(created)}</div>
+          <div><b>Modalità</b> ${esc(t.mode)}</div>
+          <div><b>Campioni</b> ${t.samples.length}</div>
+          <div><b>Degustatori</b> ${t.tasterIds.length}</div>
+        </div>
+        <div class="row-actions">
+          <button class="btn primary" onclick="openTasting('${esc(t.id)}')">Apri</button>
+          <button class="btn" onclick="openEditTasting('${esc(t.id)}')">Modifica</button>
+          <button class="btn" style="background:var(--rosso);border-color:var(--rosso);color:#fff" onclick="deleteTasting('${esc(t.id)}')">Elimina</button>
+        </div>
+      </div>
+    `;
+  };
+
+  att.innerHTML = nonArchiviate.length ? nonArchiviate.map(card).join("") : `<div class="muted" style="padding:10px;">Nessuna degustazione disponibile.</div>`;
+
+  const boz = document.getElementById("prep-bozze");
+  if(boz) boz.style.display = "none";
+}
+
+/* ---------- Open tasting / pick taster ---------- */
+let pendingOpenTastingId = null;
+
+function openTasting(id){
+  const t = state.tastings.find(x=>x.id===id);
+  if(!t){ toast("Degustazione non trovata"); return; }
+  state.currentTastingId = id;
+  saveState();
+
+  if(t.status==="archiviata"){
+    go("degustazione", document.getElementById("btnMenuDeg"));
+    setTimeout(()=>{ hydrateTasterSelect(); renderTastingPage(); }, 0);
+    return;
+  }
+
+  pendingOpenTastingId = id;
+  const sel = document.getElementById("modalPickTasterSelect");
+  const ids = new Set(t.tasterIds);
+  sel.innerHTML = `<option value="">Seleziona degustatore...</option>` +
+    state.tasters.filter(x=>ids.has(x.id)).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
+  openModal("modalPickTaster");
+}
+
+function confirmPickTasterAndOpen(){
+  const sel = document.getElementById("modalPickTasterSelect");
+  const id = parseIntSafe(sel.value, 0);
+  if(!id){ toast("Seleziona degustatore"); return; }
+  closeModal("modalPickTaster");
+
+  state.currentTaster = id;
+
+  document.getElementById("tasterSelect").value = String(id);
+  go("degustazione", document.getElementById("btnMenuDeg"));
+  setTimeout(()=>renderTastingPage(), 0);
+}
+
+
+/* =========================
+   ARCHIVIO (qui appare "Copia")
+   ========================= */
+function onArchiveSearch(v){
+  state.ui.archiveSearch = String(v||"");
+  saveState();
+  renderArchive();
+}
+function tastingSearchText(t){
+  try{ return JSON.stringify(t).toLowerCase(); }catch{ return ""; }
+}
+
+function renderArchive(){
+  const wrap = document.getElementById("archiveList");
+  if(!wrap) return;
+
+  const q = String(state.ui.archiveSearch||"").trim().toLowerCase();
+  const listAll = state.tastings.filter(t=>t.status==="archiviata");
+  const list = q ? listAll.filter(t=>tastingSearchText(t).includes(q)) : listAll;
+
+  wrap.innerHTML = list.length ? list.map(t=>{
+    const created = t.createdAt ? new Date(t.createdAt).toLocaleString("it-IT") : "-";
+    const finished = t.finishedAt ? new Date(t.finishedAt).toLocaleString("it-IT") : "-";
+    return `
+      <div class="list-card">
+        <h3>${esc(t.title)}</h3>
+        <div class="meta">
+          <div><b>ID</b> ${esc(t.id)}</div>
+          <div><b>Creata</b> ${esc(created)}</div>
+          <div><b>Terminata</b> ${esc(finished)}</div>
+          <div><b>Modalità</b> ${esc(t.mode)}</div>
+          <div><b>Campioni</b> ${t.samples.length}</div>
+          <div><b>Degustatori</b> ${t.tasterIds.length}</div>
+        </div>
+        <div class="row-actions">
+          <button class="btn primary" onclick="openTasting('${esc(t.id)}')">Apri sola lettura</button>
+          <button class="btn" onclick="copyTastingFromArchive('${esc(t.id)}')">Copia degustazione</button>
+          <button class="btn" onclick="reopenTasting('${esc(t.id)}')">Riapri</button>
+          <button class="btn" onclick="openResultsFor('${esc(t.id)}')">Confronto</button>
+          <button class="btn" style="background:var(--rosso);border-color:var(--rosso);color:#fff" onclick="deleteTasting('${esc(t.id)}')">Elimina</button>
+        </div>
+      </div>
+    `;
+  }).join("") : `<div class="muted" style="padding:10px;">Nessun elemento trovato.</div>`;
+}
+
+function copyTastingFromArchive(id){
+  const t = state.tastings.find(x=>x.id===id);
+  if(!t || t.status!=="archiviata"){ toast("Seleziona una degustazione archiviata"); return; }
+  copyTasting(id);
+}
+
+function reopenTasting(id){
+  const t = state.tastings.find(x=>x.id===id);
+  if(!t) return;
+  if(t.status!=="archiviata"){ toast("Non in archivio"); return; }
+  if(!confirm("Riaprire la degustazione dall'archivio e renderla modificabile?")) return;
+
+  t.status="attiva";
+  t.finishedAt=null;
+  state.currentTastingId=t.id;
+  saveState();
+  toast("Degustazione riaperta");
+  renderPreparation();
+  renderArchive();
+  go("degustazione", document.getElementById("btnMenuDeg"));
+  setTimeout(()=>renderTastingPage(),0);
+}
+
+/* ---------- Delete / toggle status ---------- */
+function deleteTasting(id){
+  if(!confirm("Eliminare la degustazione?")) return;
+  state.tastings = state.tastings.filter(t=>t.id!==id);
+  if(state.currentTastingId===id){
+    state.currentTastingId = state.tastings[0]?.id || null;
+  }
+  saveState();
+  toast("Eliminata");
+  renderPreparation();
+  renderArchive();
+  renderResultsSelect();
+  if(document.getElementById("page-degustazione")?.classList.contains("active")) renderTastingPage();
+}
+
+function toggleActiveDraft(id){
+  const t = state.tastings.find(x=>x.id===id);
+  if(!t) return;
+  if(t.status==="archiviata"){ toast("Non modificabile: archiviata"); return; }
+  t.status = (t.status==="attiva") ? "bozza" : "attiva";
+  saveState();
+  toast("Stato aggiornato");
+  renderPreparation();
+}
+
+/* ---------- Import / Export ---------- */
+function exportJson(){
+  downloadBlob("degustapp_export.json", JSON.stringify(state,null,2), "application/json");
+  toast("Export pronto");
+}
+function triggerImportJson(){
+  document.getElementById("importJsonInput")?.click();
+}
+function handleImportJsonFile(f){
+  const fr = new FileReader();
+  fr.onload = ()=>{
+    try{
+      const data = JSON.parse(String(fr.result||""));
+      state = migrate(data);
+      saveState();
+      toast("Import completato");
+      hydrateAll();
+    }catch{
+      toast("File non valido");
+    }
+  };
+  fr.readAsText(f);
+}
+
+/* ---------- Copia degustazione (usata solo da Archivio) ---------- */
+function copyTasting(id){
+  const src = state.tastings.find(x=>x.id===id);
+  if(!src){ toast("Non trovata"); return; }
+
+  const copy = {
+    id: uid(),
+    title: src.title + " (Copia)",
+    status: "bozza",
+    mode: src.mode,
+    createdAt: nowIso(),
+    finishedAt: null,
+    columns: cols4(src.columns),
+    groups: clone(state.groups),
+    samples: [],
+    products: null,
+    blindMap: {},
+    tasterIds: src.tasterIds.slice(),
+    evaluations: {}
+  };
+
+  if(src.mode==="scoperta"){
+    copy.samples = src.samples.map(s=>({ id:s.id, cols:cols4(s.cols), groupKey:null }));
+    copy.products = null;
+  }else{
+    copy.samples = src.samples.map(s=>({ id:s.id, cols:["","","",""], groupKey:null }));
+    copy.products = (src.products||[]).map(p=>({ id:p.id, cols:cols4(p.cols) }));
+  }
+
+  state.tastings.unshift(copy);
+  state.currentTastingId = copy.id;
+  saveState();
+  renderPreparation();
+  toast("Copia creata (bozza)");
+}
+
+/* =========================
+   MODAL DRAFT (tabella excel-like + incolla)
+   ========================= */
+let editingId = null;
+let draft = null;
+let lastDraftFocus = { r:0, col:"c1" };
+
+function emptyDraft(mode){
+  return { mode, columns:["Prodotto","Annata","Zona","Extra"], items:[], tasterIds: state.tasters.map(t=>t.id) };
+}
+function ensureDraftMinRows(n){
+  if(!draft) return;
+  while(draft.items.length < n){
+    const nextNum = draft.items.length + 1;
+    const defaultId = String(nextNum).padStart(2, '0');
+    draft.items.push({ include:true, id:defaultId, cols4:["","","",""] });
+  }
+}
+
+
+function openCreateModal(){
+  editingId = null;
+  draft = emptyDraft("scoperta");
+
+  document.getElementById("tastingModalTitle").textContent = "Nuova degustazione";
+  document.getElementById("modalPrimaryBtn").textContent = "Crea";
+  document.getElementById("degTitle").value = "";
+  document.getElementById("degMode").value = "scoperta";
+  document.getElementById("degStatus").value = "attiva";
+
+  renderDraftTasters();
+  ensureDraftMinRows(12);
+  renderDraftTable();
+  setupDraftPasteHandlers();
+  setupColShiftDnD();
+
+  openModal("modalTasting");
+}
+
+function openEditDraft(id){
+  const t = state.tastings.find(x=>x.id===id);
+  if(!t) return;
+
+  editingId = t.id;
+  draft = { mode:t.mode, columns:cols4(t.columns), items:[], tasterIds:(t.tasterIds||[]).slice() };
+
+  if(t.mode==="scoperta"){
+    draft.items = t.samples.map(s=>({ include:true, id:s.id, cols4: cols4(s.cols) }));
+  }else{
+    // per semplicità: in cieca la tabella rappresenta i prodotti (ID + col1..col4)
+    draft.items = (t.products||[]).map(p=>({ include:true, id:p.id ?? null, cols4: cols4(p.cols) }));
+  }
+
+  document.getElementById("tastingModalTitle").textContent = "Modifica bozza";
+  document.getElementById("modalPrimaryBtn").textContent = "Salva bozza";
+  document.getElementById("degTitle").value = t.title;
+  document.getElementById("degMode").value = t.mode;
+  document.getElementById("degStatus").value = t.status;
+
+  ensureDraftMinRows(12);
+  renderDraftTasters();
+  renderDraftTable();
+  setupDraftPasteHandlers();
+  setupColShiftDnD();
+
+  openModal("modalTasting");
+}
+
+
+function openEditTasting(id){
+  const t = state.tastings.find(x=>x.id===id);
+  if(!t) return;
+
+  editingId = t.id;
+  draft = { mode:t.mode, columns:cols4(t.columns), items:[], tasterIds:(t.tasterIds||[]).slice() };
+
+  if(t.mode==="scoperta"){
+    draft.items = t.samples.map(s=>({ include:true, id:s.id, cols4: cols4(s.cols) }));
+  }else{
+    draft.items = (t.products||[]).map(p=>({ include:true, id:p.id ?? null, cols4: cols4(p.cols) }));
+  }
+
+  document.getElementById("tastingModalTitle").textContent = "Modifica degustazione";
+  document.getElementById("modalPrimaryBtn").textContent = "Salva modifiche";
+  document.getElementById("degTitle").value = t.title;
+  document.getElementById("degMode").value = t.mode;
+  document.getElementById("degStatus").value = t.status;
+
+  ensureDraftMinRows(12);
+  renderDraftTasters();
+  renderDraftTable();
+  setupDraftPasteHandlers();
+  setupColShiftDnD();
+
+  openModal("modalTasting");
+}
+
+function onModeChanged(){
+  if(!draft) draft = emptyDraft(document.getElementById('degMode').value);
+  const mode = document.getElementById('degMode').value;
+  draft.mode = mode;
+  // NON azzerare la tabella: mantieni i dati inseriti
+  ensureDraftMinRows(12);
+  renderDraftTable();
+  toast('Modalità aggiornata');
+}
+
+function renderDraftTasters(){
+  const wrap = document.getElementById("draftTasters");
+  if(!wrap) return;
+  const set = new Set(draft?.tasterIds || []);
+  wrap.innerHTML = state.tasters.map(t=>{
+    const checked = set.has(t.id) ? "checked" : "";
+    return `<label><input type="checkbox" value="${t.id}" ${checked} onchange="onDraftTasterToggle(${t.id}, this.checked)"> ${esc(t.name)}</label>`;
+  }).join("");
+}
+function onDraftTasterToggle(id, on){
+  if(!draft) return;
+  const s = new Set(draft.tasterIds||[]);
+  if(on) s.add(id); else s.delete(id);
+  draft.tasterIds = Array.from(s);
+}
+
+function renderDraftTable(){
+  const body = document.getElementById("draftTableBody");
+  if(!body) return;
+  if(!draft || !draft.items.length){
+    body.innerHTML = `<tr><td colspan="7" class="muted" style="padding:12px;">Nessuna riga.</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = draft.items.map((it, idx)=>{
+    const c = cols4(it.cols4);
+    const inc = it.include ? "checked" : "";
+    const idVal = (it.id ?? "");
+    return `
+      <tr data-row="${idx}">
+        <td><input type="checkbox" ${inc} onchange="setDraftCell(${idx},'include', this.checked)"></td>
+
+        <td class="draft-cell id"><input class="draft-input" data-r="${idx}" data-c="id" value="${esc(idVal)}" placeholder="auto"></td>
+        <td class="draft-cell"><input class="draft-input" data-r="${idx}" data-c="c1" value="${esc(c[0])}"></td>
+        <td class="draft-cell"><input class="draft-input" data-r="${idx}" data-c="c2" value="${esc(c[1])}"></td>
+        <td class="draft-cell"><input class="draft-input" data-r="${idx}" data-c="c3" value="${esc(c[2])}"></td>
+        <td class="draft-cell"><input class="draft-input" data-r="${idx}" data-c="c4" value="${esc(c[3])}"></td>
+
+        <td><button class="btn" style="background:var(--rosso);border-color:var(--rosso);color:#fff" onclick="removeDraftRow(${idx})">Elimina</button></td>
+      </tr>
+    `;
+  }).join("");
+
+  body.querySelectorAll(".draft-input").forEach(inp=>{
+    inp.addEventListener("input", ()=>{
+      const r = parseIntSafe(inp.dataset.r, -1);
+      const col = inp.dataset.c;
+      if(r<0 || !col) return;
+      setDraftCell(r, col, inp.value);
+    });
+    inp.addEventListener("focus", ()=>{
+      lastDraftFocus = { r: parseIntSafe(inp.dataset.r,0), col: inp.dataset.c };
+    });
+  });
+}
+
+function addDraftRow(){
+  if(!draft) return;
+  draft.items.push({ include:true, id:null, cols4:["","","",""] });
+  renderDraftTable();
+}
+function removeDraftRow(idx){
+  if(!draft) return;
+  draft.items.splice(idx, 1);
+  renderDraftTable();
+}
+
+function setDraftCell(idx, field, value){
+  if(!draft || !draft.items[idx]) return;
+
+  if(field==="include"){ draft.items[idx].include = !!value; return; }
+
+  if(field==="id"){
+    const raw = String(value ?? "").trim();
+    draft.items[idx].id = raw ? raw : null;
+    return;
+  }
+
+  const m = /^c([1-4])$/.exec(field);
+  if(m){
+    const j = parseInt(m[1],10)-1;
+    draft.items[idx].cols4[j] = String(value ?? "");
+  }
+}
+
+function assignDefaultDraftIdsIfMissing(){
+  if(!draft) return;
+  const used = new Set((draft.items||[]).map(x=>String(x.id||'').trim()).filter(Boolean));
+  let next = 1;
+  (draft.items||[]).forEach(it=>{
+    if(!it.include) return;
+    if(it.id) return;
+    let cand = String(next).padStart(2,'0');
+    while(used.has(cand)){
+      next++;
+      cand = String(next).padStart(2,'0');
+    }
+    it.id = cand;
+    used.add(cand);
+    next++;
+  });
+}
+
+function setupDraftPasteHandlers(){
+  const body = document.getElementById("draftTableBody");
+  if(!body) return;
+  if(body.dataset.pasteAttached==="1") return;
+  body.dataset.pasteAttached="1";
+
+  body.addEventListener("paste", (e)=>{
+    const target = e.target;
+    if(!(target instanceof HTMLInputElement)) return;
+    if(!target.classList.contains("draft-input")) return;
+
+    const text = (e.clipboardData || window.clipboardData)?.getData("text");
+    if(!text) return;
+
+    e.preventDefault();
+
+    const startR = parseIntSafe(target.dataset.r, 0);
+    const startCol = target.dataset.c || "c1";
+    const colOrder = ["id","c1","c2","c3","c4"];
+    const startC = colOrder.indexOf(startCol);
+    if(startC < 0) return;
+
+    const rows = text
+      .replace(/\r\n/g,"\n").replace(/\r/g,"\n")
+      .split("\n")
+      .map(l=>l.split("\t"))
+      .filter(parts=>parts.length && parts.some(x=>String(x||"").trim().length));
+
+    ensureDraftMinRows(startR + rows.length);
+
+    for(let i=0;i<rows.length;i++){
+      const r = startR + i;
+      const parts = rows[i];
+      for(let j=0;j<parts.length;j++){
+        const cIdx = startC + j;
+        if(cIdx >= colOrder.length) break;
+        const field = colOrder[cIdx];
+        setDraftCell(r, field, parts[j]);
+      }
+    }
+
+    assignDefaultDraftIdsIfMissing();
+    renderDraftTable();
+
+    const sel = document.querySelector(`.draft-input[data-r="${startR}"][data-c="${startCol}"]`);
+    sel?.focus();
+    toast("Incollato nella tabella");
+  });
+}
+
+/* Shift columns Col1..Col4 values only */
+function setupColShiftDnD(){
+  const drags = Array.from(document.querySelectorAll(".col-drag"));
+  if(!drags.length) return;
+  if(drags[0].dataset.dndAttached==="1") return;
+  drags.forEach(d=>d.dataset.dndAttached="1");
+
+  drags.forEach(el=>{
+    el.addEventListener("dragstart", (e)=>{
+      e.dataTransfer.effectAllowed="move";
+      e.dataTransfer.setData("text/plain", String(el.dataset.col));
+    });
+    el.addEventListener("dragover", (e)=>e.preventDefault());
+    el.addEventListener("drop", (e)=>{
+      e.preventDefault();
+      const a = parseIntSafe(e.dataTransfer.getData("text/plain"), -1);
+      const b = parseIntSafe(el.dataset.col, -1);
+      if(a<0 || b<0 || a===b) return;
+      swapDraftCols(a, b);
+      toast("Colonne scambiate");
+    });
+  });
+}
+function swapDraftCols(a, b){
+  if(!draft) return;
+  draft.items.forEach(it=>{
+    const t = it.cols4[a];
+    it.cols4[a] = it.cols4[b];
+    it.cols4[b] = t;
+  });
+  renderDraftTable();
+}
+
+/* Create/update tasting from draft */
+function createOrUpdateTasting(){
+  const title = document.getElementById("degTitle").value.trim();
+  if(!title){ toast("Titolo obbligatorio"); return; }
+
+  const mode = document.getElementById("degMode").value;
+  const status = document.getElementById("degStatus").value;
+
+  if(!draft) draft = emptyDraft(mode);
+  draft.mode = mode;
+
+  const tasterIds = (draft.tasterIds||[]).filter(Boolean);
+  if(!tasterIds.length){ toast("Seleziona almeno 1 degustatore"); return; }
+
+  const picked = draft.items.filter(x=>x.include);
+  if(!picked.length){ toast("Seleziona almeno 1 riga"); return; }
+
+  assignDefaultDraftIdsIfMissing();
+
+  const used = new Set();
+  const assigned = [];
+  for(const it of picked){
+    const sid = it.id;
+    if(!sid || used.has(sid)) continue;
+    used.add(sid);
+    assigned.push({ sampleId:sid, cols4: cols4(it.cols4) });
+  }
+  if(!assigned.length){ toast("Nessun ID valido"); return; }
+
+  if(!editingId){
+    const t = {
+      id: uid(),
+      title, status, mode,
+      createdAt: nowIso(),
+      finishedAt: null,
+      columns: cols4(draft.columns),
+      groups: clone(state.groups),
+      samples: [],
+      products: null,
+      blindMap: {},
+      tasterIds: tasterIds.slice(),
+      evaluations: {}
+    };
+
+    if(mode==="scoperta"){
+      t.samples = assigned.map(x=>({ id:x.sampleId, cols:x.cols4, groupKey:null }));
+      t.products = null;
+    }else{
+      t.samples = assigned.map(x=>({ id:x.sampleId, cols:["","","",""], groupKey:null }));
+      t.products = assigned.map(x=>({ id:x.sampleId, cols:x.cols4 }));
+    }
+
+    state.tastings.unshift(t);
+    state.currentTastingId = t.id;
+    saveState();
+    closeModal("modalTasting");
+    renderPreparation();
+    renderTastingPage();
+    toast("Degustazione creata");
+    return;
+  }
+
+  const existing = state.tastings.find(x=>x.id===editingId);
+  if(!existing){ toast("Degustazione non trovata"); return; }
+  
+
+  const modeChanged = existing.mode !== mode;
+
+  existing.title = title;
+  existing.mode = mode;
+  existing.status = (existing.status==='archiviata') ? 'archiviata' : 'attiva';
+  existing.columns = cols4(draft.columns);
+  existing.groups = clone(state.groups);
+  existing.blindMap = {};
+  existing.tasterIds = tasterIds.slice();
+
+  if(mode==="scoperta"){
+    existing.samples = assigned.map(x=>({ id:x.sampleId, cols:x.cols4, groupKey:null }));
+    existing.products = null;
+  }else{
+    existing.samples = assigned.map(x=>({ id:x.sampleId, cols:["","","",""], groupKey:null }));
+    existing.products = assigned.map(x=>({ id:x.sampleId, cols:x.cols4 }));
+  }
+
+  if(modeChanged) existing.evaluations = {};
+  state.currentTastingId = existing.id;
+
+  saveState();
+  closeModal("modalTasting");
+  renderPreparation();
+  renderTastingPage();
+  toast("Modifiche salvate");
+}
+
+/* =========================
+   RISULTATI
+   ========================= */
+function onResultsSearch(v){
+  state.ui.resultsSearch = String(v||"");
+  saveState();
+  renderResultsTable();
+}
+function renderResultsSelect(){
+  const sel = document.getElementById("resultsDegSelect");
+  if(!sel) return;
+  sel.innerHTML = state.tastings.length
+    ? state.tastings.map(t=>`<option value="${esc(t.id)}">${esc(t.title)} (${t.samples.length} campioni) - ${esc(t.status)}</option>`).join("")
+    : `<option value="">Nessuna degustazione</option>`;
+}
+function openResultsFor(id){
+  go("risultati", document.getElementById("btnMenuRes"));
+  document.getElementById("resultsDegSelect").value = id;
+  renderResultsTable();
+}
+function fmtList(arr){
+  const a = (arr||[]).filter(Boolean);
+  return a.length ? a.map(esc).join(", ") : "-";
+}
+function profileChipHTML(profileKey){
+  if(!profileKey) return "-";
+  const p = profileDef(profileKey);
+  const label = p ? p.label : profileKey;
+  const color = p ? p.color : "7a2938";
+  return `<span class="chip profile" style="background:${hexToRgba(color,0.22)}">${esc(label)}</span>`;
+}
+function groupChipHTML(t, groupKey){
+  const g = groupDef(t, groupKey);
+  if(!g) return "-";
+  return `<span class="chip group" style="background:#${esc(g.color)}">${esc(g.label)}</span>`;
+}
+
+function renderResultsTable(){
+  const sel = document.getElementById("resultsDegSelect");
+  const wrap = document.getElementById("resultsTableWrap");
+  if(!sel || !wrap) return;
+
+  const t = state.tastings.find(x=>x.id===sel.value);
+  if(!t){ wrap.innerHTML = `<div class="muted">Seleziona una degustazione.</div>`; return; }
+
+  const q = String(state.ui.resultsSearch||"").trim().toLowerCase();
+  const tasters = state.tasters.filter(x=>t.tasterIds.includes(x.id));
+  const samples = t.samples.slice().sort((a,b)=>cmpSampleId(a.id,b.id));
+
+  const rows = [];
+
+  for(const s of samples){
+    const c = cols4(s.cols);
+
+    let sampleLabel = "";
+    if(t.mode==="cieca"){
+      const pid = (t.blindMap||{})[String(s.id)];
+      if(pid){
+        const p = productById(t, pid);
+        const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
+        const main = pc[0] || pc[1] || "Prodotto?";
+        sampleLabel = `${String(s.id).padStart(2,"0")} - ${main}`;
+      }else{
+        sampleLabel = `${String(s.id).padStart(2,"0")} - (non associato)`;
+      }
+    }else{
+      const main = c[0] || c[1] || "vuoto";
+      const sub = [c[2],c[3]].filter(Boolean).join(" - ");
+      sampleLabel = `${String(s.id).padStart(2,"0")} - ${main}${sub ? " - "+sub : ""}`;
+    }
+
+    const headerBlob = (sampleLabel + " " + (groupDef(t,s.groupKey)?.label||"")).toLowerCase();
+    const headerMatches = !q || headerBlob.includes(q);
+
+    const sampleRows = [];
+    for(const tas of tasters){
+      const ev = getEval(t, tas.id, s.id);
+      ev.progress = calcProgress(ev);
+      ev.overall = calcOverall(ev);
+
+      const rowBlob = (tas.name + " " + JSON.stringify(ev)).toLowerCase();
+      const match = headerMatches || !q || rowBlob.includes(q);
+      if(!match) continue;
+
+      sampleRows.push(`
+        <tr>
+          <td style="white-space:nowrap">${esc(tas.name)}</td>
+          <td>${profileChipHTML(ev.profileKey)}</td>
+          <td>${esc(ev.evolution||0)}</td>
+          <td>${ev.favourite ? "♥" : "-"}</td>
+          <td>${esc(ev.data.vista.intensita||0)} / ${esc(ev.data.vista.limpidezza||0)}</td>
+          <td>${fmtList(ev.data.vista.desc)}</td>
+          <td>${esc(ev.data.olfatto.intensita||0)} / ${esc(ev.data.olfatto.complessita||0)}</td>
+          <td>${fmtList(ev.data.olfatto.desc)}</td>
+          <td>${esc(ev.data.gusto.corpo||0)} / ${esc(ev.data.gusto.acidita||0)} / ${esc(ev.data.gusto.persistenza||0)}</td>
+          <td>${fmtList(ev.data.gusto.desc)}</td>
+          <td>${ev.overall ? ev.overall.toFixed(1) : "-"}</td>
+          <td>${esc(ev.progress||0)}%</td>
+        </tr>
+      `);
+    }
+
+    if(!sampleRows.length) continue;
+
+    rows.push(`
+      <tr>
+        <td colspan="12" style="background:rgba(245,240,232,.6);font-weight:950;">
+          ${esc(sampleLabel)} &nbsp; ${groupChipHTML(t, s.groupKey)}
+        </td>
+      </tr>
+    `);
+    rows.push(sampleRows.join(""));
+    rows.push(`<tr class="sep-row"><td colspan="12"></td></tr>`);
+  }
+
+  if(!rows.length){
+    wrap.innerHTML = `<div class="muted">Nessun risultato.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Degustatore</th>
+          <th>Profilo</th>
+          <th>Evoluzione</th>
+          <th>Preferito</th>
+          <th>Vista I/L</th>
+          <th>Vista descr.</th>
+          <th>Olfatto I/C</th>
+          <th>Olfatto descr.</th>
+          <th>Gusto C/A/P</th>
+          <th>Gusto descr.</th>
+          <th>Overall</th>
+          <th>Progresso</th>
+        </tr>
+      </thead>
+      <tbody>${rows.join("")}</tbody>
+    </table>
+  `;
+}
+
+/* =========================
+   ANAGRAFICHE (descriptor/profili/gruppi/degustatori)
+   ========================= */
+function showAnaTab(tab, btnEl){
+  document.querySelectorAll("#page-anagrafiche .tab").forEach(b=>b.classList.remove("active"));
+  btnEl?.classList.add("active");
+  document.getElementById("ana-descrittori").style.display = (tab==="descrittori") ? "block" : "none";
+  document.getElementById("ana-profili").style.display = (tab==="profili") ? "block" : "none";
+  document.getElementById("ana-gruppi").style.display = (tab==="gruppi") ? "block" : "none";
+  document.getElementById("ana-degustatori").style.display = (tab==="degustatori") ? "block" : "none";
+}
+
+function renderAnagrafiche(){
+  renderProfilesUI();
+  renderGroupsUI();
+  renderTastersTable();
+  // descrittori già caricati dai default; UI minima (se vuoi la gestione completa dimmelo)
+}
+
+/* Profiles list */
+function renderProfilesUI(){
+  const wrap = document.getElementById("profilesList");
+  if(!wrap) return;
+  wrap.innerHTML = state.profiles.length ? state.profiles.map((p,idx)=>`
+    <div class="row-actions" style="justify-content:space-between;align-items:center;margin:6px 0;">
+      <div class="pill2" style="flex:1;display:flex;align-items:center;gap:10px;">
+        <span style="width:14px;height:14px;border-radius:4px;background:#${esc(p.color)};border:1px solid rgba(0,0,0,.18)"></span>
+        <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.label)} <span class="muted">${esc(p.key)}</span></span>
+      </div>
+      <div>
+        <button class="btn" onclick="moveProfile(${idx},-1)">↑</button>
+        <button class="btn" onclick="moveProfile(${idx},1)">↓</button>
+        <button class="btn" onclick="editProfile('${esc(p.key)}')">Modifica</button>
+        <button class="btn" style="background:var(--rosso);border-color:var(--rosso);color:#fff" onclick="removeProfile('${esc(p.key)}')">Rimuovi</button>
+      </div>
+    </div>
+  `).join("") : `<div class="muted">Nessun profilo.</div>`;
+}
+function addProfile(){
+  const name = document.getElementById("newProfileName")?.value.trim();
+  const color = document.getElementById("newProfileColor")?.value.trim();
+  if(!name){ toast("Inserisci un nome"); return; }
+  const key = slugify(name);
+  if(!key){ toast("Nome non valido"); return; }
+  if(state.profiles.some(p=>p.key===key)){ toast("Profilo già presente"); return; }
+  if(!/^[0-9a-fA-F]{6}$/.test(color)){ toast("Colore non valido (RRGGBB)"); return; }
+  state.profiles.push({key, label:name, color});
+  document.getElementById("newProfileName").value="";
+  saveState();
+  renderProfilesUI(); renderProfileOptions(); renderProfileFilterBtns(); renderGrid();
+}
+function moveProfile(idx, delta){
+  const j = idx+delta;
+  if(j<0 || j>=state.profiles.length) return;
+  const tmp = state.profiles[idx];
+  state.profiles[idx] = state.profiles[j];
+  state.profiles[j] = tmp;
+  saveState();
+  renderProfilesUI(); renderProfileOptions(); renderProfileFilterBtns(); renderGrid();
+}
+function editProfile(key){
+  const p = state.profiles.find(x=>x.key===key);
+  if(!p) return;
+  const name = prompt("Nome profilo:", p.label);
+  if(name===null) return;
+  const v = name.trim();
+  if(!v){ toast("Nome non valido"); return; }
+  const color = prompt("Colore hex (RRGGBB):", p.color);
+  if(color===null) return;
+  const c = color.trim();
+  if(!/^[0-9a-fA-F]{6}$/.test(c)){ toast("Colore non valido"); return; }
+  p.label=v; p.color=c;
+  saveState();
+  renderProfilesUI(); renderProfileOptions(); renderProfileFilterBtns(); renderGrid();
+}
+function removeProfile(key){
+  if(!confirm("Rimuovere il profilo?")) return;
+  state.profiles = state.profiles.filter(p=>p.key!==key);
+  state.tastings.forEach(t=>{
+    Object.values(t.evaluations||{}).forEach(perT=>{
+      Object.values(perT||{}).forEach(ev=>{
+        if(ev.profileKey===key) ev.profileKey=null;
+      });
+    });
+  });
+  if(state.ui.filterProfile===key) state.ui.filterProfile="tutti";
+  saveState();
+  renderProfilesUI(); renderProfileOptions(); renderProfileFilterBtns(); renderGrid();
+}
+
+/* Groups list (global) */
+function renderGroupsUI(){
+  const wrap = document.getElementById("groupsList");
+  if(!wrap) return;
+  wrap.innerHTML = state.groups.length ? state.groups.map((g,idx)=>`
+    <div class="row-actions" style="justify-content:space-between;align-items:center;margin:6px 0;">
+      <div class="pill2" style="flex:1;display:flex;align-items:center;gap:10px;">
+        <span style="width:14px;height:14px;border-radius:4px;background:#${esc(g.color)};border:1px solid rgba(0,0,0,.18)"></span>
+        <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(g.label)} <span class="muted">${esc(g.key)}</span></span>
+      </div>
+      <div>
+        <button class="btn" onclick="moveGroup(${idx},-1)">↑</button>
+        <button class="btn" onclick="moveGroup(${idx},1)">↓</button>
+        <button class="btn" onclick="editGroup('${esc(g.key)}')">Modifica</button>
+        <button class="btn" style="background:var(--rosso);border-color:var(--rosso);color:#fff" onclick="removeGroup('${esc(g.key)}')">Rimuovi</button>
+      </div>
+    </div>
+  `).join("") : `<div class="muted">Nessun gruppo.</div>`;
+}
+function addGroup(){
+  const name = document.getElementById("newGroupName")?.value.trim();
+  const color = document.getElementById("newGroupColor")?.value.trim();
+  if(!name){ toast("Inserisci un nome gruppo"); return; }
+  const key = slugify(name);
+  if(!key){ toast("Nome non valido"); return; }
+  if(state.groups.some(g=>g.key===key)){ toast("Gruppo già presente"); return; }
+  if(!/^[0-9a-fA-F]{6}$/.test(color)){ toast("Colore non valido (RRGGBB)"); return; }
+  state.groups.push({key, label:name, color});
+  document.getElementById("newGroupName").value="";
+  saveState();
+  renderGroupsUI();
+}
+function moveGroup(idx, delta){
+  const j = idx+delta;
+  if(j<0 || j>=state.groups.length) return;
+  const tmp = state.groups[idx];
+  state.groups[idx] = state.groups[j];
+  state.groups[j] = tmp;
+  saveState();
+  renderGroupsUI();
+}
+function editGroup(key){
+  const g = state.groups.find(x=>x.key===key);
+  if(!g) return;
+  const name = prompt("Nome gruppo:", g.label);
+  if(name===null) return;
+  const v = name.trim();
+  if(!v){ toast("Nome non valido"); return; }
+  const color = prompt("Colore hex (RRGGBB):", g.color);
+  if(color===null) return;
+  const c = color.trim();
+  if(!/^[0-9a-fA-F]{6}$/.test(c)){ toast("Colore non valido"); return; }
+  g.label=v; g.color=c;
+  saveState();
+  renderGroupsUI();
+  renderGroupOptions(); renderGroupFilterBtns(); renderGrid(); updateDetail();
+}
+function removeGroup(key){
+  if(!confirm("Rimuovere il gruppo?")) return;
+  state.groups = state.groups.filter(g=>g.key!==key);
+  if(state.ui.filterGroup===key) state.ui.filterGroup="tutti";
+  state.tastings.forEach(t=> t.samples.forEach(s=>{ if(s.groupKey===key) s.groupKey=null; }));
+  saveState();
+  renderGroupsUI();
+  renderGroupOptions(); renderGroupFilterBtns(); renderGrid(); updateDetail();
+}
+
+/* Tasters */
+function renderTastersTable(){
+  const tb = document.getElementById("tastersTbody");
+  if(!tb) return;
+  tb.innerHTML = state.tasters.length ? state.tasters.map(t=>`
+    <tr>
+      <td>${t.id}</td>
+      <td>${esc(t.name)}</td>
+      <td>${esc(t.email||"-")}</td>
+      <td>
+        <div class="row-actions">
+          <button class="btn" style="background:var(--rosso);border-color:var(--rosso);color:#fff" onclick="deleteTaster(${t.id})">Elimina</button>
+        </div>
+      </td>
+    </tr>
+  `).join("") : `<tr><td colspan="4" class="muted" style="padding:14px;">Nessun degustatore.</td></tr>`;
+}
+function addTaster(){
+  const name = document.getElementById("newTasterName")?.value.trim();
+  const email = document.getElementById("newTasterEmail")?.value.trim();
+  if(!name){ toast("Inserisci un nome"); return; }
+  const nextId = (state.tasters.reduce((m,t)=>Math.max(m,t.id),0) || 0) + 1;
+  state.tasters.push({id:nextId, name, email});
+  document.getElementById("newTasterName").value="";
+  document.getElementById("newTasterEmail").value="";
+  saveState();
+  renderTastersTable();
+  hydrateTasterSelect();
+}
+function deleteTaster(id){
+  if(!confirm("Eliminare degustatore?")) return;
+  state.tasters = state.tasters.filter(t=>t.id!==id);
+  state.tastings.forEach(t=>{
+    t.tasterIds = (t.tasterIds||[]).filter(x=>x!==id);
+    delete (t.evaluations||{})[id];
+  });
+  saveState();
+  renderTastersTable();
+  hydrateTasterSelect();
+}
+
+/* ---------- Demo reset ---------- */
+function resetDemo(){
+  if(!confirm("Ripristinare demo? (Sovrascrive lo stato salvato)")) return;
+  state = defaultState();
+  saveState();
+  toast("Demo ripristinata");
+  hydrateAll();
+}
+
+/* ---------- Hydrate all ---------- */
+function hydrateAll(){
+  renderPreparation();
+  renderAnagrafiche();
+  renderArchive();
+  renderResultsSelect();
+  updateTopActions(document.querySelector(".page.active")?.id?.replace("page-","") || "preparazione");
+  if(document.getElementById("page-degustazione")?.classList.contains("active")){
+    initCanvas();
+    renderTastingPage();
+  }
+}
+
+/* ---------- Boot ---------- */
+window.addEventListener("DOMContentLoaded", ()=>{
+  // Splash screen: scompare dopo 3 secondi
+  const splash = document.getElementById("splashScreen");
+  if (splash) {
+    setTimeout(() => splash.classList.add("hide"), 3000);
+    setTimeout(() => splash.remove(), 3400);
+  }
+
+  state = migrate(loadState() || defaultState());
+  saveState();
+ 
+   const inp = document.getElementById("importJsonInput");
+   if(inp){
+     inp.addEventListener("change", (e)=>{
+       const f = e.target.files && e.target.files[0];
+       if(f) handleImportJsonFile(f);
+       e.target.value = "";
+     });
+   }
+
+  renderPreparation();
+  renderAnagrafiche();
+  renderArchive();
+  renderResultsSelect();
+  updateTopActions("preparazione");
+
+  initCanvas();
+  if(state.ui.zen) setZenUI(true);
+});
+
+window.addEventListener("resize", ()=>{
+  if(document.getElementById("page-degustazione")?.classList.contains("active")){
+    initCanvas();
+    loadCanvasFromEval();
+  }
+});
+</script>
+</body>
+</html>
