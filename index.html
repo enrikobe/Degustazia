@@ -696,19 +696,7 @@ tr:hover td{background:rgba(245,240,232,.7)}
 /* =========================
    HTML BODY
    ========================= */
-  
-/* UX: evita selezione testo su elementi cliccabili */
-.btn, .filter-btn, .sort-btn, .pchip, .chip, .menu-btn, .tab, .pill, .pill2, .assigned-tag, .col-drag {
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* Pencil/Touch: riduce scroll involontario durante scrittura */
-.canvas-container{ touch-action: none; overscroll-behavior: contain; }
-#drawingCanvas{ touch-action: none; }
-.no-scroll{ overflow:hidden !important; }
-
-</style>
+  </style>
 </head>
 
 <body>
@@ -1105,7 +1093,7 @@ tr:hover td{background:rgba(245,240,232,.7)}
               </select>
             </div>
 
-            <div class="form-group" style="display:none">
+            <div class=\"form-group\" style=\"display:none\">
       <label>Stato</label>
               <select class="select" id="degStatus">
                 <option value="attiva">Attiva</option>
@@ -1181,7 +1169,6 @@ tr:hover td{background:rgba(245,240,232,.7)}
   <input id="importJsonInput" type="file" accept="application/json" style="display:none">
 
   <div id="toast" class="toast"></div>
-
 
 <script>
 /* =========================
@@ -1297,43 +1284,44 @@ function defaultDescriptors(){
   };
 }
 
+function demoTasting(){
+  const cols = ["Prodotto","Annata","Zona","Extra"];
+  const rows = [
+    ["Cuvée Prestige","2021","Franciacorta",""],
+    ["Cuvée Prestige","2020","Franciacorta",""],
+    ["Cuvée Prestige","2019","Franciacorta",""],
+    ["Satèn","2021","Franciacorta",""],
+    ["Satèn","2020","Franciacorta",""],
+    ["Rosé","2021","Franciacorta",""],
+    ["Annamaria Clementi","2015","Franciacorta",""],
+    ["Riserva Dosage Zéro","2016","Franciacorta",""],
+  ];
 
-function getNewDemoTasting(){
-  const rows = [["Cuvée Prestige Ed. 46", "N.V.", "Franciacorta", "Lotto A1"], ["Cuvée Prestige Ed. 45", "N.V.", "Franciacorta", "Lotto B2"], ["Cuvée Prestige Ed. 44", "N.V.", "Franciacorta", "Lotto C3"], ["Cuvée Prestige Rosé Ed. 18", "N.V.", "Franciacorta", "Lotto R1"], ["Vintage Collection Brut", "2019", "Franciacorta", "Lotto V19"], ["Vintage Collection Satèn", "2019", "Franciacorta", "Lotto S19"], ["Vintage Collection Dosage Zéro", "2019", "Franciacorta", "Lotto D19"], ["Vintage Collection Brut", "2018", "Franciacorta", "Lotto V18"], ["Vintage Collection Satèn", "2018", "Franciacorta", "Lotto S18"], ["Vintage Collection Dosage Zéro", "2018", "Franciacorta", "Lotto D18"], ["Cuvée Annamaria Clementi", "2015", "Franciacorta", "Lotto AC15"], ["Cuvée Annamaria Clementi Rosé", "2015", "Franciacorta", "Lotto AR15"]];
-  const tId = uid();
   return {
-    id: tId,
-    title: "Degustazione Ca' del Bosco (demo)",
-    status: 'attiva',
-    mode: 'scoperta',
+    id: uid(),
+    title: "Panel Demo 2025",
+    status: "attiva",
+    mode: "scoperta",
     createdAt: nowIso(),
     finishedAt: null,
-    columns: ['Prodotto','Annata','Zona','Note/Lotto'],
-    groups: cloneobj(defaultGroups()),
-    samples: rows.map((r,i)=>({
-      id: String(i+1).padStart(2,'0'),
-      cols: [r[0], r[1], r[2], r[3]],
-      groupKey: null
-    })),
+    columns: cols.slice(0,4),
+    groups: clone(defaultGroups()),
+    samples: rows.map((r,i)=>({id:i+1, cols:r.slice(0,4), groupKey:null})),
     products: null,
     blindMap: {},
-    tasterIds: state.tasters.map(x=>x.id),
+    tasterIds: [1,2,3,4],
     evaluations: {}
   };
-}
-
-function demoTasting(){
-  return getNewDemoTasting();
 }
 
 function defaultState(){
   const d = demoTasting();
   return {
     tasters:[
-      {id:1, name:"Stefano", email:"mario@panel.local"},
-      {id:2, name:"Guido", email:"laura@panel.local"},
-      {id:3, name:"Leonardo", email:"giovanni@panel.local"},
-      {id:4, name:"Enrico", email:"anna@panel.local"},
+      {id:1, name:"Mario Rossi", email:"mario@panel.local"},
+      {id:2, name:"Laura Bianchi", email:"laura@panel.local"},
+      {id:3, name:"Giovanni Verdi", email:"giovanni@panel.local"},
+      {id:4, name:"Anna Neri", email:"anna@panel.local"},
     ],
     profiles: defaultProfiles(),
     groups: defaultGroups(),
@@ -1603,6 +1591,8 @@ function hydrateTasterSelect(){
     state.tasters.filter(x=>ids.has(x.id)).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join("");
 }
 function onSelectTaster(){
+  state.currentTaster = currentTasterId();
+  saveState();
   renderGrid();
   updateDetail();
   loadCanvasFromEval();
@@ -1733,6 +1723,15 @@ function renderTastingPage(){
   renderProfileOptions();
   renderDescriptorPickers();
   hydrateTasterSelect();
+  // apply remembered taster
+  try{
+    const sel = document.getElementById('tasterSelect');
+    const t0 = getTasting();
+    if(sel && t0){
+      const ok = (t0.tasterIds||[]).map(x=>String(x));
+      if(state.currentTaster && ok.includes(String(state.currentTaster))) sel.value = String(state.currentTaster);
+    }
+  }catch{}
 
   const ro = !!t && isArchived();
   const b = document.getElementById("readonlyBanner");
@@ -1938,7 +1937,7 @@ function renderGrid(){
   // click card => select sample
   grid.querySelectorAll(".sample-card").forEach(card=>{
     card.addEventListener("click", ()=>{
-      const sid = parseIntSafe(card.dataset.sampleid, 0);
+      const sid = String(card.dataset.sampleid || '');
       if(sid) selectSample(sid);
     });
   });
@@ -1951,7 +1950,7 @@ function renderGrid(){
     }
     h.addEventListener("click", (e)=>{
       e.stopPropagation();
-      const sid = parseIntSafe(h.dataset.favSample, 0);
+      const sid = String(h.dataset.favSample || '');
       if(!sid) return;
       if(selectedSampleId !== sid){
         toast("Seleziona prima il campione");
@@ -1969,7 +1968,7 @@ function renderGrid(){
     }
     dot.addEventListener("click", (e)=>{
       e.stopPropagation();
-      const sid = parseIntSafe(dot.dataset.dotSample, 0);
+      const sid = String(dot.dataset.dotSample || '');
       const evo = parseIntSafe(dot.dataset.dotEvo, 0);
       setEvolutionForSample(sid, evo);
     });
@@ -2059,7 +2058,6 @@ function attachReorderDnD(){
   });
 }
 
-
 /* ---------- Blind assignment drop ---------- */
 function attachBlindDrop(){
   const grid = document.getElementById('samplesGrid');
@@ -2077,7 +2075,6 @@ function attachBlindDrop(){
     });
   });
 }
-
 function setBlindMap(sampleId, productId){
   const t = getTasting();
   if(!t) return;
@@ -2415,10 +2412,10 @@ function initCanvas(){
   }
   canvas.dataset.attached="1";
 
-  canvas.addEventListener("pointerdown", startDrawing, { passive: false });
-  canvas.addEventListener("pointermove", draw, { passive: false });
-  canvas.addEventListener("pointerup", stopDrawing, { passive: false });
-  canvas.addEventListener("pointercancel", stopDrawing, { passive: false });
+  canvas.addEventListener("pointerdown", startDrawing);
+  canvas.addEventListener("pointermove", draw);
+  canvas.addEventListener("pointerup", stopDrawing);
+  canvas.addEventListener("pointercancel", stopDrawing);
   canvas.addEventListener("pointerleave", stopDrawing);
 
   loadCanvasFromEval();
@@ -2428,8 +2425,6 @@ function getCanvasPos(e){
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
 function startDrawing(e){
-  try{ e.preventDefault(); }catch{}
-  document.body.classList.add('no-scroll');
   if(isArchived()) return;
   if(!currentTasterId() || !selectedSampleId) return;
   if(!canvas || !ctx) return;
@@ -2462,7 +2457,6 @@ function draw(e){
   lastY = p.y;
 }
 function stopDrawing(){
-  document.body.classList.remove('no-scroll');
   if(!canvas || !ctx) return;
   if(!isDrawing) return;
 
@@ -2543,7 +2537,7 @@ function renderPreparation(){
   const att = document.getElementById("prep-attive");
   if(!att) return;
 
-  const nonArchiviate = state.tastings.filter(t=>t.status!=='archiviata');
+  const nonArchiviate = state.tastings.filter(t=>!t.archived);
 
   const card = (t)=>{
     const created = t.createdAt ? new Date(t.createdAt).toLocaleString("it-IT") : "-";
@@ -3119,8 +3113,8 @@ function createOrUpdateTasting(){
   }
 
   const existing = state.tastings.find(x=>x.id===editingId);
-  if(!existing){ toast("Bozza non trovata"); return; }
-  if(existing.status!=="bozza"){ toast("Modifica consentita solo se BOZZA"); return; }
+  if(!existing){ toast("Degustazione non trovata"); return; }
+  
 
   const modeChanged = existing.mode !== mode;
 
@@ -3147,7 +3141,7 @@ function createOrUpdateTasting(){
   closeModal("modalTasting");
   renderPreparation();
   renderTastingPage();
-  toast("Bozza salvata");
+  toast("Modifiche salvate");
 }
 
 /* =========================
@@ -3493,12 +3487,11 @@ function deleteTaster(id){
 
 /* ---------- Demo reset ---------- */
 function resetDemo(){
-  const d = getNewDemoTasting();
-  state.tastings.unshift(d);
-  state.currentTastingId = d.id;
+  if(!confirm("Ripristinare demo? (Sovrascrive lo stato salvato)")) return;
+  state = defaultState();
   saveState();
-  renderPreparation();
-  toast('Degustazione demo aggiunta');
+  toast("Demo ripristinata");
+  hydrateAll();
 }
 
 /* ---------- Hydrate all ---------- */
