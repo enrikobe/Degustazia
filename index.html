@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>DegustAPP by EB <span id="syncLed" class="sync-led" title="Sync Status"></span></title>
+  <title>DegustAPP by EB <span id="syncLed" class="sync-led" title="Cloud Status"></span></title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     :root{
@@ -471,13 +471,12 @@
     #page-preparazione .tabs{display:none}
   
 .sync-led{
-  display:inline-block; width:12px; height:12px; margin-left:12px; border-radius:50%;
-  background:#ccc; border:2px solid rgba(255,255,255,0.3); vertical-align:middle; transition:background 0.3s;
+  display:inline-block; width:10px; height:10px; margin-left:10px; border-radius:50%;
+  background:#999; border:1px solid #fff; vertical-align:middle; transition:background 0.2s;
 }
-.sync-led.connected { background:#00e676; box-shadow:0 0 8px #00e676; } /* Green */
-.sync-led.syncing { background:#ffea00; animation: blink 0.5s infinite; } /* Yellow blink */
-.sync-led.offline { background:#ff1744; } /* Red */
-@keyframes blink { 50% { opacity: 0.4; } }
+.sync-led.connected { background:#4caf50; box-shadow:0 0 6px #4caf50; } 
+.sync-led.syncing { background:#ffeb3b; } 
+.sync-led.offline { background:#f44336; } 
 
 </style>
 </head>
@@ -505,7 +504,7 @@
       <button id="btnMenuRes" class="menu-btn" onclick="go('risultati', this)">Confronto</button>
     </div>
 
-    <div class="app-title">DegustAPP by EB <span id="syncLed" class="sync-led" title="Sync Status"></span></div>
+    <div class="app-title">DegustAPP by EB <span id="syncLed" class="sync-led" title="Cloud Status"></span></div>
 
     <div class="menu-actions">
       <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
@@ -1130,7 +1129,7 @@
 
     function loadState(){ return null; }catch{ return null; }
     }
-    function saveState(){ /* Cloud Only - No Local Persist */ }
+    function saveState(){ /* Cloud Only */ }
 
     function cols4(cols){
       const c = (cols ?? []).slice(0,4).map(x=>String(x ?? "").trim());
@@ -3088,11 +3087,10 @@ function renderArchive(){
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import { 
-    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, enableIndexedDbPersistence, enableNetwork, disableNetwork
+    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, enableIndexedDbPersistence
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-  // --- CONFIGURAZIONE ---
- const firebaseConfig = {
+  const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
@@ -3101,131 +3099,116 @@ function renderArchive(){
   appId: "1:689428903782:web:a8fc272dd0b2e74ce2baa7"
 };
 
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
-  // Optional: Persistence for offline resilience (cache), but "Truth" is cloud.
-  try { enableIndexedDbPersistence(db); } catch(e) {}
+  let db;
+  try {
+      const app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      // Try persistence for reliability, but we treat it as Cloud Only logic (UI updates from Listener)
+      try { enableIndexedDbPersistence(db); } catch(e){}
+      console.log("V22 Cloud Active");
+  } catch(e) {
+      console.error("Firebase Init Error", e);
+  }
 
-  console.log("DegustAPP V21 Cloud-Only + LED");
-
-  // --- LED MANAGER ---
+  // LED Logic
   const led = document.getElementById("syncLed");
-  let pendingWrites = 0;
+  const setLed = (s) => { if(led) { led.className = "sync-led " + s; } };
 
-  function updateLed(status){
-    if(!led) return;
-    led.classList.remove("connected", "syncing", "offline");
-    if(status === "offline") led.classList.add("offline");
-    else if(status === "syncing") led.classList.add("syncing");
-    else led.classList.add("connected");
+  // Monitor connection rough approximation
+  window.addEventListener('online', ()=>setLed("connected"));
+  window.addEventListener('offline', ()=>setLed("offline"));
+  setLed(navigator.onLine ? "connected" : "offline");
+
+  function flashSync(){
+     setLed("syncing");
+     setTimeout(()=>{ setLed(navigator.onLine ? "connected" : "offline"); }, 500);
   }
 
-  // Initial status
-  updateLed(navigator.onLine ? "connected" : "offline");
-  window.addEventListener('online', ()=>updateLed("connected"));
-  window.addEventListener('offline', ()=>updateLed("offline"));
-
-  function startWrite(){
-    pendingWrites++;
-    updateLed("syncing");
-  }
-
-  function endWrite(){
-    pendingWrites--;
-    if(pendingWrites <= 0){
-        pendingWrites = 0;
-        updateLed(navigator.onLine ? "connected" : "offline");
-    }
-  }
-
-  // --- SYNC HELPERS ---
+  // --- SYNC FUNCTIONS ---
 
   window.fbPushTasting = (t) => {
-    if(!t || !t.id) return;
-    startWrite();
+    if(!db || !t || !t.id) return;
+    flashSync();
     const payload = JSON.parse(JSON.stringify(t));
     delete payload.evaluations; 
-    setDoc(doc(db, "tastings", t.id), payload, {merge:true})
-      .then(()=>{ console.log("Pushed:", t.title); endWrite(); })
-      .catch(e=>{ console.error(e); endWrite(); });
+    setDoc(doc(db, "tastings", t.id), payload, {merge:true}).catch(console.error);
   };
 
   window.fbDeleteTasting = (id) => {
-    startWrite();
-    deleteDoc(doc(db, "tastings", id)).finally(endWrite);
-  };
-
-  // LISTENER (The only way state is updated)
-  window.listenTastings = () => {
-    onSnapshot(collection(db, "tastings"), (snap) => {
-       if(snap.metadata.fromCache){ 
-          // Optional: Indicate cache usage?
-       }
-       let changed = false;
-       snap.docChanges().forEach((change) => {
-         const d = change.doc.data();
-         const id = change.doc.id;
-         if(change.type === 'added' || change.type === 'modified'){
-            const idx = state.tastings.findIndex(x=>x.id===id);
-            const oldEvals = (idx>=0 && state.tastings[idx].evaluations) ? state.tastings[idx].evaluations : {};
-            const newObj = { ...d, id, evaluations: oldEvals };
-            if(idx >= 0) state.tastings[idx] = newObj;
-            else state.tastings.unshift(newObj);
-            changed = true;
-         }
-         if(change.type === 'removed'){
-            state.tastings = state.tastings.filter(x=>x.id !== id);
-            changed = true;
-         }
-       });
-
-       if(changed){
-         state.tastings.sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-         // No saveState() call needed as per requirement (Cloud Only)
-         // But we must refresh UI
-         if(typeof renderArchive === 'function') renderArchive();
-         if(typeof renderPreparation === 'function') renderPreparation(); 
-         if(typeof renderResultsSelect === 'function') renderResultsSelect();
-       }
-    });
+    if(!db) return;
+    flashSync();
+    deleteDoc(doc(db, "tastings", id));
   };
 
   window.fbPushAnagrafiche = () => {
-    startWrite();
+    if(!db) return;
+    flashSync();
     setDoc(doc(db, "global", "anagrafiche"), {
       profiles: state.profiles, groups: state.groups, tasters: state.tasters
-    }, {merge:true}).finally(endWrite);
-  };
-
-  window.listenAnagrafiche = () => {
-    onSnapshot(doc(db, "global", "anagrafiche"), (snap) => {
-      if(snap.exists()){
-        const d = snap.data();
-        let ch=false;
-        if(JSON.stringify(state.profiles)!==JSON.stringify(d.profiles)){ state.profiles=d.profiles||[]; ch=true; }
-        if(JSON.stringify(state.groups)!==JSON.stringify(d.groups)){ state.groups=d.groups||[]; ch=true; }
-        if(d.tasters && JSON.stringify(state.tasters)!==JSON.stringify(d.tasters)){ state.tasters=d.tasters; ch=true; }
-        if(ch){ 
-            if(typeof hydrateAll==='function') hydrateAll(); 
-        }
-      } else {
-        // Init if empty
-        window.fbPushAnagrafiche();
-      }
-    });
+    }, {merge:true});
   };
 
   window.fbPushEval = (tid, sid, uid, val) => {
-     startWrite();
+     if(!db) return;
+     flashSync();
      setDoc(doc(db, "tastings", tid, "evaluations", `${uid}_${sid}`), {
        ...val, tastingId:tid, sampleId:sid, tasterId:uid, updatedAt: new Date().toISOString()
-     }, {merge:true}).finally(endWrite);
+     }, {merge:true});
   };
 
+  // --- LISTENERS ---
+
+  if(db) {
+      // TASTINGS LISTENER
+      onSnapshot(collection(db, "tastings"), (snap) => {
+         let changed = false;
+         snap.docChanges().forEach((change) => {
+           const d = change.doc.data();
+           const id = change.doc.id;
+           if(change.type === 'added' || change.type === 'modified'){
+              const idx = state.tastings.findIndex(x=>x.id===id);
+              const oldEvals = (idx>=0 && state.tastings[idx].evaluations) ? state.tastings[idx].evaluations : {};
+              const newObj = { ...d, id, evaluations: oldEvals };
+              if(idx >= 0) state.tastings[idx] = newObj;
+              else state.tastings.unshift(newObj);
+              changed = true;
+           }
+           if(change.type === 'removed'){
+              state.tastings = state.tastings.filter(x=>x.id !== id);
+              changed = true;
+           }
+         });
+
+         if(changed){
+           state.tastings.sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+           // UI REFRESH
+           if(typeof renderArchive === 'function') renderArchive();
+           if(typeof renderPreparation === 'function') renderPreparation(); 
+           if(typeof renderResultsSelect === 'function') renderResultsSelect();
+         }
+      });
+
+      // ANAGRAFICHE LISTENER
+      onSnapshot(doc(db, "global", "anagrafiche"), (snap) => {
+        if(snap.exists()){
+          const d = snap.data();
+          let ch=false;
+          if(JSON.stringify(state.profiles)!==JSON.stringify(d.profiles)){ state.profiles=d.profiles||[]; ch=true; }
+          if(JSON.stringify(state.groups)!==JSON.stringify(d.groups)){ state.groups=d.groups||[]; ch=true; }
+          if(d.tasters && JSON.stringify(state.tasters)!==JSON.stringify(d.tasters)){ state.tasters=d.tasters; ch=true; }
+          if(ch && typeof hydrateAll==='function') hydrateAll();
+        } else {
+          // Push defaults if empty
+          window.fbPushAnagrafiche();
+        }
+      });
+  }
+
+  // --- EVAL SUBSCRIPTION ---
   let evalUnsub = null;
   window.subscribeEvaluations = (tid) => {
     if(evalUnsub) evalUnsub();
-    if(!tid) return;
+    if(!db || !tid) return;
     evalUnsub = onSnapshot(collection(db, "tastings", tid, "evaluations"), (snap) => {
        const t = state.tastings.find(x=>x.id===tid);
        if(!t) return;
@@ -3245,8 +3228,7 @@ function renderArchive(){
     });
   };
 
-  // --- WRAPPERS / HOOKS ---
-  // We use wrappers again where safe, or rely on Direct Injection for createOrUpdateTasting present in V19 base.
+  // --- WRAPPERS ---
 
   const _finish = window.finishTasting;
   window.finishTasting = function(){
@@ -3257,8 +3239,7 @@ function renderArchive(){
 
   window.deleteTasting = function(id){
     if(!confirm("Eliminare definitivamente (Cloud)?")) return;
-    // Optimistic delete
-    state.tastings = state.tastings.filter(x=>x.id !== id);
+    state.tastings = state.tastings.filter(x=>x.id !== id); // UI Optimistic
     if(typeof renderArchive==='function') renderArchive();
     window.fbDeleteTasting(id);
   };
@@ -3299,9 +3280,6 @@ function renderArchive(){
     const orig = window[f];
     if(orig) window[f] = function(...a){ orig.apply(this,a); window.fbPushAnagrafiche(); };
   });
-
-  window.listenTastings();
-  window.listenAnagrafiche();
 
 </script>
 <!-- FIREBASE INTEGRATION END -->
