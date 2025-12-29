@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>DegustAPP by EB</title>
+  <title>DegustAPP by EB <span id="syncLed" class="sync-led" title="Sync Status"></span></title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     :root{
@@ -469,7 +469,17 @@
       opacity:0;pointer-events:none;transition:opacity .25s ease;
     }
     #page-preparazione .tabs{display:none}
-  </style>
+  
+.sync-led{
+  display:inline-block; width:12px; height:12px; margin-left:12px; border-radius:50%;
+  background:#ccc; border:2px solid rgba(255,255,255,0.3); vertical-align:middle; transition:background 0.3s;
+}
+.sync-led.connected { background:#00e676; box-shadow:0 0 8px #00e676; } /* Green */
+.sync-led.syncing { background:#ffea00; animation: blink 0.5s infinite; } /* Yellow blink */
+.sync-led.offline { background:#ff1744; } /* Red */
+@keyframes blink { 50% { opacity: 0.4; } }
+
+</style>
 </head>
 
 <body>
@@ -495,7 +505,7 @@
       <button id="btnMenuRes" class="menu-btn" onclick="go('risultati', this)">Confronto</button>
     </div>
 
-    <div class="app-title">DegustAPP by EB</div>
+    <div class="app-title">DegustAPP by EB <span id="syncLed" class="sync-led" title="Sync Status"></span></div>
 
     <div class="menu-actions">
       <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
@@ -928,7 +938,7 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    const STORAGEKEY = "degustappstatev19_final";
+    const STORAGEKEY = "degustappstatev13";
 
     // ---------- Helpers ----------
     function setupDraftArrowNavigation(){
@@ -1090,7 +1100,7 @@
     }
 
     function defaultState(){
-      const d = demoTasting();
+      //const d = demoTasting();
       return {
         tasters:[
           {id:1, name:"Stefano", email:"s.capelli@cadelbosco.com"},
@@ -1101,8 +1111,8 @@
         profiles: defaultProfiles(),
         groups: defaultGroups(),
         descriptors: defaultDescriptors(),
-        tastings: [d],
-        currentTastingId: d.id,
+        tastings:[],
+    currentTastingId: null,
         currentTaster: null,
         ui:{
           prepTab:"attive",
@@ -1118,15 +1128,9 @@
 
     let state = null;
 
-    function loadState(){
-      try{
-        const raw = localStorage.getItem(STORAGEKEY);
-        return raw ? JSON.parse(raw) : null;
-      }catch{ return null; }
+    function loadState(){ return null; }catch{ return null; }
     }
-    function saveState(){
-      localStorage.setItem(STORAGEKEY, JSON.stringify(state));
-    }
+    function saveState(){ /* Cloud Only - No Local Persist */ }
 
     function cols4(cols){
       const c = (cols ?? []).slice(0,4).map(x=>String(x ?? "").trim());
@@ -2287,7 +2291,7 @@
     }
 
     function resetDemo(){
-      const d = demoTasting();
+      //const d = demoTasting();
       d.id = uid();
       d.title += " (Copia)";
       state.tastings.unshift(d);
@@ -3084,10 +3088,11 @@ function renderArchive(){
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import { 
-    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, enableIndexedDbPersistence
+    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, enableIndexedDbPersistence, enableNetwork, disableNetwork
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-  const firebaseConfig = {
+  // --- CONFIGURAZIONE ---
+ const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
@@ -3098,29 +3103,64 @@ function renderArchive(){
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
+  // Optional: Persistence for offline resilience (cache), but "Truth" is cloud.
   try { enableIndexedDbPersistence(db); } catch(e) {}
 
-  console.log("DegustAPP V19 Direct Sync Active");
+  console.log("DegustAPP V21 Cloud-Only + LED");
 
-  // --- HELPERS ---
+  // --- LED MANAGER ---
+  const led = document.getElementById("syncLed");
+  let pendingWrites = 0;
+
+  function updateLed(status){
+    if(!led) return;
+    led.classList.remove("connected", "syncing", "offline");
+    if(status === "offline") led.classList.add("offline");
+    else if(status === "syncing") led.classList.add("syncing");
+    else led.classList.add("connected");
+  }
+
+  // Initial status
+  updateLed(navigator.onLine ? "connected" : "offline");
+  window.addEventListener('online', ()=>updateLed("connected"));
+  window.addEventListener('offline', ()=>updateLed("offline"));
+
+  function startWrite(){
+    pendingWrites++;
+    updateLed("syncing");
+  }
+
+  function endWrite(){
+    pendingWrites--;
+    if(pendingWrites <= 0){
+        pendingWrites = 0;
+        updateLed(navigator.onLine ? "connected" : "offline");
+    }
+  }
+
+  // --- SYNC HELPERS ---
 
   window.fbPushTasting = (t) => {
     if(!t || !t.id) return;
+    startWrite();
     const payload = JSON.parse(JSON.stringify(t));
-    delete payload.evaluations; // Evaluations in subcollection
-    // MERGE=TRUE ensures updates merge fields, but for New it creates.
+    delete payload.evaluations; 
     setDoc(doc(db, "tastings", t.id), payload, {merge:true})
-      .then(()=>console.log("Pushed:", t.title))
-      .catch(e=>console.error("Push Error", e));
+      .then(()=>{ console.log("Pushed:", t.title); endWrite(); })
+      .catch(e=>{ console.error(e); endWrite(); });
   };
 
   window.fbDeleteTasting = (id) => {
-    deleteDoc(doc(db, "tastings", id));
+    startWrite();
+    deleteDoc(doc(db, "tastings", id)).finally(endWrite);
   };
 
-  // LISTENER
+  // LISTENER (The only way state is updated)
   window.listenTastings = () => {
     onSnapshot(collection(db, "tastings"), (snap) => {
+       if(snap.metadata.fromCache){ 
+          // Optional: Indicate cache usage?
+       }
        let changed = false;
        snap.docChanges().forEach((change) => {
          const d = change.doc.data();
@@ -3141,7 +3181,8 @@ function renderArchive(){
 
        if(changed){
          state.tastings.sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-         saveState();
+         // No saveState() call needed as per requirement (Cloud Only)
+         // But we must refresh UI
          if(typeof renderArchive === 'function') renderArchive();
          if(typeof renderPreparation === 'function') renderPreparation(); 
          if(typeof renderResultsSelect === 'function') renderResultsSelect();
@@ -3150,9 +3191,10 @@ function renderArchive(){
   };
 
   window.fbPushAnagrafiche = () => {
+    startWrite();
     setDoc(doc(db, "global", "anagrafiche"), {
       profiles: state.profiles, groups: state.groups, tasters: state.tasters
-    }, {merge:true});
+    }, {merge:true}).finally(endWrite);
   };
 
   window.listenAnagrafiche = () => {
@@ -3163,15 +3205,21 @@ function renderArchive(){
         if(JSON.stringify(state.profiles)!==JSON.stringify(d.profiles)){ state.profiles=d.profiles||[]; ch=true; }
         if(JSON.stringify(state.groups)!==JSON.stringify(d.groups)){ state.groups=d.groups||[]; ch=true; }
         if(d.tasters && JSON.stringify(state.tasters)!==JSON.stringify(d.tasters)){ state.tasters=d.tasters; ch=true; }
-        if(ch){ saveState(); if(typeof hydrateAll==='function') hydrateAll(); }
+        if(ch){ 
+            if(typeof hydrateAll==='function') hydrateAll(); 
+        }
+      } else {
+        // Init if empty
+        window.fbPushAnagrafiche();
       }
     });
   };
 
   window.fbPushEval = (tid, sid, uid, val) => {
+     startWrite();
      setDoc(doc(db, "tastings", tid, "evaluations", `${uid}_${sid}`), {
        ...val, tastingId:tid, sampleId:sid, tasterId:uid, updatedAt: new Date().toISOString()
-     }, {merge:true});
+     }, {merge:true}).finally(endWrite);
   };
 
   let evalUnsub = null;
@@ -3190,7 +3238,6 @@ function renderArchive(){
           ch=true;
        });
        if(ch){
-         saveState();
          if(document.getElementById("resultsDegSelect")?.value === tid){
             if(typeof renderResultsTable==='function') renderResultsTable();
          }
@@ -3198,9 +3245,8 @@ function renderArchive(){
     });
   };
 
-  // --- WRAPPERS ---
-
-  // NOTE: createOrUpdateTasting is handled via Direct Injection in the source code above.
+  // --- WRAPPERS / HOOKS ---
+  // We use wrappers again where safe, or rely on Direct Injection for createOrUpdateTasting present in V19 base.
 
   const _finish = window.finishTasting;
   window.finishTasting = function(){
@@ -3210,9 +3256,9 @@ function renderArchive(){
   };
 
   window.deleteTasting = function(id){
-    if(!confirm("Eliminare definitivamente (Cloud e Locale)?")) return;
+    if(!confirm("Eliminare definitivamente (Cloud)?")) return;
+    // Optimistic delete
     state.tastings = state.tastings.filter(x=>x.id !== id);
-    saveState();
     if(typeof renderArchive==='function') renderArchive();
     window.fbDeleteTasting(id);
   };
