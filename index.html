@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>DegustAPP by EB <span id="syncLed" class="sync-led" title="Cloud Status"></span></title>
+  <title>DegustAPP by EB <span id="syncLed" class="sync-led" title="Connessione / Sync"></span></title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     :root{
@@ -470,13 +470,11 @@
     }
     #page-preparazione .tabs{display:none}
   
-.sync-led{
-  display:inline-block; width:10px; height:10px; margin-left:10px; border-radius:50%;
-  background:#999; border:1px solid #fff; vertical-align:middle; transition:background 0.2s;
-}
-.sync-led.connected { background:#4caf50; box-shadow:0 0 6px #4caf50; } 
-.sync-led.syncing { background:#ffeb3b; } 
-.sync-led.offline { background:#f44336; } 
+.sync-led{ display:inline-block; width:10px; height:10px; margin-left:10px; border-radius:50%; background:#777; border:1px solid rgba(255,255,255,.6); vertical-align:middle; }
+.sync-led.connected{ background:#2ecc71; box-shadow:0 0 6px rgba(46,204,113,.85); }
+.sync-led.offline{ background:#e74c3c; box-shadow:none; }
+@keyframes blinkSync{ 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} }
+.sync-led.syncing{ background:#f1c40f; animation: blinkSync .8s linear infinite; }
 
 </style>
 </head>
@@ -504,7 +502,7 @@
       <button id="btnMenuRes" class="menu-btn" onclick="go('risultati', this)">Confronto</button>
     </div>
 
-    <div class="app-title">DegustAPP by EB <span id="syncLed" class="sync-led" title="Cloud Status"></span></div>
+    <div class="app-title">DegustAPP by EB</div>
 
     <div class="menu-actions">
       <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
@@ -937,7 +935,7 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    const STORAGEKEY = "degustappstatev13";
+    const STORAGEKEY = "degustapp_cloud_v24";
 
     // ---------- Helpers ----------
     function setupDraftArrowNavigation(){
@@ -1099,7 +1097,6 @@
     }
 
     function defaultState(){
-      //const d = demoTasting();
       return {
         tasters:[
           {id:1, name:"Stefano", email:"s.capelli@cadelbosco.com"},
@@ -1111,7 +1108,7 @@
         groups: defaultGroups(),
         descriptors: defaultDescriptors(),
         tastings:[],
-    currentTastingId: null,
+        currentTastingId: null,
         currentTaster: null,
         ui:{
           prepTab:"attive",
@@ -1127,9 +1124,12 @@
 
     let state = null;
 
-    function loadState(){ return null; }catch{ return null; }
+    function loadState(){ return null; }
+    function saveState(){
+      // CLOUD-ONLY: niente localStorage
+      if(window.__cloudApplying) return;
+      if(typeof window.cloudRequestSync === 'function') window.cloudRequestSync();
     }
-    function saveState(){ /* Cloud Only */ }
 
     function cols4(cols){
       const c = (cols ?? []).slice(0,4).map(x=>String(x ?? "").trim());
@@ -2290,7 +2290,7 @@
     }
 
     function resetDemo(){
-      //const d = demoTasting();
+      const d = demoTasting();
       d.id = uid();
       d.title += " (Copia)";
       state.tastings.unshift(d);
@@ -3083,13 +3083,14 @@ function renderArchive(){
     });
   </script>
 
-<!-- FIREBASE INTEGRATION START -->
+<!-- FIREBASE CLOUD-ONLY START -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-  import { 
-    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, enableIndexedDbPersistence
+  import {
+    getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
+  // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
   const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
@@ -3099,190 +3100,292 @@ function renderArchive(){
   appId: "1:689428903782:web:a8fc272dd0b2e74ce2baa7"
 };
 
-  let db;
-  try {
-      const app = initializeApp(firebaseConfig);
-      db = getFirestore(app);
-      // Try persistence for reliability, but we treat it as Cloud Only logic (UI updates from Listener)
-      try { enableIndexedDbPersistence(db); } catch(e){}
-      console.log("V22 Cloud Active");
-  } catch(e) {
-      console.error("Firebase Init Error", e);
+  // ====== LED ======
+  const led = document.getElementById('syncLed');
+  const setLed = (cls) => {
+    if(!led) return;
+    led.classList.remove('connected','offline','syncing');
+    led.classList.add(cls);
+  };
+
+  // Default
+  setLed(navigator.onLine ? 'offline' : 'offline');
+
+  // Sync indicator (in-flight writes)
+  let inflight = 0;
+  const beginWrite = () => { inflight++; setLed('syncing'); };
+  const endWrite = () => {
+    inflight = Math.max(0, inflight-1);
+    if(inflight===0) setLed(navigator.onLine ? 'connected' : 'offline');
+  };
+
+  window.addEventListener('online', ()=>{ if(inflight===0) setLed('connected'); });
+  window.addEventListener('offline', ()=>{ setLed('offline'); });
+
+  // ====== INIT FIREBASE (NON BLOCCANTE) ======
+  let db = null;
+  try{
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+  }catch(e){
+    console.error('Firebase init error:', e);
+    setLed('offline');
   }
 
-  // LED Logic
-  const led = document.getElementById("syncLed");
-  const setLed = (s) => { if(led) { led.className = "sync-led " + s; } };
+  // ====== DIFF-BASED CLOUD SYNC ======
+  // Salva SEMPRE sul cloud; niente localStorage.
 
-  // Monitor connection rough approximation
-  window.addEventListener('online', ()=>setLed("connected"));
-  window.addEventListener('offline', ()=>setLed("offline"));
-  setLed(navigator.onLine ? "connected" : "offline");
-
-  function flashSync(){
-     setLed("syncing");
-     setTimeout(()=>{ setLed(navigator.onLine ? "connected" : "offline"); }, 500);
-  }
-
-  // --- SYNC FUNCTIONS ---
-
-  window.fbPushTasting = (t) => {
-    if(!db || !t || !t.id) return;
-    flashSync();
-    const payload = JSON.parse(JSON.stringify(t));
-    delete payload.evaluations; 
-    setDoc(doc(db, "tastings", t.id), payload, {merge:true}).catch(console.error);
-  };
-
-  window.fbDeleteTasting = (id) => {
-    if(!db) return;
-    flashSync();
-    deleteDoc(doc(db, "tastings", id));
-  };
-
-  window.fbPushAnagrafiche = () => {
-    if(!db) return;
-    flashSync();
-    setDoc(doc(db, "global", "anagrafiche"), {
-      profiles: state.profiles, groups: state.groups, tasters: state.tasters
-    }, {merge:true});
-  };
-
-  window.fbPushEval = (tid, sid, uid, val) => {
-     if(!db) return;
-     flashSync();
-     setDoc(doc(db, "tastings", tid, "evaluations", `${uid}_${sid}`), {
-       ...val, tastingId:tid, sampleId:sid, tasterId:uid, updatedAt: new Date().toISOString()
-     }, {merge:true});
-  };
-
-  // --- LISTENERS ---
-
-  if(db) {
-      // TASTINGS LISTENER
-      onSnapshot(collection(db, "tastings"), (snap) => {
-         let changed = false;
-         snap.docChanges().forEach((change) => {
-           const d = change.doc.data();
-           const id = change.doc.id;
-           if(change.type === 'added' || change.type === 'modified'){
-              const idx = state.tastings.findIndex(x=>x.id===id);
-              const oldEvals = (idx>=0 && state.tastings[idx].evaluations) ? state.tastings[idx].evaluations : {};
-              const newObj = { ...d, id, evaluations: oldEvals };
-              if(idx >= 0) state.tastings[idx] = newObj;
-              else state.tastings.unshift(newObj);
-              changed = true;
-           }
-           if(change.type === 'removed'){
-              state.tastings = state.tastings.filter(x=>x.id !== id);
-              changed = true;
-           }
-         });
-
-         if(changed){
-           state.tastings.sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-           // UI REFRESH
-           if(typeof renderArchive === 'function') renderArchive();
-           if(typeof renderPreparation === 'function') renderPreparation(); 
-           if(typeof renderResultsSelect === 'function') renderResultsSelect();
-         }
-      });
-
-      // ANAGRAFICHE LISTENER
-      onSnapshot(doc(db, "global", "anagrafiche"), (snap) => {
-        if(snap.exists()){
-          const d = snap.data();
-          let ch=false;
-          if(JSON.stringify(state.profiles)!==JSON.stringify(d.profiles)){ state.profiles=d.profiles||[]; ch=true; }
-          if(JSON.stringify(state.groups)!==JSON.stringify(d.groups)){ state.groups=d.groups||[]; ch=true; }
-          if(d.tasters && JSON.stringify(state.tasters)!==JSON.stringify(d.tasters)){ state.tasters=d.tasters; ch=true; }
-          if(ch && typeof hydrateAll==='function') hydrateAll();
-        } else {
-          // Push defaults if empty
-          window.fbPushAnagrafiche();
-        }
-      });
-  }
-
-  // --- EVAL SUBSCRIPTION ---
-  let evalUnsub = null;
-  window.subscribeEvaluations = (tid) => {
-    if(evalUnsub) evalUnsub();
-    if(!db || !tid) return;
-    evalUnsub = onSnapshot(collection(db, "tastings", tid, "evaluations"), (snap) => {
-       const t = state.tastings.find(x=>x.id===tid);
-       if(!t) return;
-       if(!t.evaluations) t.evaluations = {};
-       let ch=false;
-       snap.docChanges().forEach((c)=>{
-          const d = c.doc.data();
-          if(!t.evaluations[d.tasterId]) t.evaluations[d.tasterId] = {};
-          t.evaluations[d.tasterId][d.sampleId] = d;
-          ch=true;
-       });
-       if(ch){
-         if(document.getElementById("resultsDegSelect")?.value === tid){
-            if(typeof renderResultsTable==='function') renderResultsTable();
-         }
-       }
+  const stableStringify = (obj) => {
+    const seen = new WeakSet();
+    return JSON.stringify(obj, (k,v)=>{
+      if(v && typeof v==='object'){
+        if(seen.has(v)) return;
+        seen.add(v);
+        if(Array.isArray(v)) return v;
+        const out={};
+        Object.keys(v).sort().forEach(key=>out[key]=v[key]);
+        return out;
+      }
+      return v;
     });
   };
 
-  // --- WRAPPERS ---
+  // Track last pushed hashes
+  let lastAnaHash = '';
+  const lastTastingHash = new Map();
+  const lastEvalHash = new Map(); // key: tid|tasterId|sampleId
 
-  const _finish = window.finishTasting;
-  window.finishTasting = function(){
-    _finish(); 
-    const t = state.tastings.find(x=>x.id===state.currentTastingId);
-    if(t) window.fbPushTasting(t);
+  // Prevent echo loops
+  window.__cloudApplying = false;
+
+  // Cloud write helpers
+  const pushAnagrafiche = async () => {
+    if(!db) return;
+    const payload = {
+      tasters: state.tasters || [],
+      profiles: state.profiles || [],
+      groups: state.groups || [],
+      descriptors: state.descriptors || [],
+      updatedAt: new Date().toISOString()
+    };
+    beginWrite();
+    try{ await setDoc(doc(db,'global','anagrafiche'), payload, {merge:true}); }
+    finally{ endWrite(); }
   };
 
-  window.deleteTasting = function(id){
-    if(!confirm("Eliminare definitivamente (Cloud)?")) return;
-    state.tastings = state.tastings.filter(x=>x.id !== id); // UI Optimistic
-    if(typeof renderArchive==='function') renderArchive();
-    window.fbDeleteTasting(id);
+  const pushTastingMeta = async (t) => {
+    if(!db || !t || !t.id) return;
+    const payload = JSON.parse(JSON.stringify(t));
+    delete payload.evaluations;
+    payload.updatedAt = new Date().toISOString();
+    beginWrite();
+    try{ await setDoc(doc(db,'tastings', String(t.id)), payload, {merge:true}); }
+    finally{ endWrite(); }
   };
 
-  const _reopen = window.reopenTasting;
-  window.reopenTasting = function(id){
-    _reopen(id);
-    const t = state.tastings.find(x=>x.id===id);
-    if(t) window.fbPushTasting(t);
+  const deleteTasting = async (id) => {
+    if(!db || !id) return;
+    beginWrite();
+    try{ await deleteDoc(doc(db,'tastings', String(id))); }
+    finally{ endWrite(); }
   };
 
-  const _copy = window.copyTasting;
-  window.copyTasting = function(id){
-    _copy(id);
-    const newT = state.tastings[0];
-    if(newT) window.fbPushTasting(newT);
+  const pushEvalDoc = async (tid, tasterId, sampleId, ev) => {
+    if(!db || !tid || !tasterId || !sampleId) return;
+    const payload = JSON.parse(JSON.stringify(ev || {}));
+    payload.tastingId = String(tid);
+    payload.tasterId = Number(tasterId);
+    payload.sampleId = String(sampleId);
+    payload.updatedAt = new Date().toISOString();
+    beginWrite();
+    try{ await setDoc(doc(db,'tastings', String(tid), 'evaluations', `${tasterId}_${sampleId}`), payload, {merge:true}); }
+    finally{ endWrite(); }
   };
 
-  const _upEval = window.updateEval;
-  window.updateEval = function(sId, k, v){
-    _upEval(sId, k, v);
-    const t = state.tastings.find(x=>x.id===state.currentTastingId);
-    if(t && state.currentTaster){
-       window.fbPushEval(t.id, sId, state.currentTaster, t.evaluations[state.currentTaster][sId]);
+  // Debounced sync scheduler (triggered by saveState())
+  let syncTimer = null;
+  window.cloudRequestSync = function(){
+    if(window.__cloudApplying) return;
+    if(syncTimer) clearTimeout(syncTimer);
+    syncTimer = setTimeout(runSync, 350);
+  };
+
+  async function runSync(){
+    if(!db) return;
+
+    // 1) Anagrafiche
+    const anaObj = {
+      tasters: state.tasters || [],
+      profiles: state.profiles || [],
+      groups: state.groups || [],
+      descriptors: state.descriptors || []
+    };
+    const anaHash = stableStringify(anaObj);
+    if(anaHash !== lastAnaHash){
+      await pushAnagrafiche();
+      lastAnaHash = anaHash;
     }
-  };
 
-  const _renderRes = window.renderResultsTable;
-  window.renderResultsTable = function(){
-    _renderRes();
-    const sel = document.getElementById("resultsDegSelect");
-    if(sel && sel.value) window.subscribeEvaluations(sel.value);
-  };
+    // 2) Tastings meta + detect deletions
+    const currentIds = new Set((state.tastings||[]).map(t=>String(t.id)));
+    for(const [tid] of list(lastTastingHash)){
+      if(!currentIds.has(tid)){
+        // deleted locally -> delete in cloud
+        await deleteTasting(tid);
+        lastTastingHash.delete(tid);
+      }
+    }
 
-  const anaFn = ['editProfileLabel', 'editProfileColor', 'moveProfile', 'removeProfile', 'addProfile',
-                 'editGroupLabel', 'editGroupColor', 'moveGroup', 'removeGroup', 'addGroup'];
-  anaFn.forEach(f => {
-    const orig = window[f];
-    if(orig) window[f] = function(...a){ orig.apply(this,a); window.fbPushAnagrafiche(); };
-  });
+    for(const t of (state.tastings||[])){
+      const meta = JSON.parse(JSON.stringify(t));
+      delete meta.evaluations;
+      const h = stableStringify(meta);
+      const tid = String(t.id);
+      if(lastTastingHash.get(tid) !== h){
+        await pushTastingMeta(t);
+        lastTastingHash.set(tid, h);
+      }
 
+      // 3) Evaluations push (diff)
+      const evals = (t.evaluations||{});
+      Object.keys(evals).forEach(tasterId=>{
+        const per = evals[tasterId] || {};
+        Object.keys(per).forEach(sampleId=>{
+          const ev = per[sampleId];
+          const key = `${tid}|${tasterId}|${sampleId}`;
+          const eh = stableStringify(ev);
+          if(lastEvalHash.get(key) !== eh){
+            // Fire and await sequentially for safety
+            // eslint-disable-next-line no-async-promise-executor
+          }
+        });
+      });
+
+      for(const tasterId of Object.keys(evals)){
+        const per = evals[tasterId] || {};
+        for(const sampleId of Object.keys(per)){
+          const ev = per[sampleId];
+          const key = `${tid}|${tasterId}|${sampleId}`;
+          const eh = stableStringify(ev);
+          if(lastEvalHash.get(key) !== eh){
+            await pushEvalDoc(tid, tasterId, sampleId, ev);
+            lastEvalHash.set(key, eh);
+          }
+        }
+      }
+    }
+  }
+
+  // helper for iterating maps
+  function list(m){ return Array.from(m.entries()); }
+
+  // ====== REALTIME LISTENERS (SOURCE OF TRUTH) ======
+  if(db){
+    // TASTINGS
+    onSnapshot(collection(db,'tastings'), (snap)=>{
+      window.__cloudApplying = true;
+      try{
+        const evalMap = new Map();
+        (state.tastings||[]).forEach(t=> evalMap.set(String(t.id), t.evaluations||{}));
+
+        const list = [];
+        snap.forEach(ds=>{
+          const d = ds.data() || {};
+          const id = ds.id;
+          list.push({ ...d, id, evaluations: evalMap.get(String(id)) || {} });
+        });
+        list.sort((a,b)=>(String(b.createdAt||'')).localeCompare(String(a.createdAt||'')));
+        state.tastings = list;
+
+        // Keep currentTastingId valid
+        if(state.currentTastingId && !state.tastings.some(t=>String(t.id)===String(state.currentTastingId))){
+          state.currentTastingId = state.tastings[0]?.id || null;
+        }
+
+        // UI refresh
+        if(typeof renderPreparation==='function') renderPreparation();
+        if(typeof renderArchive==='function') renderArchive();
+        if(typeof renderResultsSelect==='function') renderResultsSelect();
+
+        setLed(navigator.onLine ? 'connected' : 'offline');
+      } finally {
+        window.__cloudApplying = false;
+      }
+    }, (err)=>{
+      console.error('tastings snapshot error', err);
+      setLed('offline');
+    });
+
+    // ANAGRAFICHE
+    onSnapshot(doc(db,'global','anagrafiche'), (snap)=>{
+      window.__cloudApplying = true;
+      try{
+        if(!snap.exists()){
+          // bootstrap: create once using current in-memory defaults
+          pushAnagrafiche();
+          return;
+        }
+        const d = snap.data() || {};
+        state.tasters = Array.isArray(d.tasters) ? d.tasters : state.tasters;
+        state.profiles = Array.isArray(d.profiles) ? d.profiles : state.profiles;
+        state.groups = Array.isArray(d.groups) ? d.groups : state.groups;
+        state.descriptors = Array.isArray(d.descriptors) ? d.descriptors : state.descriptors;
+
+        if(typeof renderAnagrafiche==='function') renderAnagrafiche();
+        if(typeof renderPreparation==='function') renderPreparation();
+        if(typeof renderResultsTable==='function') renderResultsTable();
+
+        setLed(navigator.onLine ? 'connected' : 'offline');
+      } finally {
+        window.__cloudApplying = false;
+      }
+    }, (err)=>{
+      console.error('anagrafiche snapshot error', err);
+      setLed('offline');
+    });
+
+    // Evaluations subscription for "Confronto"
+    let unsubEval = null;
+    function ensureEvalSub(tid){
+      if(unsubEval){ unsubEval(); unsubEval=null; }
+      if(!tid) return;
+      unsubEval = onSnapshot(collection(db,'tastings', String(tid), 'evaluations'), (snap)=>{
+        window.__cloudApplying = true;
+        try{
+          const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+          if(!t) return;
+          t.evaluations = t.evaluations || {};
+          snap.forEach(ds=>{
+            const ev = ds.data() || {};
+            if(!ev.tasterId || !ev.sampleId) return;
+            const ta = String(ev.tasterId);
+            const sa = String(ev.sampleId);
+            if(!t.evaluations[ta]) t.evaluations[ta] = {};
+            t.evaluations[ta][sa] = ev;
+          });
+          if(typeof renderResultsTable==='function') renderResultsTable();
+          setLed(navigator.onLine ? 'connected' : 'offline');
+        } finally {
+          window.__cloudApplying = false;
+        }
+      }, (err)=>{
+        console.error('evaluations snapshot error', err);
+        setLed('offline');
+      });
+    }
+
+    // Hook comparison render to keep subscription aligned
+    const origRenderResultsTable = window.renderResultsTable;
+    if(typeof origRenderResultsTable === 'function'){
+      window.renderResultsTable = function(){
+        origRenderResultsTable();
+        const tid = document.getElementById('resultsDegSelect')?.value || '';
+        ensureEvalSub(tid);
+      };
+    }
+  }
 </script>
-<!-- FIREBASE INTEGRATION END -->
+<!-- FIREBASE CLOUD-ONLY END -->
 
 </body>
 </html>
