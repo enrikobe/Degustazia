@@ -3101,38 +3101,48 @@ const firebaseConfig = {
   const db = getFirestore(app);
   try { enableIndexedDbPersistence(db); } catch(e) {}
 
-  console.log("DegustAPP Cloud Sync V17 Active");
+  console.log("DegustAPP V18 Realtime Sync Active");
 
   // --- SYNC HELPERS ---
 
   window.fbPushTasting = (t) => {
     if(!t || !t.id) return;
-    const { evaluations, ...meta } = t; 
-    setDoc(doc(db, "tastings", t.id), meta, {merge:true})
-      .then(()=>console.log("Pushed:", t.id))
-      .catch(e=>console.error("Push Err", e));
+    const payload = JSON.parse(JSON.stringify(t));
+    delete payload.evaluations; // Managed in subcollection
+
+    // Merge: true is safer for concurrent edits, but for CREATION we want to ensure it exists.
+    setDoc(doc(db, "tastings", t.id), payload, {merge:true})
+      .then(()=>console.log("Pushed Tasting:", t.title))
+      .catch(e=>console.error("Push Error", e));
   };
 
   window.fbDeleteTasting = (id) => {
     deleteDoc(doc(db, "tastings", id));
   };
 
+  // LISTENER: The "Brain" of synchronization
   window.listenTastings = () => {
     onSnapshot(collection(db, "tastings"), (snap) => {
        let changed = false;
        snap.docChanges().forEach((change) => {
          const d = change.doc.data();
          const id = change.doc.id;
+
          if(change.type === 'added' || change.type === 'modified'){
             const idx = state.tastings.findIndex(x=>x.id===id);
+            // Preserve local evaluations pointer if exists
             const oldEvals = (idx>=0 && state.tastings[idx].evaluations) ? state.tastings[idx].evaluations : {};
             const newObj = { ...d, id, evaluations: oldEvals };
-            if(idx >= 0) state.tastings[idx] = newObj;
-            else state.tastings.push(newObj);
-            // Sort
-            state.tastings.sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+
+            if(idx >= 0){
+               state.tastings[idx] = newObj;
+            } else {
+               // NEW TASTING from Cloud (or self-echo)
+               state.tastings.unshift(newObj); 
+            }
             changed = true;
          }
+
          if(change.type === 'removed'){
             state.tastings = state.tastings.filter(x=>x.id !== id);
             changed = true;
@@ -3140,9 +3150,12 @@ const firebaseConfig = {
        });
 
        if(changed){
-         saveState(); 
+         // Sort: Newest Created First
+         state.tastings.sort((a,b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+
+         saveState();
          if(typeof renderArchive === 'function') renderArchive();
-         if(typeof renderPreparation === 'function') renderPreparation();
+         if(typeof renderPreparation === 'function') renderPreparation(); 
          if(typeof renderResultsSelect === 'function') renderResultsSelect();
        }
     });
@@ -3199,34 +3212,44 @@ const firebaseConfig = {
 
   // --- HOOKS ---
 
+  // 1. Create/Update Hook - ROBUST
   const _create = window.createOrUpdateTasting;
   window.createOrUpdateTasting = function(){
-    _create();
-    const t = state.tastings.find(x=>x.id===state.currentTastingId);
-    if(t) window.fbPushTasting(t);
+    // Execute Local Logic
+    _create(); 
+
+    // Identify the tasting. 
+    // Usually logic sets state.currentTastingId = newID.
+    // Check if currentTastingId matches a tasting in state.
+    let t = state.tastings.find(x=>x.id===state.currentTastingId);
+
+    // If not found (rare), check top of list
+    if(!t && state.tastings.length > 0) t = state.tastings[0];
+
+    if(t) {
+        console.log("Pushing new/updated tasting:", t.title);
+        window.fbPushTasting(t);
+    }
   };
 
-  // FIX: Hook finishTasting (Termina)
+  // 2. Finish Hook
   const _finish = window.finishTasting;
   window.finishTasting = function(){
-    _finish(); 
-    // Now push the updated status
+    _finish();
     const t = state.tastings.find(x=>x.id===state.currentTastingId);
     if(t) window.fbPushTasting(t);
   };
 
-  const _delete = window.deleteTasting;
+  // 3. Delete Hook
   window.deleteTasting = function(id){
-    // Override local confirm logic to include cloud notice
-    if(!confirm("Eliminare definitivamente (anche dal Cloud)?")) return;
-    // Local remove first
+    if(!confirm("Eliminare definitivamente (Cloud e Locale)?")) return;
     state.tastings = state.tastings.filter(x=>x.id !== id);
     saveState();
     if(typeof renderArchive==='function') renderArchive();
-    // Cloud remove
     window.fbDeleteTasting(id);
   };
 
+  // 4. Reopen Hook
   const _reopen = window.reopenTasting;
   window.reopenTasting = function(id){
     _reopen(id);
@@ -3234,6 +3257,7 @@ const firebaseConfig = {
     if(t) window.fbPushTasting(t);
   };
 
+  // 5. Copy Hook
   const _copy = window.copyTasting;
   window.copyTasting = function(id){
     _copy(id);
@@ -3241,6 +3265,7 @@ const firebaseConfig = {
     if(newT) window.fbPushTasting(newT);
   };
 
+  // 6. Eval Hook
   const _upEval = window.updateEval;
   window.updateEval = function(sId, k, v){
     _upEval(sId, k, v);
@@ -3250,6 +3275,7 @@ const firebaseConfig = {
     }
   };
 
+  // 7. Compare Select Hook
   const _renderRes = window.renderResultsTable;
   window.renderResultsTable = function(){
     _renderRes();
@@ -3257,6 +3283,7 @@ const firebaseConfig = {
     if(sel && sel.value) window.subscribeEvaluations(sel.value);
   };
 
+  // 8. Ana Hooks
   const anaFn = ['editProfileLabel', 'editProfileColor', 'moveProfile', 'removeProfile', 'addProfile',
                  'editGroupLabel', 'editGroupColor', 'moveGroup', 'removeGroup', 'addGroup'];
   anaFn.forEach(f => {
@@ -3264,6 +3291,7 @@ const firebaseConfig = {
     if(orig) window[f] = function(...a){ orig.apply(this,a); window.fbPushAnagrafiche(); };
   });
 
+  // START
   window.listenTastings();
   window.listenAnagrafiche();
 
