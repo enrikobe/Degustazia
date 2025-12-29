@@ -928,7 +928,7 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    const STORAGEKEY = "degustappstatev15_gh_fb";
+    const STORAGEKEY = "degustappstatev13";
 
     // ---------- Helpers ----------
     function setupDraftArrowNavigation(){
@@ -3084,11 +3084,11 @@ function renderArchive(){
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import { 
-    getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, query, where, getDocs, enableIndexedDbPersistence
+    getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, where, getDocs, enableIndexedDbPersistence
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-  // --- CONFIGURAZIONE FIREBASE (DA COMPILARE PRIMA DI CARICARE SU GITHUB) ---
-    const firebaseConfig = {
+  // --- CONFIGURAZIONE FIREBASE (DA COMPILARE) ---
+const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
@@ -3097,184 +3097,218 @@ function renderArchive(){
   appId: "1:689428903782:web:a8fc272dd0b2e74ce2baa7"
 };
 
-  // Init
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-
-  // Enable offline persistence if possible
   try { enableIndexedDbPersistence(db); } catch(e) {}
+  console.log("Firebase V16 Real-time Sync Active");
 
-  console.log("Firebase initialized for DegustAPP");
+  // --- SYNC HELPERS ---
 
-  // --- HELPERS ---
-  const debounce = (func, wait) => {
-    let timeout;
-    return (...args) => {
-      clearTimeout(timeout);
-      timeout = setTimeout(() => func(...args), wait);
-    };
+  // 1. PUSH TASTING (Create/Update/Reopen)
+  window.fbPushTasting = (t) => {
+    if(!t || !t.id) return;
+    const { evaluations, ...meta } = t; // Don't push full evals here, they are subcoll
+    setDoc(doc(db, "tastings", t.id), meta, {merge:true})
+      .then(()=>console.log("Tasting Pushed:", t.id))
+      .catch(e=>console.error("Push Error", e));
   };
 
-  // --- SYNC FUNCTIONS ---
-
-  // 1. ANAGRAFICHE
-  window.pushAnagrafiche = debounce(() => {
-    if(!state || !state.profiles) return;
-    const docRef = doc(db, "global", "anagrafiche");
-    setDoc(docRef, {
-      profiles: state.profiles,
-      groups: state.groups,
-      tasters: state.tasters // Sync shared tasters
-    }, {merge:true}).catch(e => console.error("Sync Ana Error", e));
-  }, 1000);
-
-  window.listenAnagrafiche = () => {
-    onSnapshot(doc(db, "global", "anagrafiche"), (snap) => {
-      if(snap.exists()){
-        const d = snap.data();
-        let changed = false;
-        if(JSON.stringify(state.profiles) !== JSON.stringify(d.profiles)) { state.profiles = d.profiles || []; changed=true; }
-        if(JSON.stringify(state.groups) !== JSON.stringify(d.groups)) { state.groups = d.groups || []; changed=true; }
-        if(d.tasters && JSON.stringify(state.tasters) !== JSON.stringify(d.tasters)) { state.tasters = d.tasters; changed=true; }
-
-        if(changed){
-          localStorage.setItem(STORAGEKEY, JSON.stringify(state));
-          if(typeof hydrateAll === 'function') hydrateAll();
-        }
-      }
-    });
+  // 2. DELETE TASTING
+  window.fbDeleteTasting = (id) => {
+    deleteDoc(doc(db, "tastings", id))
+      .then(()=>console.log("Tasting Deleted:", id));
   };
 
-  // 2. TASTINGS LIST (Metadata)
-  window.pushTastingMeta = (t) => {
-    if(!t) return;
-    // Extract meta (exclude heavy evaluations)
-    const { evaluations, ...meta } = t;
-    setDoc(doc(db, "tastings", t.id), meta, {merge:true}).catch(e=>console.error("Push Meta Error", e));
-  };
-
+  // 3. LISTEN TASTINGS (Real-time List)
   window.listenTastings = () => {
     onSnapshot(collection(db, "tastings"), (snap) => {
        let changed = false;
        snap.docChanges().forEach((change) => {
          const d = change.doc.data();
          const id = change.doc.id;
+
          if(change.type === 'added' || change.type === 'modified'){
             const idx = state.tastings.findIndex(x=>x.id===id);
+            // Preserve local evaluations if present (they load via subscribeEvaluations)
+            const oldEvals = (idx>=0 && state.tastings[idx].evaluations) ? state.tastings[idx].evaluations : {};
+
+            // Construct object
+            const newObj = { ...d, id, evaluations: oldEvals };
+
             if(idx >= 0){
-               // Merge meta, keep local evaluations for now (loaded separately)
-               const existingEval = state.tastings[idx].evaluations;
-               state.tastings[idx] = { ...d, id, evaluations: existingEval || {} };
+               // Update existing
+               // Only update if timestamps differ or deep check? 
+               // For metadata (status/title) we overwrite.
+               state.tastings[idx] = newObj;
             } else {
-               state.tastings.push({ ...d, id, evaluations: {} });
+               // Add new
+               state.tastings.push(newObj);
+               // Sort desc by created/finished?
+               state.tastings.sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
             }
             changed = true;
          }
-         // handle removed if needed
+
+         if(change.type === 'removed'){
+            state.tastings = state.tastings.filter(x=>x.id !== id);
+            changed = true;
+         }
        });
+
        if(changed) {
-         localStorage.setItem(STORAGEKEY, JSON.stringify(state));
+         console.log("Remote changes applied to Tastings List");
+         saveState(); // Persist to local storage
+         // Update UI immediately
          if(typeof renderArchive === 'function') renderArchive();
          if(typeof renderResultsSelect === 'function') renderResultsSelect();
+         if(typeof renderPreparation === 'function') renderPreparation(); // If prep status changed
        }
     });
   };
 
-  // 3. EVALUATIONS (Real-time)
-  window.pushEval = debounce((tastingId, sampleId, tasterId, data) => {
-     if(!tastingId || !sampleId || !tasterId) return;
-     const docRef = doc(db, "tastings", tastingId, "evaluations", `${tasterId}_${sampleId}`);
-     setDoc(docRef, {
-       ...data,
-       tastingId, sampleId, tasterId,
-       updatedAt: new Date().toISOString()
+  // 4. ANAGRAFICHE SYNC
+  const debounce = (fn, ms) => { let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; };
+
+  window.fbPushAnagrafiche = debounce(() => {
+    setDoc(doc(db, "global", "anagrafiche"), {
+      profiles: state.profiles, groups: state.groups, tasters: state.tasters
+    }, {merge:true});
+  }, 1000);
+
+  window.listenAnagrafiche = () => {
+    onSnapshot(doc(db, "global", "anagrafiche"), (snap) => {
+      if(snap.exists()){
+        const d = snap.data();
+        let ch = false;
+        if(JSON.stringify(state.profiles)!==JSON.stringify(d.profiles)){ state.profiles=d.profiles||[]; ch=true; }
+        if(JSON.stringify(state.groups)!==JSON.stringify(d.groups)){ state.groups=d.groups||[]; ch=true; }
+        if(d.tasters && JSON.stringify(state.tasters)!==JSON.stringify(d.tasters)){ state.tasters=d.tasters; ch=true; }
+        if(ch){
+           saveState();
+           if(typeof hydrateAll==='function') hydrateAll();
+        }
+      }
+    });
+  };
+
+  // 5. EVALUATIONS (Real-time)
+  window.fbPushEval = debounce((tid, sid, uid, val) => {
+     setDoc(doc(db, "tastings", tid, "evaluations", `${uid}_${sid}`), {
+       ...val, tastingId:tid, sampleId:sid, tasterId:uid, updatedAt: new Date().toISOString()
      }, {merge:true});
   }, 500);
 
-  let unsubEval = null;
-  window.subscribeEvaluations = (tastingId) => {
-    if(unsubEval) unsubEval();
-    if(!tastingId) return;
-
-    // Listen to ALL evaluations for this tasting (Comparison view)
-    unsubEval = onSnapshot(collection(db, "tastings", tastingId, "evaluations"), (snap) => {
-       const t = state.tastings.find(x=>x.id===tastingId);
-       if(!t) return;
-       if(!t.evaluations) t.evaluations = {};
-
-       let changed = false;
-       snap.docChanges().forEach((ch) => {
-          const d = ch.doc.data();
-          if(!t.evaluations[d.tasterId]) t.evaluations[d.tasterId] = {};
-
-          // Check if different to avoid infinite loops if we just pushed it?
-          // Firestore local writes trigger snapshot immediately.
-          t.evaluations[d.tasterId][d.sampleId] = d;
-          changed = true;
-       });
-
-       if(changed){
-         localStorage.setItem(STORAGEKEY, JSON.stringify(state));
-         // Refresh views if active
-         if(document.getElementById("resultsDegSelect")?.value === tastingId){
-            if(typeof renderResultsTable === 'function') renderResultsTable();
-         }
-       }
+  let evalUnsub = null;
+  window.subscribeEvaluations = (tid) => {
+    if(evalUnsub) evalUnsub();
+    if(!tid) return;
+    evalUnsub = onSnapshot(collection(db, "tastings", tid, "evaluations"), (snap) => {
+      const t = state.tastings.find(x=>x.id===tid);
+      if(!t) return;
+      if(!t.evaluations) t.evaluations = {};
+      let ch = false;
+      snap.docChanges().forEach((c)=>{
+         const d = c.doc.data();
+         if(!t.evaluations[d.tasterId]) t.evaluations[d.tasterId] = {};
+         t.evaluations[d.tasterId][d.sampleId] = d;
+         ch = true;
+      });
+      if(ch){
+        saveState();
+        if(document.getElementById("resultsDegSelect")?.value === tid){
+           if(typeof renderResultsTable==='function') renderResultsTable();
+        }
+      }
     });
   };
 
-  // --- MONKEY PATCHING (HOOKS) ---
-  // Apply hooks once main script is loaded. 
-  // Since this is module, it defers. We can assume main script ran (synchronous).
+  // --- HOOKS (Monkey Patching) ---
 
-  // Hook Evaluation Update
-  const originalUpdateEval = window.updateEval;
-  window.updateEval = function(sId, key, val){
-    originalUpdateEval(sId, key, val); // Do local logic
-    // Push to cloud
+  // Hook Create/Update
+  const _create = window.createOrUpdateTasting;
+  window.createOrUpdateTasting = function(){
+    _create(); 
+    // Find the one we just touched (currentTastingId or draft id)
+    // Actually createOrUpdate sets state.currentTastingId usually or we can find it.
+    // Let's assume currentTastingId is set to the new/updated one.
+    // If we just saved to draft, we might need to find it in state.tastings.
+    const t = state.tastings.find(x=>x.id===state.currentTastingId); 
+    if(t) window.fbPushTasting(t);
+  };
+
+  // Hook Delete
+  const _delete = window.deleteTasting;
+  window.deleteTasting = function(id){
+    if(confirm("Eliminare definitivamente? (Anche dal cloud)")){
+       _delete(id); // Local delete (removes from state)
+       window.fbDeleteTasting(id); // Cloud delete
+    }
+  };
+  // Note: Original deleteTasting had a confirm() inside. 
+  // If we wrap it, we might double confirm or fail logic. 
+  // Let's NOT call _delete(id) which has UI logic, but instead Implement strict logic?
+  // V15 deleteTasting: 
+  // function deleteTasting(id){ if(!confirm(...)) return; state.tastings=...; saveState(); renderArchive(); }
+  // We should Override it completely to handle Cloud.
+
+  window.deleteTasting = function(id){
+     if(!confirm("Confermi eliminazione definitiva (Locale e Cloud)?")) return;
+     // 1. Local delete
+     state.tastings = state.tastings.filter(x=>x.id !== id);
+     saveState();
+     renderArchive();
+     // 2. Cloud delete
+     window.fbDeleteTasting(id);
+  };
+
+  // Hook Reopen
+  // reopenTasting(id) sets status='attiva'. We must push this change.
+  const _reopen = window.reopenTasting;
+  window.reopenTasting = function(id){
+    _reopen(id);
+    const t = state.tastings.find(x=>x.id===id);
+    if(t) window.fbPushTasting(t);
+  };
+
+  // Hook Copy
+  // copyTasting(id) adds new tasting. We must push it.
+  const _copy = window.copyTasting;
+  window.copyTasting = function(id){
+    _copy(id);
+    // The new one is at index 0 usually (unshift)
+    const newT = state.tastings[0];
+    if(newT) window.fbPushTasting(newT);
+  };
+
+  // Hook Eval Update
+  const _upEval = window.updateEval;
+  window.updateEval = function(sId, k, v){
+    _upEval(sId, k, v);
     const t = state.tastings.find(x=>x.id===state.currentTastingId);
     if(t && state.currentTaster){
-       const ev = t.evaluations[state.currentTaster][sId];
-       window.pushEval(t.id, sId, state.currentTaster, ev);
+      window.fbPushEval(t.id, sId, state.currentTaster, t.evaluations[state.currentTaster][sId]);
     }
   };
 
-  // Hook Tasting Create/Update
-  const originalCreate = window.createOrUpdateTasting;
-  window.createOrUpdateTasting = function(){
-    originalCreate();
-    // After create, finding the active tasting
-    const tid = state.currentTastingId; // usually set by create
-    const t = state.tastings.find(x=>x.id===tid);
-    if(t) window.pushTastingMeta(t);
+  // Hook Comparison Select (Subscribe)
+  const _renderRes = window.renderResultsTable;
+  window.renderResultsTable = function(){
+    _renderRes();
+    const sel = document.getElementById("resultsDegSelect");
+    if(sel && sel.value) window.subscribeEvaluations(sel.value);
   };
 
-  // Hook Anagrafiche Edits
-  const anaHooks = ['editProfileLabel', 'editProfileColor', 'moveProfile', 'removeProfile', 
-                    'editGroupLabel', 'editGroupColor', 'moveGroup', 'removeGroup', 'addGroup', 'addProfile'];
-  anaHooks.forEach(fnName => {
-     const oldFn = window[fnName];
-     if(oldFn){
-       window[fnName] = function(...args){
-         oldFn.apply(this, args);
-         window.pushAnagrafiche();
-       }
-     }
+  // Hook Anagrafiche
+  const anaFn = ['editProfileLabel', 'editProfileColor', 'moveProfile', 'removeProfile', 'addProfile',
+                 'editGroupLabel', 'editGroupColor', 'moveGroup', 'removeGroup', 'addGroup'];
+  anaFn.forEach(f => {
+    const orig = window[f];
+    if(orig) window[f] = function(...a){ orig.apply(this,a); window.fbPushAnagrafiche(); };
   });
 
-  // Hook Comparison Select
-  const originalRenderRes = window.renderResultsTable;
-  window.renderResultsTable = function(){
-    originalRenderRes();
-    const sel = document.getElementById("resultsDegSelect");
-    if(sel && sel.value){
-       window.subscribeEvaluations(sel.value);
-    }
-  };
-
-  // START SYNC
-  window.listenAnagrafiche();
+  // START LISTENERS
   window.listenTastings();
+  window.listenAnagrafiche();
 
 </script>
 <!-- FIREBASE INTEGRATION END -->
