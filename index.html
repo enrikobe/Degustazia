@@ -477,12 +477,12 @@
 .sync-led.syncing{ background:#f1c40f; animation: blinkSync .8s linear infinite; }
 
 
-/* V29/V30/V31 UX tweaks */
+
+/* V31 styles */
 #page-degustazione, #page-degustazione * { -webkit-user-select:none; user-select:none; }
 #page-degustazione input, #page-degustazione textarea { -webkit-user-select:text; user-select:text; }
 #drawingCanvas { touch-action:none; }
 
-/* V31: Gray Evolution Dots */
 .dot { display:inline-block; width:16px; height:16px; border-radius:999px; 
        border:2px solid #9a9a9a; background:transparent; box-sizing:border-box; }
 .dot.on { background:#6a6a6a; border-color:#4a4a4a; }
@@ -492,21 +492,19 @@
 .evo-pick-big .dot { cursor:pointer; }
 .tool-btn, .tool-btn * { -webkit-user-select:none; user-select:none; }
 
-/* V31: Assigned tag clickable */
-.assigned-tag { cursor: pointer; transition: all 0.12s; }
+.assigned-tag { cursor: pointer !important; transition: all 0.12s; }
 .assigned-tag:hover { opacity: 0.8; transform: scale(0.98); }
 
-/* V31: Print styles */
 @media print {
   body { background: #fff; }
-  .menu-bar, .btn, #zenBar, #filtersPanel, #filtersOverlay, input, select { display: none !important; }
+  .menu-bar, .btn, #zenBar, #filtersPanel, #filtersOverlay, input[type="range"], select { display: none !important; }
   .page { display: block !important; }
-  #page-risultati { display: block !important; }
+  #page-risultati { display: block !important; height: auto !important; overflow: visible !important; }
   .card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
-  table { page-break-inside: auto; border-collapse: collapse; }
+  table { page-break-inside: auto; border-collapse: collapse; width: 100%; }
   tr { page-break-inside: avoid; page-break-after: auto; }
   thead { display: table-header-group; }
-  th, td { border: 1px solid #ccc; padding: 8px; }
+  th, td { border: 1px solid #ccc; padding: 6px; }
   .dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
 </style>
@@ -538,7 +536,7 @@
     <div class="app-title">DegustAPP by EB</div>
 
     <div class="menu-actions">
-      <span id="syncLed" class="sync-led" title="Connessione / Sync" style="margin-right:8px; margin-left:0;"></span>
+      <span id="syncLed" class="sync-led" title="Connessione / Sync" style="margin-right:8px;"></span>
       <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
       <button id="btnTopFilters" class="menu-btn action" style="font-weight:950" onclick="toggleFiltersPanel()">Filtri</button>
       <button id="btnTopZen" class="menu-btn action" style="font-weight:950" onclick="toggleZen()">ZEN</button>
@@ -586,7 +584,6 @@
         <div style="margin-top:10px">
           <div style="font-size:12px;font-weight:950;color:var(--bordeaux);margin-bottom:6px">Evoluzione</div>
           <div id="detailEvoPick" class="evo-pick-big"></div>
-          <div class="muted" style="margin-top:6px">Tocca un pallino per impostare 1-5.</div>
         </div>
 
             </div>
@@ -2159,7 +2156,7 @@
 
       loadCanvasFromEval();
 
-  // V31: Render evolution picker
+  // V31: Render evo picker
   const evoPick = document.getElementById('detailEvoPick');
   if(evoPick && tId && !isArchived()) {
     evoPick.innerHTML = evoDotsHTML(ev.evolution, 'big');
@@ -3152,7 +3149,7 @@ function renderArchive(){
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
-  const firebaseConfig = {
+ const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
@@ -3339,12 +3336,11 @@ function renderArchive(){
 
   // helper for iterating maps
 
-  // V31: Tap assigned-tag to unassign
+  // V31: Unassign on tap
   grid.querySelectorAll('.assigned-tag[data-sample]').forEach(tag => {
     tag.addEventListener('click', (e) => {
       e.stopPropagation();
       const sid = String(tag.dataset.sample);
-      if(!sid) return;
       if(t.blindMap[sid]) {
         delete t.blindMap[sid];
         saveState();
@@ -3464,53 +3460,54 @@ function renderArchive(){
     }
   }
 
-    // V29/V31 helpers
-    function evoDotsHTML(evo, cls){
-      const v = Math.max(0, Math.min(5, parseInt(evo||0,10)||0));
-      const k = cls ? (' '+cls) : '';
-      let h = '';
-      for(let i=1; i<=5; i++){
-        h += '<span class="dot'+k+' '+(i<=v?'on':'')+'"></span>';
-      }
-      return h;
-    }
 
-    function tasterHasAnyData(t, tasterId){
-      const per = t?.evaluations?.[String(tasterId)];
-      if(!per) return false;
-      for(const sid of Object.keys(per)){
-        const ev = per[sid];
-        if(!ev) continue;
-        if(ev.profileKey || (ev.evolution||0)>0 || ev.favourite) return true;
-        const v = ev.data?.vista||{};
-        const o = ev.data?.olfatto||{};
-        const g = ev.data?.gusto||{};
-        const sliders = [v.intensita, v.limpidezza, o.intensita, o.complessita, g.corpo, g.acidita, g.persistenza];
-        if(sliders.some(x=>(parseInt(x||0,10)||0)>0)) return true;
-        if((v.desc||[]).length || (o.desc||[]).length || (g.desc||[]).length) return true;
-        if((v.canvas||'').length>50) return true;
-      }
-      return false;
+  // ========== V31 HELPER FUNCTIONS ==========
+  function evoDotsHTML(evo, cls){
+    const v = Math.max(0, Math.min(5, parseInt(evo||0,10)||0));
+    const k = cls ? (' '+cls) : '';
+    let h = '';
+    for(let i=1; i<=5; i++){
+      h += '<span class="dot'+k+' '+(i<=v?'on':'')+'"></span>';
     }
+    return h;
+  }
 
-    // V31: Per-Taster Sample Order
-    function getSampleOrder(t, tId) {
-      if(!t || !tId) return null;
-      if(!t.evaluations) t.evaluations = {};
-      if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
-      return t.evaluations[String(tId)]._sampleOrder || null;
+  function tasterHasAnyData(t, tasterId){
+    const per = t?.evaluations?.[String(tasterId)];
+    if(!per) return false;
+    for(const sid of Object.keys(per)){
+      const ev = per[sid];
+      if(!ev) continue;
+      if(ev.profileKey || (ev.evolution||0)>0 || ev.favourite) return true;
+      const v = ev.data?.vista||{};
+      const o = ev.data?.olfatto||{};
+      const g = ev.data?.gusto||{};
+      const sliders = [v.intensita, v.limpidezza, o.intensita, o.complessita, g.corpo, g.acidita, g.persistenza];
+      if(sliders.some(x=>(parseInt(x||0,10)||0)>0)) return true;
+      if((v.desc||[]).length || (o.desc||[]).length || (g.desc||[]).length) return true;
+      if((v.canvas||'').length>50) return true;
     }
+    return false;
+  }
 
-    function setSampleOrder(t, tId, order) {
-      if(!t || !tId) return;
-      if(!t.evaluations) t.evaluations = {};
-      if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
-      t.evaluations[String(tId)]._sampleOrder = order;
-    }
+  function getSampleOrder(t, tId) {
+    if(!t || !tId) return null;
+    if(!t.evaluations) t.evaluations = {};
+    if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
+    return t.evaluations[String(tId)]._sampleOrder || null;
+  }
 
-    function printResults() {
-      window.print();
-    }
+  function setSampleOrder(t, tId, order) {
+    if(!t || !tId) return;
+    if(!t.evaluations) t.evaluations = {};
+    if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
+    t.evaluations[String(tId)]._sampleOrder = order;
+  }
+
+  function printResults() {
+    window.print();
+  }
+
 </script>
 <!-- FIREBASE CLOUD-ONLY END -->
 
