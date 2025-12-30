@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>DegustAPP by EB <span id="syncLed" class="sync-led" title="Connessione / Sync"></span></title>
+  <title>DegustAPP by EB </title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     :root{
@@ -476,6 +476,20 @@
 @keyframes blinkSync{ 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} }
 .sync-led.syncing{ background:#f1c40f; animation: blinkSync .8s linear infinite; }
 
+
+
+/* V29 UX tweaks */
+#page-degustazione, #page-degustazione * { -webkit-user-select:none; user-select:none; }
+#page-degustazione input, #page-degustazione textarea { -webkit-user-select:text; user-select:text; }
+#drawingCanvas { touch-action:none; }
+.dot { display:inline-block; width:16px; height:16px; border-radius:999px; 
+       border:2px solid var(--bordeaux); background:transparent; box-sizing:border-box; }
+.dot.on { background:var(--bordeaux); }
+.dot.big { width:55px; height:55px; border-width:3px; }
+.dot.mini { width:12px; height:12px; border-width:2px; }
+.evo-pick-big { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.evo-pick-big .dot { cursor:pointer; }
+.tool-btn, .tool-btn * { -webkit-user-select:none; user-select:none; }
 </style>
 </head>
 
@@ -505,6 +519,7 @@
     <div class="app-title">DegustAPP by EB</div>
 
     <div class="menu-actions">
+      <span id="syncLed" class="sync-led" title="Connessione / Sync" style="margin-right:5px; margin-left:0;"></span>
       <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
       <button id="btnTopFilters" class="menu-btn action" style="font-weight:950" onclick="toggleFiltersPanel()">Filtri</button>
       <button id="btnTopZen" class="menu-btn action" style="font-weight:950" onclick="toggleZen()">ZEN</button>
@@ -549,6 +564,13 @@
                 <h2 id="detailName">Seleziona un campione</h2>
                 <p id="detailSub">-</p>
               </div>
+
+        <div style="margin-top:10px">
+          <div style="font-size:12px;font-weight:950;color:var(--bordeaux);margin-bottom:6px">Evoluzione</div>
+          <div id="detailEvoPick" class="evo-pick-big"></div>
+          <div class="muted" style="margin-top:6px">Tocca un pallino per impostare 1-5.</div>
+        </div>
+
             </div>
             <div class="nav-buttons">
               <button class="btn" onclick="navSample(-1)">◀</button>
@@ -1067,7 +1089,7 @@
     }
 
     function demoTasting(){
-      const cols = ["Prodotto","Annata","Zona","Extra"];
+      const cols = ["Col1","Col2","Col3","Col4"];
       const rows = [
         ["Cuvée Prestige","2021","Franciacorta",""],
         ["Cuvée Prestige","2020","Franciacorta",""],
@@ -3092,13 +3114,13 @@ function renderArchive(){
 
   // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
   const firebaseConfig = {
-    apiKey: "INSERISCI_API_KEY",
-    authDomain: "INSERISCI_PROJECT_ID.firebaseapp.com",
-    projectId: "INSERISCI_PROJECT_ID",
-    storageBucket: "INSERISCI_PROJECT_ID.appspot.com",
-    messagingSenderId: "INSERISCI_SENDER_ID",
-    appId: "INSERISCI_APP_ID"
-  };
+  apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
+  authDomain: "degustazia-ed29c.firebaseapp.com",
+  projectId: "degustazia-ed29c",
+  storageBucket: "degustazia-ed29c.firebasestorage.app",
+  messagingSenderId: "689428903782",
+  appId: "1:689428903782:web:a8fc272dd0b2e74ce2baa7"
+};
 
   // ====== LED ======
   const led = document.getElementById('syncLed');
@@ -3384,6 +3406,35 @@ function renderArchive(){
       };
     }
   }
+
+    // V29 helpers
+    function evoDotsHTML(evo, cls){
+      const v = Math.max(0, Math.min(5, parseInt(evo||0,10)||0));
+      const k = cls ? (' '+cls) : '';
+      let h = '';
+      for(let i=1; i<=5; i++){
+        h += '<span class="dot'+k+' '+(i<=v?'on':'')+'"></span>';
+      }
+      return h;
+    }
+
+    function tasterHasAnyData(t, tasterId){
+      const per = t?.evaluations?.[String(tasterId)];
+      if(!per) return false;
+      for(const sid of Object.keys(per)){
+        const ev = per[sid];
+        if(!ev) continue;
+        if(ev.profileKey || (ev.evolution||0)>0 || ev.favourite) return true;
+        const v = ev.data?.vista||{};
+        const o = ev.data?.olfatto||{};
+        const g = ev.data?.gusto||{};
+        const sliders = [v.intensita, v.limpidezza, o.intensita, o.complessita, g.corpo, g.acidita, g.persistenza];
+        if(sliders.some(x=>(parseInt(x||0,10)||0)>0)) return true;
+        if((v.desc||[]).length || (o.desc||[]).length || (g.desc||[]).length) return true;
+        if((v.canvas||'').length>50) return true;
+      }
+      return false;
+    }
 </script>
 <!-- FIREBASE CLOUD-ONLY END -->
 
