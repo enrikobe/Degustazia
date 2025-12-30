@@ -477,12 +477,20 @@
 .sync-led.syncing{ background:#f1c40f; animation: blinkSync .8s linear infinite; }
 
 
-
-/* V31 styles */
+/* V29 UX tweaks */
 #page-degustazione, #page-degustazione * { -webkit-user-select:none; user-select:none; }
 #page-degustazione input, #page-degustazione textarea { -webkit-user-select:text; user-select:text; }
 #drawingCanvas { touch-action:none; }
+.dot { display:inline-block; width:16px; height:16px; border-radius:999px; 
+       border:2px solid var(--bordeaux); background:transparent; box-sizing:border-box; }
+.dot.on { background:var(--bordeaux); }
+.dot.big { width:55px; height:55px; border-width:3px; }
+.dot.mini { width:12px; height:12px; border-width:2px; }
+.evo-pick-big { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.evo-pick-big .dot { cursor:pointer; }
+.tool-btn, .tool-btn * { -webkit-user-select:none; user-select:none; }
 
+/* V31 Patches */
 .dot { display:inline-block; width:16px; height:16px; border-radius:999px; 
        border:2px solid #9a9a9a; background:transparent; box-sizing:border-box; }
 .dot.on { background:#6a6a6a; border-color:#4a4a4a; }
@@ -490,8 +498,6 @@
 .dot.mini { width:12px; height:12px; border-width:2px; }
 .evo-pick-big { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 .evo-pick-big .dot { cursor:pointer; }
-.tool-btn, .tool-btn * { -webkit-user-select:none; user-select:none; }
-
 .assigned-tag { cursor: pointer !important; transition: all 0.12s; }
 .assigned-tag:hover { opacity: 0.8; transform: scale(0.98); }
 
@@ -507,6 +513,7 @@
   th, td { border: 1px solid #ccc; padding: 6px; }
   .dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
 </style>
 </head>
 
@@ -536,7 +543,7 @@
     <div class="app-title">DegustAPP by EB</div>
 
     <div class="menu-actions">
-      <span id="syncLed" class="sync-led" title="Connessione / Sync" style="margin-right:8px;"></span>
+      <span id="syncLed" class="sync-led" title="Connessione / Sync" style="margin-right:8px; margin-left:0;"></span>
       <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
       <button id="btnTopFilters" class="menu-btn action" style="font-weight:950" onclick="toggleFiltersPanel()">Filtri</button>
       <button id="btnTopZen" class="menu-btn action" style="font-weight:950" onclick="toggleZen()">ZEN</button>
@@ -584,6 +591,7 @@
         <div style="margin-top:10px">
           <div style="font-size:12px;font-weight:950;color:var(--bordeaux);margin-bottom:6px">Evoluzione</div>
           <div id="detailEvoPick" class="evo-pick-big"></div>
+          <div class="muted" style="margin-top:6px">Tocca un pallino per impostare 1-5.</div>
         </div>
 
             </div>
@@ -853,6 +861,7 @@
 
       <div class="row-actions" style="justify-content:flex-end;">
         <button class="btn" onclick="toggleZen()">ZEN</button>
+      <button class="btn" onclick="printResults()">📄 Stampa</button>
       </div>
     </div>
   </div>
@@ -975,6 +984,23 @@
     const STORAGEKEY = "degustapp_cloud_v24";
 
     // ---------- Helpers ----------
+
+    function printResults() { window.print(); }
+
+    function getSampleOrder(t, tId) {
+      if(!t || !tId) return null;
+      if(!t.evaluations) t.evaluations = {};
+      if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
+      return t.evaluations[String(tId)]._sampleOrder || null;
+    }
+
+    function setSampleOrder(t, tId, order) {
+      if(!t || !tId) return;
+      if(!t.evaluations) t.evaluations = {};
+      if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
+      t.evaluations[String(tId)]._sampleOrder = order;
+    }
+
     function setupDraftArrowNavigation(){
       const body = document.getElementById("draftTableBody");
       if(!body || body.dataset.arrowAttached==="1") return;
@@ -1317,7 +1343,27 @@
       state.ui.zen = !!on;
       saveState();
       updateTopActions(document.querySelector(".page.active")?.id?.replace("page-","") || "preparazione");
-      setTimeout(()=>{ initCanvas(); loadCanvasFromEval(); }, 50);
+      setTimeout(()=>{ initCanvas(); loadCanvasFromEval();
+  // V31: Render evo picker
+  const evoPick = document.getElementById('detailEvoPick');
+  if(evoPick && tId && !isArchived()) {
+    evoPick.innerHTML = evoDotsHTML(ev.evolution, 'big');
+    evoPick.querySelectorAll('.dot').forEach((dot, i) => {
+      const val = i + 1;
+      dot.addEventListener('click', () => {
+        const next = (ev.evolution||0) === val ? 0 : val;
+        ev.evolution = next;
+        ev.progress = calcProgress(ev);
+        ev.overall = calcOverall(ev);
+        saveState();
+        renderGrid();
+        updateDetail();
+      });
+    });
+  } else if(evoPick) {
+    evoPick.innerHTML = evoDotsHTML(ev.evolution, 'big');
+  }
+ }, 50);
     }
     async function toggleZen(force){
       const want = (typeof force==="boolean") ? force : !document.body.classList.contains("zen");
@@ -1395,6 +1441,26 @@
       renderGrid();
       updateDetail();
       loadCanvasFromEval();
+  // V31: Render evo picker
+  const evoPick = document.getElementById('detailEvoPick');
+  if(evoPick && tId && !isArchived()) {
+    evoPick.innerHTML = evoDotsHTML(ev.evolution, 'big');
+    evoPick.querySelectorAll('.dot').forEach((dot, i) => {
+      const val = i + 1;
+      dot.addEventListener('click', () => {
+        const next = (ev.evolution||0) === val ? 0 : val;
+        ev.evolution = next;
+        ev.progress = calcProgress(ev);
+        ev.overall = calcOverall(ev);
+        saveState();
+        renderGrid();
+        updateDetail();
+      });
+    });
+  } else if(evoPick) {
+    evoPick.innerHTML = evoDotsHTML(ev.evolution, 'big');
+  }
+
       disableInputs(isArchived() || !currentTasterId());
     }
 
@@ -1773,92 +1839,110 @@
       if(!isArchived() && t.mode==="cieca") attachBlindDrop();
     }
 
+    
     function attachReorderDnD(){
-      const grid = document.getElementById("samplesGrid");
+      const grid = document.getElementById('samplesGrid');
       const t = getTasting();
       if(!grid || !t) return;
 
+      let draggingEl = null;
       let fromId = null;
-      let touchTimer = null;
 
-      grid.querySelectorAll(".sample-card").forEach(card=>{
-        card.addEventListener("touchstart",(e)=>{
-          touchTimer = setTimeout(()=>{
-            fromId = String(card.dataset.sampleid);
-            card.classList.add("dragging");
-            card.style.opacity = "0.5";
-          }, 250);
+      // Helper to perform the move
+      const doMove = (srcId, tgtId) => {
+        if(!srcId || !tgtId || srcId === tgtId) return;
+
+        const tId = currentTasterId();
+        if(!tId) return; // Only allow sorting if taster is selected
+
+        // 1. Get current valid IDs in t.samples
+        const validIds = t.samples.map(s => String(s.id));
+
+        // 2. Get current custom order or default
+        let currentOrder = getSampleOrder(t, tId);
+        if(!currentOrder || !Array.isArray(currentOrder)) {
+            currentOrder = [...validIds];
+        }
+
+        // 3. Ensure integrity (filter out deleted, add missing)
+        currentOrder = currentOrder.filter(id => validIds.includes(String(id)));
+        validIds.forEach(id => {
+            if(!currentOrder.includes(String(id))) currentOrder.push(String(id));
         });
 
-        card.addEventListener("touchmove",(e)=>{
-          if(!fromId) return;
-          e.preventDefault();
-          const touch = e.touches[0];
-          const el = document.elementFromPoint(touch.clientX, touch.clientY);
-          const target = el?.closest(".sample-card");
-          document.querySelectorAll(".sample-card").forEach(c=>c.style.border="");
-          if(target && target !== card) target.style.border = "3px dashed var(--bordeaux)";
-        });
+        // 4. Perform move
+        const idxA = currentOrder.indexOf(String(srcId));
+        const idxB = currentOrder.indexOf(String(tgtId));
 
-        card.addEventListener("touchend",(e)=>{
-          if(touchTimer){ clearTimeout(touchTimer); touchTimer=null; }
-          if(!fromId){ card.style.opacity = ""; return; }
-          const touch = e.changedTouches[0];
-          const el = document.elementFromPoint(touch.clientX, touch.clientY);
-          const target = el?.closest(".sample-card");
-          if(target && target !== card){
-            const toId = String(target.dataset.sampleid);
-            if(toId && fromId !== toId){
-              const a = t.samples.findIndex(s=>String(s.id)===String(fromId));
-              const b = t.samples.findIndex(s=>String(s.id)===String(toId));
-              if(a>=0 && b>=0){
-                const moved = t.samples.splice(a,1)[0];
-                t.samples.splice(b,0,moved);
-                saveState();
-              }
+        if(idxA > -1 && idxB > -1) {
+            const item = currentOrder.splice(idxA, 1)[0];
+            currentOrder.splice(idxB, 0, item);
+
+            // 5. Save
+            setSampleOrder(t, tId, currentOrder);
+            saveState();
+            renderGrid();
+        }
+      };
+
+      // --- TOUCH EVENTS (Mobile/Tablet) ---
+      let touchSrc = null;
+
+      grid.querySelectorAll('.sample-card').forEach(card => {
+        // Touch Start
+        card.addEventListener('touchstart', (e) => {
+            if(e.target.closest('.fav-heart') || e.target.closest('.dot')) return;
+            touchSrc = String(card.dataset.sampleid);
+            card.style.opacity = '0.4';
+        }, {passive: true});
+
+        // Touch End (Simulate Drop)
+        card.addEventListener('touchend', (e) => {
+            if(touchSrc) {
+                const touch = e.changedTouches[0];
+                const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                const targetCard = targetEl ? targetEl.closest('.sample-card') : null;
+
+                if(targetCard) {
+                    const targetId = String(targetCard.dataset.sampleid);
+                    doMove(touchSrc, targetId);
+                }
+
+                // Reset visual
+                const srcCard = grid.querySelector(`.sample-card[data-sampleid="${touchSrc}"]`);
+                if(srcCard) srcCard.style.opacity = '1';
+                touchSrc = null;
             }
-          }
-          card.classList.remove("dragging");
-          card.style.opacity = "";
-          document.querySelectorAll(".sample-card").forEach(c=>c.style.border="");
-          fromId = null;
-          renderGrid();
         });
 
-        card.addEventListener("touchcancel",()=>{
-          if(touchTimer){ clearTimeout(touchTimer); touchTimer=null; }
-          card.classList.remove("dragging");
-          card.style.opacity = "";
-          fromId = null;
+        // --- MOUSE EVENTS (Desktop) ---
+        card.setAttribute('draggable', 'true');
+
+        card.addEventListener('dragstart', (e) => {
+           if(e.target.closest('.fav-heart') || e.target.closest('.dot')) {
+               e.preventDefault();
+               return;
+           }
+           fromId = String(card.dataset.sampleid);
+           e.dataTransfer.effectAllowed = "move";
+           e.dataTransfer.setData('text/plain', fromId);
+           card.style.opacity = '0.4';
         });
 
-        card.addEventListener("dragstart",(e)=>{
-          fromId = String(card.dataset.sampleid);
-          if(!fromId) return;
-          card.classList.add("dragging");
-          e.dataTransfer.effectAllowed="move";
-          e.dataTransfer.setData("application/x-sampleid", fromId);
-          try{ e.dataTransfer.setData("text/plain", fromId); }catch{}
+        card.addEventListener('dragend', (e) => {
+           card.style.opacity = '1';
+           fromId = null;
         });
-        card.addEventListener("dragend", ()=>{
-          card.classList.remove("dragging");
-          fromId = null;
+
+        card.addEventListener('dragover', (e) => {
+           e.preventDefault();
+           e.dataTransfer.dropEffect = "move";
         });
-        card.addEventListener("dragover",(e)=>{
-          e.preventDefault();
-          e.dataTransfer.dropEffect="move";
-        });
-        card.addEventListener("drop",(e)=>{
-          e.preventDefault();
-          const toId = String(card.dataset.sampleid);
-          if(!fromId || !toId || fromId===toId) return;
-          const a = t.samples.findIndex(s=>String(s.id)===String(fromId));
-          const b = t.samples.findIndex(s=>String(s.id)===String(toId));
-          if(a<0 || b<0) return;
-          const moved = t.samples.splice(a,1)[0];
-          t.samples.splice(b,0,moved);
-          saveState();
-          renderGrid();
+
+        card.addEventListener('drop', (e) => {
+           e.preventDefault();
+           const tgtId = String(card.dataset.sampleid);
+           doMove(fromId, tgtId);
         });
       });
     }
@@ -2059,6 +2143,26 @@
       renderGrid();
       updateDetail();
       loadCanvasFromEval();
+  // V31: Render evo picker
+  const evoPick = document.getElementById('detailEvoPick');
+  if(evoPick && tId && !isArchived()) {
+    evoPick.innerHTML = evoDotsHTML(ev.evolution, 'big');
+    evoPick.querySelectorAll('.dot').forEach((dot, i) => {
+      const val = i + 1;
+      dot.addEventListener('click', () => {
+        const next = (ev.evolution||0) === val ? 0 : val;
+        ev.evolution = next;
+        ev.progress = calcProgress(ev);
+        ev.overall = calcOverall(ev);
+        saveState();
+        renderGrid();
+        updateDetail();
+      });
+    });
+  } else if(evoPick) {
+    evoPick.innerHTML = evoDotsHTML(ev.evolution, 'big');
+  }
+
     }
 
     function navSample(dir){
@@ -2155,7 +2259,6 @@
       });
 
       loadCanvasFromEval();
-
   // V31: Render evo picker
   const evoPick = document.getElementById('detailEvoPick');
   if(evoPick && tId && !isArchived()) {
@@ -3335,23 +3438,6 @@ function renderArchive(){
   }
 
   // helper for iterating maps
-
-  // V31: Unassign on tap
-  grid.querySelectorAll('.assigned-tag[data-sample]').forEach(tag => {
-    tag.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const sid = String(tag.dataset.sample);
-      if(t.blindMap[sid]) {
-        delete t.blindMap[sid];
-        saveState();
-        renderProductsStrip();
-        renderGrid();
-        updateDetail();
-        toast('Prodotto disassociato');
-      }
-    });
-  });
-
   function list(m){ return Array.from(m.entries()); }
 
   // ====== REALTIME LISTENERS (SOURCE OF TRUTH) ======
@@ -3460,54 +3546,33 @@ function renderArchive(){
     }
   }
 
-
-  // ========== V31 HELPER FUNCTIONS ==========
-  function evoDotsHTML(evo, cls){
-    const v = Math.max(0, Math.min(5, parseInt(evo||0,10)||0));
-    const k = cls ? (' '+cls) : '';
-    let h = '';
-    for(let i=1; i<=5; i++){
-      h += '<span class="dot'+k+' '+(i<=v?'on':'')+'"></span>';
+    // V29 helpers
+    function evoDotsHTML(evo, cls){
+      const v = Math.max(0, Math.min(5, parseInt(evo||0,10)||0));
+      const k = cls ? (' '+cls) : '';
+      let h = '';
+      for(let i=1; i<=5; i++){
+        h += '<span class="dot'+k+' '+(i<=v?'on':'')+'"></span>';
+      }
+      return h;
     }
-    return h;
-  }
-
-  function tasterHasAnyData(t, tasterId){
-    const per = t?.evaluations?.[String(tasterId)];
-    if(!per) return false;
-    for(const sid of Object.keys(per)){
-      const ev = per[sid];
-      if(!ev) continue;
-      if(ev.profileKey || (ev.evolution||0)>0 || ev.favourite) return true;
-      const v = ev.data?.vista||{};
-      const o = ev.data?.olfatto||{};
-      const g = ev.data?.gusto||{};
-      const sliders = [v.intensita, v.limpidezza, o.intensita, o.complessita, g.corpo, g.acidita, g.persistenza];
-      if(sliders.some(x=>(parseInt(x||0,10)||0)>0)) return true;
-      if((v.desc||[]).length || (o.desc||[]).length || (g.desc||[]).length) return true;
-      if((v.canvas||'').length>50) return true;
+    function tasterHasAnyData(t, tasterId){
+      const per = t?.evaluations?.[String(tasterId)];
+      if(!per) return false;
+      for(const sid of Object.keys(per)){
+        const ev = per[sid];
+        if(!ev) continue;
+        if(ev.profileKey || (ev.evolution||0)>0 || ev.favourite) return true;
+        const v = ev.data?.vista||{};
+        const o = ev.data?.olfatto||{};
+        const g = ev.data?.gusto||{};
+        const sliders = [v.intensita, v.limpidezza, o.intensita, o.complessita, g.corpo, g.acidita, g.persistenza];
+        if(sliders.some(x=>(parseInt(x||0,10)||0)>0)) return true;
+        if((v.desc||[]).length || (o.desc||[]).length || (g.desc||[]).length) return true;
+        if((v.canvas||'').length>50) return true;
+      }
+      return false;
     }
-    return false;
-  }
-
-  function getSampleOrder(t, tId) {
-    if(!t || !tId) return null;
-    if(!t.evaluations) t.evaluations = {};
-    if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
-    return t.evaluations[String(tId)]._sampleOrder || null;
-  }
-
-  function setSampleOrder(t, tId, order) {
-    if(!t || !tId) return;
-    if(!t.evaluations) t.evaluations = {};
-    if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
-    t.evaluations[String(tId)]._sampleOrder = order;
-  }
-
-  function printResults() {
-    window.print();
-  }
-
 </script>
 <!-- FIREBASE CLOUD-ONLY END -->
 
