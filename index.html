@@ -472,10 +472,9 @@
   
 .sync-led{ display:inline-block; width:10px; height:10px; margin-left:10px; border-radius:50%; background:#777; border:1px solid rgba(255,255,255,.6); vertical-align:middle; }
 .sync-led.connected{ background:#2ecc71; box-shadow:0 0 6px rgba(46,204,113,.85); }
-.sync-led.offline{ background:#e74c3c; box-shadow:none; }
+.sync-led.offline{ background:#999; box-shadow:none; }
 @keyframes blinkSync{ 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} }
 .sync-led.syncing{ background:#f1c40f; animation: blinkSync .8s linear infinite; }
-
 
 
 /* V29 UX tweaks */
@@ -519,7 +518,7 @@
     <div class="app-title">DegustAPP by EB</div>
 
     <div class="menu-actions">
-      <span id="syncLed" class="sync-led" title="Connessione / Sync" style="margin-right:5px; margin-left:0;"></span>
+      <span id="syncLed" class="sync-led" title="Connessione / Sync" style="margin-right:8px; margin-left:0;"></span>
       <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
       <button id="btnTopFilters" class="menu-btn action" style="font-weight:950" onclick="toggleFiltersPanel()">Filtri</button>
       <button id="btnTopZen" class="menu-btn action" style="font-weight:950" onclick="toggleZen()">ZEN</button>
@@ -564,7 +563,6 @@
                 <h2 id="detailName">Seleziona un campione</h2>
                 <p id="detailSub">-</p>
               </div>
-
         <div style="margin-top:10px">
           <div style="font-size:12px;font-weight:950;color:var(--bordeaux);margin-bottom:6px">Evoluzione</div>
           <div id="detailEvoPick" class="evo-pick-big"></div>
@@ -3113,7 +3111,7 @@ function renderArchive(){
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
-  const firebaseConfig = {
+ const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
@@ -3417,7 +3415,6 @@ function renderArchive(){
       }
       return h;
     }
-
     function tasterHasAnyData(t, tasterId){
       const per = t?.evaluations?.[String(tasterId)];
       if(!per) return false;
