@@ -3109,7 +3109,7 @@ function renderResultsTable(){
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
- const firebaseConfig = {
+  const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
@@ -3119,7 +3119,16 @@ function renderResultsTable(){
 };
 
   // ====== LED ======
-  const led = document.getElementById('syncLed');
+  
+  window.fbPushTabOrder = (tid, uid, order) => {
+     if(!db) return;
+     flashSync();
+     setDoc(doc(db, "tastings", tid, "evaluations", `settings_${uid}`), {
+       tasterId: uid, type: 'settings', tabOrder: order, updatedAt: new Date().toISOString()
+     }, {merge:true});
+  };
+
+ const led = document.getElementById('syncLed');
   const setLed = (cls) => {
     if(!led) return;
     led.classList.remove('connected','offline','syncing');
