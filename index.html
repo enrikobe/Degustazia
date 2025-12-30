@@ -247,7 +247,8 @@
       border-radius:999px;padding:3px 10px;
       max-width:100%;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-    }
+    
+      cursor: pointer;}
 
     .evo-row{display:flex;align-items:center;justify-content:flex-start;gap:8px}
     .evo-label{font-size:11px;font-weight:950;color:#666}
@@ -826,7 +827,7 @@
         </div>
 
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label style="font-size:12px;font-weight:950;">Degustazione</label>
+          <button class="btn" onclick="printResults()">📄 Stampa</button>&nbsp; <label style="font-size:12px;font-weight:950;">Degustazione</label>
           <select id="resultsDegSelect" class="select" onchange="renderResultsTable()"></select>
 
           <label style="font-size:12px;font-weight:950;">Cerca</label>
@@ -985,7 +986,73 @@
 
     // ---------- Helpers ----------
 
-    function printResults() { window.print(); }
+    function printResults() {
+      const sel = document.getElementById("resultsDegSelect");
+      if(!sel) return;
+      const tid = sel.value;
+      if(!tid) { toast("Seleziona una degustazione"); return; }
+      const t = state.tastings.find(x=>x.id===tid);
+      if(!t) return;
+
+      const activeTasters = state.tasters.filter(tas => {
+         if(!(t.tasterIds||[]).includes(tas.id)) return false;
+         const evs = t.evaluations && t.evaluations[String(tas.id)];
+         return evs && Object.keys(evs).length > 0;
+      });
+
+      const win = window.open('','_blank');
+      if(!win) { toast("Popup bloccato"); return; }
+
+      let h = `<html><head><title>Stampa Degustazione</title>
+      <style>
+        @page{size:A4; margin:12mm;}
+        body{font-family:sans-serif; padding:20px; font-size:12px;}
+        h1{color:#7a2938; margin-bottom:5px;}
+        .meta{color:#666; margin-bottom:20px; font-size:14px;}
+        ul{margin-bottom:20px;}
+        table{width:100%; border-collapse:collapse; font-size:11px;}
+        th{background:#7a2938; color:#fff; padding:5px; border:1px solid #999;}
+        td{padding:5px; border:1px solid #ccc;}
+      </style>
+      </head><body>`;
+
+      h += `<h1>${esc(t.title)}</h1>`;
+      h += `<div class="meta">
+              Data: ${new Date().toLocaleDateString()} | 
+              Modalità: ${t.mode==="cieca"?"Alla cieca":"Scoperta"} | 
+              Campioni: ${t.samples.length} | 
+              Degustatori attivi: ${activeTasters.length}
+            </div>`;
+
+      h += `<h3>Elenco Campioni</h3><ul>`;
+      t.samples.forEach(s=>{
+         let name = "Campione " + s.id;
+         if(t.mode!=="cieca"){
+             const c = cols4(s.cols);
+             const n = (c[0] + " " + c[1]).trim();
+             if(n) name += " - " + esc(n);
+         } else {
+             const pid = (t.blindMap||{})[String(s.id)];
+             if(pid){
+                 const p = (t.products||[]).find(x=>String(x.id)===String(pid));
+                 if(p){
+                    const c = cols4(p.cols);
+                    const n = (c[0] + " " + c[1]).trim();
+                    if(n) name += " (Svelato: " + esc(n) + ")";
+                 }
+             }
+         }
+         h += `<li>${name}</li>`;
+      });
+      h += `</ul>`;
+
+      const tblWrap = document.getElementById("resultsTableWrap");
+      if(tblWrap) h += `<div style="width:100%">${tblWrap.innerHTML}</div>`;
+      h += `</body></html>`;
+
+      win.document.write(h);
+      win.document.close();
+    }
 
     function getSampleOrder(t, tId) {
       if(!t || !tId) return null;
@@ -1547,10 +1614,10 @@
         el.addEventListener("pointerdown", ()=>{
           timer = setTimeout(()=>{
             const key = el.dataset.group;
-            const groups = groupsForTasting(t);
-            const g = groups.find(x=>x.key===key);
+            if(!t.groups || !t.groups.length) t.groups = clone(state.groups);
+            const g = t.groups.find(x=>x.key===key);
             if(!g) return;
-            const name = prompt("Nome gruppo", g.label);
+            const name = prompt("Rinomina gruppo (solo questa degustazione)", g.label);
             if(name===null) return;
             const v = name.trim();
             if(!v){ toast("Nome non valido"); return; }
@@ -1560,6 +1627,7 @@
             renderGroupFilterBtns();
             renderGrid();
             updateDetail();
+            toast("Gruppo rinominato");
           }, 650);
         });
         ["pointerup","pointercancel","pointerleave"].forEach(ev=> el.addEventListener(ev, ()=>{ if(timer){ clearTimeout(timer); timer=null; } }));
@@ -1640,6 +1708,19 @@
       const t = getTasting();
       if(!strip) return;
 
+      if(!strip.dataset.dndAttached){
+        strip.dataset.dndAttached = "1";
+        strip.addEventListener("dragstart", (e)=>{
+          const ch = e.target.closest(".pchip");
+          if(!ch || ch.classList.contains("assigned")) return;
+          const pid = String(ch.dataset.productid || "");
+          if(!pid) return;
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/plain", pid);
+          e.dataTransfer.setData("text", pid);
+        });
+      }
+
       if(!t || t.mode!=="cieca" || isArchived()){
         strip.classList.remove("active");
         strip.innerHTML = "";
@@ -1655,14 +1736,6 @@
         const isAss = assigned.has(String(p.id));
         return `<span class="pchip ${isAss?"assigned":""}" draggable="${isAss?"false":"true"}" data-productid="${esc(p.id)}">${esc(main)}</span>`;
       }).join("");
-
-      strip.querySelectorAll(".pchip").forEach(ch=>{
-        if(ch.classList.contains("assigned")) return;
-        ch.addEventListener("dragstart",(e)=>{
-          e.dataTransfer.effectAllowed="move";
-          e.dataTransfer.setData("text/plain", String(ch.dataset.productid));
-        });
-      });
     }
 
     function renderGrid(){
@@ -1677,45 +1750,37 @@
 
       let list = t.samples.slice();
 
-      if(filterGroup!=="tutti"){
-        list = list.filter(s=>String(s.groupKey)===String(filterGroup));
-      }
-
-      if(filterProfile!=="tutti"){
-        if(tId){
-          list = list.filter(s=>{
-            const ev = getEval(t,tId,s.id);
-            return String(ev.profileKey)===String(filterProfile);
-          });
-        }
-      }
-
-      const viewSort = state.ui.sort || "custom";
-      if(viewSort==="group"){
+      if(state.ui.sort === 'custom') {
+         if(tId) {
+            const ord = getSampleOrder(t, tId);
+            if(ord && Array.isArray(ord)) {
+               const map = {};
+               ord.forEach((id,i) => map[String(id)] = i);
+               list.sort((a,b) => (map[String(a.id)]??9999) - (map[String(b.id)]??9999));
+            }
+         }
+      } else if(state.ui.sort === "group"){
         const ord={};
         groupsForTasting(t).forEach((g,i)=>ord[g.key]=i+1);
-        list.sort((a,b)=>{
-          const oa = ord[a.groupKey] ?? 9999;
-          const ob = ord[b.groupKey] ?? 9999;
-          return oa-ob || cmpSampleId(a.id,b.id);
-        });
-      }else if(viewSort==="profile" && tId){
+        list.sort((a,b)=> (ord[a.groupKey]??9999) - (ord[b.groupKey]??9999) || cmpSampleId(a.id,b.id));
+      } else if(state.ui.sort === "profile" && tId){
         const ord={};
         state.profiles.forEach((p,i)=>ord[p.key]=i+1);
         list.sort((a,b)=>{
           const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id);
-          const oa = ord[ea.profileKey] ?? 9999;
-          const ob = ord[eb.profileKey] ?? 9999;
-          return oa-ob || cmpSampleId(a.id,b.id);
+          return (ord[ea.profileKey]??9999) - (ord[eb.profileKey]??9999) || cmpSampleId(a.id,b.id);
         });
-      }else if(viewSort==="evolution" && tId){
+      } else if(state.ui.sort === "evolution" && tId){
         list.sort((a,b)=>{
           const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id);
           return (eb.evolution||0)-(ea.evolution||0) || cmpSampleId(a.id,b.id);
         });
-      }else if(viewSort==="reset"){
+      } else if(state.ui.sort === "reset"){
         list.sort((a,b)=>cmpSampleId(a.id,b.id));
       }
+
+      if(filterGroup!=="tutti") list = list.filter(s=>String(s.groupKey)===String(filterGroup));
+      if(filterProfile!=="tutti" && tId) list = list.filter(s=> String(getEval(t,tId,s.id).profileKey)===String(filterProfile));
 
       const blind = t.mode==="cieca";
       const dragOk = !isArchived() && eligibleForReorder();
@@ -1733,68 +1798,45 @@
         let profileChip = "";
         if(ev.profileKey){
           const p = profileDef(ev.profileKey);
-          const label = p ? p.label : ev.profileKey;
-          const color = p ? p.color : "7a2938";
-          profileChip = `<span class="chip profile" style="background:${hexToRgba(color,0.22)}">${esc(label)}</span>`;
+          if(p) profileChip = `<span class="chip profile" style="background:${hexToRgba(p.color,0.22)}">${esc(p.label)}</span>`;
         }
 
         let assignedHtml = "";
         if(blind){
-          const pid = t.blindMap[String(s.id)];
+          const pid = (t.blindMap||{})[String(s.id)];
           if(pid){
             const p = productById(t,pid);
             const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
             const pm = pc[0] + (pc[1] ? " "+pc[1] : "");
-            assignedHtml = `<div class="assigned-tag" data-sample="${esc(s.id)}" title="Tap per disassociare">${esc(pm)}</div>`;
+            assignedHtml = `<div class="assigned-tag" style="cursor:pointer" data-sample="${esc(s.id)}" title="Tap per disassociare">${esc(pm)}</div>`;
           }
         }
 
         const evo = ev.evolution || 0;
-        const dots = Array.from({length:5},(_,i)=>{
-          const v=i+1;
-          return `<span class="dot ${v<=evo?"on":""}" data-dot-evo="${v}" data-dot-sample="${esc(s.id)}"></span>`;
-        }).join("");
-
+        const dots = Array.from({length:5},(_,i)=>`<span class="dot ${i+1<=evo?"on":""}" data-dot-evo="${i+1}" data-dot-sample="${esc(s.id)}"></span>`).join("");
         const favOn = !!ev.favourite;
-        const heartChar = favOn ? "❤" : "♡";
 
-        
         const l1 = blind ? "Campione" : (c[0]||"");
         const l2 = blind ? "Alla cieca" : (c[1]||"");
         const l3 = blind ? "" : (c[2]||"");
         const l4 = blind ? "" : (c[3]||"");
-    
 
         return `
-          <div class="sample-card ${selectedSampleId===s.id?"selected":""}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg}">
+          <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg}">
             <div class="sample-top">
-              <div class="sample-id-col">
-                <div class="sample-id">${esc(String(s.id).padStart(2,"0"))}</div>
-              </div>
+              <div class="sample-id-col"><div class="sample-id">${esc(String(s.id).padStart(2,"0"))}</div></div>
               <div class="sample-meta">
-                
-        <div class="sample-lines" style="gap:1px">
-          <div class="sample-line first">${esc(l1)}</div>
-          <div class="sample-line other">${esc(l2)}</div>
-          <div class="sample-line other">${esc(l3)}</div>
-          <div class="sample-line other">${esc(l4)}</div>
-        </div>
-    
+                <div class="sample-lines" style="gap:1px">
+                  <div class="sample-line first">${esc(l1)}</div>
+                  <div class="sample-line other">${esc(l2)}</div>
+                  <div class="sample-line other">${esc(l3)}</div>
+                  <div class="sample-line other">${esc(l4)}</div>
+                </div>
               </div>
-              <div class="fav-heart ${favOn?"on":""} ${(!tId || isArchived())?"disabled":""}" data-fav-sample="${esc(s.id)}" title="Campione preferito">${heartChar}</div>
+              <div class="fav-heart ${favOn?"on":""} ${(!tId||isArchived())?"disabled":""}" data-fav-sample="${esc(s.id)}">${favOn?"❤":"♡"}</div>
             </div>
-
-            <div class="chips-row">
-              ${profileChip}
-              ${groupChip}
-              ${assignedHtml}
-            </div>
-
-            <div class="evo-row">
-              <span class="evo-label">Evoluzione</span>
-              <span class="dots">${dots}</span>
-            </div>
-
+            <div class="chips-row">${profileChip}${groupChip}${assignedHtml}</div>
+            <div class="evo-row"><span class="evo-label">Evol.</span><span class="dots">${dots}</span></div>
             <div class="progress"><div style="width:${ev.progress||0}%"></div></div>
           </div>
         `;
@@ -1803,36 +1845,41 @@
       grid.querySelectorAll(".sample-card").forEach(card=>{
         card.addEventListener("click", ()=>{
           const sid = String(card.dataset.sampleid);
-          if(!sid) return;
-          selectSample(sid);
+          if(sid) selectSample(sid);
         });
       });
-
-      grid.querySelectorAll(".fav-heart[data-fav-sample]").forEach(h=>{
-        if(isArchived() || !currentTasterId()){
-          h.classList.add("disabled");
-          return;
-        }
-        h.addEventListener("click",(e)=>{
-          e.stopPropagation();
-          const sid = String(h.dataset.favSample);
-          if(!sid) return;
-          if(selectedSampleId!==sid){ toast("Seleziona prima il campione"); return; }
-          toggleFavourite(sid);
-        });
+      grid.querySelectorAll(".fav-heart").forEach(h=>{
+         if(isArchived() || !currentTasterId()) { h.classList.add("disabled"); return; }
+         h.addEventListener("click", e=>{
+            e.stopPropagation();
+            const sid = h.dataset.favSample;
+            if(!sid) return;
+            if(selectedSampleId!==sid){ toast("Seleziona prima il campione"); return; }
+            toggleFavourite(sid);
+         });
       });
-
       grid.querySelectorAll(".dot[data-dot-evo]").forEach(dot=>{
-        if(isArchived() || !currentTasterId()){
-          dot.classList.add("disabled");
-          return;
-        }
-        dot.addEventListener("click",(e)=>{
-          e.stopPropagation();
-          const sid = String(dot.dataset.dotSample);
-          const evo = parseIntSafe(dot.dataset.dotEvo,0);
-          setEvolutionForSample(sid, evo);
-        });
+         if(isArchived() || !currentTasterId()) { dot.classList.add("disabled"); return; }
+         dot.addEventListener("click", e=>{
+            e.stopPropagation();
+            const sid = dot.dataset.dotSample;
+            const val = parseIntSafe(dot.dataset.dotEvo,0);
+            setEvolutionForSample(sid, val);
+         });
+      });
+      grid.querySelectorAll(".assigned-tag").forEach(el=>{
+         el.addEventListener("click", e=>{
+            e.stopPropagation();
+            const sid = el.dataset.sample;
+            if(sid && t.blindMap && t.blindMap[sid]){
+               delete t.blindMap[sid];
+               saveState();
+               renderProductsStrip();
+               renderGrid();
+               updateDetail();
+               toast("Prodotto disassociato");
+            }
+         });
       });
 
       if(!isArchived() && eligibleForReorder()) attachReorderDnD();
@@ -1845,105 +1892,76 @@
       const t = getTasting();
       if(!grid || !t) return;
 
-      let draggingEl = null;
-      let fromId = null;
+      let dragSrcId = null;
 
-      // Helper to perform the move
       const doMove = (srcId, tgtId) => {
-        if(!srcId || !tgtId || srcId === tgtId) return;
+         if(!srcId || !tgtId || srcId === tgtId) return;
+         const tId = currentTasterId();
+         if(!tId) { toast('Seleziona un degustatore'); return; }
 
-        const tId = currentTasterId();
-        if(!tId) return; // Only allow sorting if taster is selected
+         let order = getSampleOrder(t, tId);
+         if(!order) order = t.samples.map(s => String(s.id));
 
-        // 1. Get current valid IDs in t.samples
-        const validIds = t.samples.map(s => String(s.id));
+         const allIds = t.samples.map(s => String(s.id));
+         order = order.filter(id => allIds.includes(id));
+         allIds.forEach(id => { if(!order.includes(id)) order.push(id); });
 
-        // 2. Get current custom order or default
-        let currentOrder = getSampleOrder(t, tId);
-        if(!currentOrder || !Array.isArray(currentOrder)) {
-            currentOrder = [...validIds];
-        }
-
-        // 3. Ensure integrity (filter out deleted, add missing)
-        currentOrder = currentOrder.filter(id => validIds.includes(String(id)));
-        validIds.forEach(id => {
-            if(!currentOrder.includes(String(id))) currentOrder.push(String(id));
-        });
-
-        // 4. Perform move
-        const idxA = currentOrder.indexOf(String(srcId));
-        const idxB = currentOrder.indexOf(String(tgtId));
-
-        if(idxA > -1 && idxB > -1) {
-            const item = currentOrder.splice(idxA, 1)[0];
-            currentOrder.splice(idxB, 0, item);
-
-            // 5. Save
-            setSampleOrder(t, tId, currentOrder);
+         const idxA = order.indexOf(String(srcId));
+         const idxB = order.indexOf(String(tgtId));
+         if(idxA > -1 && idxB > -1) {
+            const item = order.splice(idxA, 1)[0];
+            order.splice(idxB, 0, item);
+            setSampleOrder(t, tId, order);
             saveState();
             renderGrid();
-        }
+         }
       };
 
-      // --- TOUCH EVENTS (Mobile/Tablet) ---
-      let touchSrc = null;
-
       grid.querySelectorAll('.sample-card').forEach(card => {
-        // Touch Start
-        card.addEventListener('touchstart', (e) => {
+         const sid = String(card.dataset.sampleid);
+         card.setAttribute('draggable', 'true');
+
+         // Mouse
+         card.addEventListener('dragstart', e => {
+            if(e.target.closest('.fav-heart') || e.target.closest('.dot')) { e.preventDefault(); return; }
+            dragSrcId = sid;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', sid);
+            card.style.opacity = '0.5';
+         });
+         card.addEventListener('dragend', () => card.style.opacity = '1');
+         card.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+         card.addEventListener('drop', e => {
+            e.preventDefault();
+            const tgt = e.target.closest('.sample-card');
+            if(tgt) doMove(dragSrcId, String(tgt.dataset.sampleid));
+         });
+
+         // Touch (Simple Tap-Selection for Move)
+         // Logic: Tap one card (selects it for move), Tap another (moves it there)
+         // Visual feedback needed.
+         card.addEventListener('click', e => {
+            // Only if specific sort mode active? No, always allow reorder if eligible.
+            // Check if we are in "Reorder Mode" implicit?
+            // Let's use Long Press or specific interaction? 
+            // The user asked for "fluid drag & drop". Touch Drag is hard to impl robustly in vanilla JS without libs.
+            // fallback: Standard Touch API emulation
+         });
+
+         // Touch Drag Emulation
+         card.addEventListener('touchstart', e => {
             if(e.target.closest('.fav-heart') || e.target.closest('.dot')) return;
-            touchSrc = String(card.dataset.sampleid);
-            card.style.opacity = '0.4';
-        }, {passive: true});
+            dragSrcId = sid;
+         }, {passive:true});
 
-        // Touch End (Simulate Drop)
-        card.addEventListener('touchend', (e) => {
-            if(touchSrc) {
-                const touch = e.changedTouches[0];
-                const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-                const targetCard = targetEl ? targetEl.closest('.sample-card') : null;
-
-                if(targetCard) {
-                    const targetId = String(targetCard.dataset.sampleid);
-                    doMove(touchSrc, targetId);
-                }
-
-                // Reset visual
-                const srcCard = grid.querySelector(`.sample-card[data-sampleid="${touchSrc}"]`);
-                if(srcCard) srcCard.style.opacity = '1';
-                touchSrc = null;
-            }
-        });
-
-        // --- MOUSE EVENTS (Desktop) ---
-        card.setAttribute('draggable', 'true');
-
-        card.addEventListener('dragstart', (e) => {
-           if(e.target.closest('.fav-heart') || e.target.closest('.dot')) {
-               e.preventDefault();
-               return;
-           }
-           fromId = String(card.dataset.sampleid);
-           e.dataTransfer.effectAllowed = "move";
-           e.dataTransfer.setData('text/plain', fromId);
-           card.style.opacity = '0.4';
-        });
-
-        card.addEventListener('dragend', (e) => {
-           card.style.opacity = '1';
-           fromId = null;
-        });
-
-        card.addEventListener('dragover', (e) => {
-           e.preventDefault();
-           e.dataTransfer.dropEffect = "move";
-        });
-
-        card.addEventListener('drop', (e) => {
-           e.preventDefault();
-           const tgtId = String(card.dataset.sampleid);
-           doMove(fromId, tgtId);
-        });
+         card.addEventListener('touchend', e => {
+            if(!dragSrcId) return;
+            const t = e.changedTouches[0];
+            const el = document.elementFromPoint(t.clientX, t.clientY);
+            const tgt = el ? el.closest('.sample-card') : null;
+            if(tgt) doMove(dragSrcId, String(tgt.dataset.sampleid));
+            dragSrcId = null;
+         });
       });
     }
 
@@ -1951,25 +1969,40 @@
       const grid = document.getElementById("samplesGrid");
       const t = getTasting();
       if(!grid || !t) return;
-      grid.querySelectorAll(".sample-card").forEach(card=>{
-        card.addEventListener("dragover",(e)=>{
-          e.preventDefault();
-          e.dataTransfer.dropEffect="move";
-        });
-        card.addEventListener("drop",(e)=>{
-          e.preventDefault();
-          const pid = e.dataTransfer.getData("text/plain");
-          const sid = String(card.dataset.sampleid);
-          if(!pid || !sid) return;
-          if(t.blindMap[sid]){ toast("Campione già associato"); return; }
-          const used = new Set(Object.values(t.blindMap||{}).map(x=>String(x)));
-          if(used.has(String(pid))){ toast("Prodotto già assegnato"); return; }
-          t.blindMap[sid] = String(pid);
-          saveState();
-          renderProductsStrip();
-          renderGrid();
-          updateDetail();
-        });
+
+      if(grid.dataset.dropAttached === "1") return;
+      grid.dataset.dropAttached = "1";
+
+      grid.addEventListener("dragover", (e) => {
+        if(e.target.closest(".sample-card")) {
+           e.preventDefault();
+           e.dataTransfer.dropEffect = "move";
+        }
+      });
+
+      grid.addEventListener("drop", (e) => {
+        const card = e.target.closest(".sample-card");
+        if(!card) return;
+
+        e.preventDefault();
+        const pid = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text");
+        const sid = String(card.dataset.sampleid);
+
+        if(!pid || !sid) return;
+
+        if(!t.blindMap) t.blindMap = {};
+
+        if(t.blindMap[sid]){ toast("Campione già associato"); return; }
+
+        const used = new Set(Object.values(t.blindMap).map(x=>String(x)));
+        if(used.has(String(pid))){ toast("Prodotto già assegnato"); return; }
+
+        t.blindMap[sid] = String(pid);
+        saveState();
+        renderProductsStrip();
+        renderGrid();
+        updateDetail();
+        toast("Prodotto associato");
       });
     }
 
@@ -2841,10 +2874,19 @@ function renderArchive(){
         return;
       }
 
-      const tasters = state.tasters.filter(x=>(t.tasterIds||[]).includes(x.id));
+      const activeTasters = state.tasters.filter(tas => {
+         if(!(t.tasterIds||[]).includes(tas.id)) return false;
+         const evs = t.evaluations && t.evaluations[String(tas.id)];
+         return evs && Object.keys(evs).length > 0;
+      });
+
+      if(activeTasters.length === 0){
+          wrap.innerHTML = `<div class="muted">Nessuna valutazione presente.</div>`;
+          return;
+      }
+
       const q = (state.ui.resultsSearch||"").toLowerCase();
 
-      // Columns Config
       const cols = [
         "Degustatore", "Profilo", "Evoluzione", "Preferito", 
         "Vista I/L", "Vista descr.", 
@@ -2854,72 +2896,96 @@ function renderArchive(){
       ];
 
       let html = `<div style="overflow-x:auto"><table style="min-width:100%; border-collapse:collapse; font-size:12px;">`;
-
-      // Main Header (Bordeaux)
       html += `<thead><tr style="background:#7a2938; color:#fff; font-weight:bold;">`;
       cols.forEach(c => html += `<th style="padding:8px; text-align:left; border:1px solid #9d3d4f;">${esc(c)}</th>`);
       html += `</tr></thead><tbody>`;
 
+      let anyRowShown = false;
+
       t.samples.forEach(s=>{
         const name = getSampleName(t, s);
-        // Search Filter
-        if(q && !name.toLowerCase().includes(q) && !String(s.id).includes(q)) return;
+        const sampleText = (name + " " + s.id).toLowerCase();
 
-        // 1. Sample Header Row (Beige)
-        html += `<tr style="background:#f9f5f0; border-top:2px solid #ccc;">
+        let tasterRowsHtml = "";
+        let visibleTasterRows = 0;
+
+        activeTasters.forEach(tas=>{
+           const ev = (t.evaluations && t.evaluations[tas.id] && t.evaluations[tas.id][s.id]) || {};
+
+           let pLabel = "";
+           if(ev.profileKey){
+             const p = state.profiles.find(x=>x.key===ev.profileKey);
+             if(p) pLabel = p.label;
+           }
+           const evo = ev.evolution || 0;
+           const v_d = (ev.data?.vista?.desc || []).join(", ");
+           const o_d = (ev.data?.olfatto?.desc || []).join(", ");
+           const g_d = (ev.data?.gusto?.desc || []).join(", ");
+
+           const rowText = [
+              tas.name, pLabel, 
+              evo > 0 ? "evoluzione" : "", 
+              ev.favourite ? "preferito" : "", 
+              v_d, o_d, g_d,
+              ev.overall,
+              sampleText 
+           ].join(" ").toLowerCase();
+
+           if(!q || rowText.includes(q)){
+               visibleTasterRows++;
+
+               let profHtml = "-";
+               if(ev.profileKey){
+                 const p = state.profiles.find(x=>x.key===ev.profileKey);
+                 if(p) profHtml = `<span style="display:inline-block; padding:2px 8px; border-radius:10px; background:#${p.color}40; border:1px solid #${p.color}; font-size:11px; font-weight:bold;">${esc(p.label)}</span>`;
+               }
+
+               const fav = ev.favourite ? '<span style="color:red; font-size:14px;">❤</span>' : "-";
+
+               const v_int = ev.data?.vista?.intensita || 0;
+               const v_lim = ev.data?.vista?.limpidezza || 0;
+
+               const o_int = ev.data?.olfatto?.intensita || 0;
+               const o_cmp = ev.data?.olfatto?.complessita || 0;
+
+               const g_cor = ev.data?.gusto?.corpo || 0;
+               const g_aci = ev.data?.gusto?.acidita || 0;
+               const g_per = ev.data?.gusto?.persistenza || 0;
+
+               const overall = ev.overall > 0 ? ev.overall.toFixed(1) : "-";
+               const prog = (ev.progress || 0) + "%";
+
+               const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div style="width:8px;height:8px;border-radius:50%;background:${i<=evo?'#7a2938':'#eee'};border:1px solid #999;"></div>`).join('')}</div>`;
+
+               tasterRowsHtml += `<tr style="background:#fff; border-bottom:1px solid #eee;">
+                  <td style="padding:8px; color:#666;">${esc(tas.name)}</td>
+                  <td style="padding:8px;">${profHtml}</td>
+                  <td style="padding:8px;">${evoHtml}</td>
+                  <td style="padding:8px; text-align:center;">${fav}</td>
+                  <td style="padding:8px;">${v_int} / ${v_lim}</td>
+                  <td style="padding:8px; font-style:italic; color:#555;">${esc(v_d||"-")}</td>
+                  <td style="padding:8px;">${o_int} / ${o_cmp}</td>
+                  <td style="padding:8px; font-style:italic; color:#555;">${esc(o_d||"-")}</td>
+                  <td style="padding:8px;">${g_cor} / ${g_aci} / ${g_per}</td>
+                  <td style="padding:8px; font-style:italic; color:#555;">${esc(g_d||"-")}</td>
+                  <td style="padding:8px; font-weight:bold;">${overall}</td>
+                  <td style="padding:8px; font-size:10px; color:#888;">${prog}</td>
+               </tr>`;
+           }
+        });
+
+        if(visibleTasterRows > 0){
+           anyRowShown = true;
+           html += `<tr style="background:#f9f5f0; border-top:2px solid #ccc;">
                    <td colspan="${cols.length}" style="padding:10px; font-weight:bold; font-size:14px; color:#333; border-bottom:1px solid #ddd;">
                      <span style="color:#7a2938; margin-right:8px;">${esc(s.id)}</span> ${esc(name)}
                    </td>
                  </tr>`;
-
-        // 2. Taster Rows
-        tasters.forEach(tas=>{
-           const ev = (t.evaluations && t.evaluations[tas.id] && t.evaluations[tas.id][s.id]) || {};
-
-           // Data Extraction
-           let profHtml = "-";
-           if(ev.profileKey){
-             const p = state.profiles.find(x=>x.key===ev.profileKey);
-             if(p) profHtml = `<span style="display:inline-block; padding:2px 8px; border-radius:10px; background:#${p.color}40; border:1px solid #${p.color}; font-size:11px; font-weight:bold;">${esc(p.label)}</span>`;
-           }
-
-           const evo = ev.evolution || 0;
-           const fav = ev.favourite ? '<span style="color:red; font-size:14px;">❤</span>' : "-";
-
-           const v_int = ev.data?.vista?.intensita || 0;
-           const v_lim = ev.data?.vista?.limpidezza || 0;
-           const v_d = (ev.data?.vista?.desc || []).join(", ");
-
-           const o_int = ev.data?.olfatto?.intensita || 0;
-           const o_cmp = ev.data?.olfatto?.complessita || 0;
-           const o_d = (ev.data?.olfatto?.desc || []).join(", ");
-
-           const g_cor = ev.data?.gusto?.corpo || 0;
-           const g_aci = ev.data?.gusto?.acidita || 0;
-           const g_per = ev.data?.gusto?.persistenza || 0;
-           const g_d = (ev.data?.gusto?.desc || []).join(", ");
-
-           const overall = ev.overall > 0 ? ev.overall.toFixed(1) : "-";
-           const prog = (ev.progress || 0) + "%";
-
-           html += `<tr style="background:#fff; border-bottom:1px solid #eee;">
-              <td style="padding:8px; color:#666;">${esc(tas.name)}</td>
-              <td style="padding:8px;">${profHtml}</td>
-              <td style="padding:8px;">${evo>0 ? evo : "0"}</td>
-              <td style="padding:8px; text-align:center;">${fav}</td>
-              <td style="padding:8px;">${v_int} / ${v_lim}</td>
-              <td style="padding:8px; font-style:italic; color:#555;">${esc(v_d||"-")}</td>
-              <td style="padding:8px;">${o_int} / ${o_cmp}</td>
-              <td style="padding:8px; font-style:italic; color:#555;">${esc(o_d||"-")}</td>
-              <td style="padding:8px;">${g_cor} / ${g_aci} / ${g_per}</td>
-              <td style="padding:8px; font-style:italic; color:#555;">${esc(g_d||"-")}</td>
-              <td style="padding:8px; font-weight:bold; color:var(--bordeaux);">${overall}</td>
-              <td style="padding:8px; font-size:11px; color:#888;">${prog}</td>
-           </tr>`;
-        });
+           html += tasterRowsHtml;
+        }
       });
-
       html += `</tbody></table></div>`;
+      if(!anyRowShown) html = `<div class="muted">Nessun risultato per la ricerca.</div>`;
       wrap.innerHTML = html;
     }
 
@@ -3252,7 +3318,7 @@ function renderArchive(){
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
- const firebaseConfig = {
+  const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
