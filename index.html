@@ -476,17 +476,7 @@
 @keyframes blinkSync{ 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} }
 .sync-led.syncing{ background:#f1c40f; animation: blinkSync .8s linear infinite; }
 
-
-/* No Select */
-.tasting-page, .tab-btn, .sample-grid, .eval-slider-row { user-select: none; -webkit-user-select: none; }
-input, textarea { user-select: text; -webkit-user-select: text; }
-
-/* Bigger Evolution Dots */
-.evolution-dot { width: 45px; height: 45px; margin: 0 8px; }
-
-/* Smooth Pencil */
-canvas { touch-action: none; } /* Prevents scrolling while drawing */
-
+.canvas-tools button, .canvas-tools label { user-select: none; -webkit-user-select: none; }
 </style>
 </head>
 
@@ -1078,7 +1068,7 @@ canvas { touch-action: none; } /* Prevents scrolling while drawing */
     }
 
     function demoTasting(){
-      const cols = ["Prodotto","Annata","Zona","Extra"];
+      const cols = ["Col 1","Col 2","Col 3","Col 4"];
       const rows = [
         ["Cuvée Prestige","2021","Franciacorta",""],
         ["Cuvée Prestige","2020","Franciacorta",""],
@@ -1134,13 +1124,6 @@ canvas { touch-action: none; } /* Prevents scrolling while drawing */
     }
 
     let state = null;
-
-    // Local Preferences (Not synced)
-    var localPrefs = { tabOrder: {} };
-    const PREF_KEY = "degustapp_prefs_v1";
-    try { localPrefs = JSON.parse(localStorage.getItem(PREF_KEY)) || { tabOrder:{} }; } catch(e){}
-    function savePrefs(){ localStorage.setItem(PREF_KEY, JSON.stringify(localPrefs)); }
-
 
     function loadState(){ return null; }
     function saveState(){
@@ -2681,17 +2664,6 @@ function renderArchive(){
       const c = cols4(p.cols);
       return (c[0] + (c[1]?" "+c[1]:"")).trim();
     }
-    
-    function getEvoDotsHtml(val){
-      let h = '<div style="display:flex;gap:3px;justify-content:center;">';
-      for(let i=1;i<=5;i++){
-         let bg = i<=val ? '#555' : '#ddd';
-         h += `<div style="width:10px;height:10px;border-radius:50%;background:${bg}"></div>`;
-      }
-      h += '</div>';
-      return h;
-    }
-
     function renderResultsTable(){
       const wrap = document.getElementById("resultsTableWrap");
       const sel = document.getElementById("resultsDegSelect");
@@ -2709,7 +2681,7 @@ function renderArchive(){
         return;
       }
 
-      const tasters = state.tasters.filter(x=>(t.tasterIds||[]).includes(x.id));
+      const tasters = state.tasters.filter(x=> t.evaluations && t.evaluations[x.id] && Object.keys(t.evaluations[x.id]).length > 0);
       const q = (state.ui.resultsSearch||"").toLowerCase();
 
       // Columns Config
@@ -2887,7 +2859,7 @@ function renderArchive(){
       document.querySelectorAll(".col-drag").forEach(el=>{
         const c = parseInt(el.dataset.col);
         if(isBlind) el.textContent = "ProdCol"+(c+1);
-        else el.textContent = ["Prodotto","Annata","Zona","Extra"][c];
+        else el.textContent = ["Col 1","Col 2","Col 3","Col 4"][c];
       });
     }
 
@@ -3120,7 +3092,7 @@ function renderArchive(){
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
-  const firebaseConfig = {
+ const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
@@ -3386,7 +3358,19 @@ function renderArchive(){
           t.evaluations = t.evaluations || {};
           snap.forEach(ds=>{
             const ev = ds.data() || {};
+            
+          snap.forEach(ds=>{
+            const ev = ds.data() || {};
+
+            if(ev.type === 'settings' && ev.tasterId && ev.tabOrder){
+                if(!state.ui.userTabOrders) state.ui.userTabOrders = {};
+                state.ui.userTabOrders[ev.tasterId] = ev.tabOrder;
+                if(ev.tasterId === state.currentTaster && typeof renderTabs==='function') renderTabs();
+                return;
+            }
+
             if(!ev.tasterId || !ev.sampleId) return;
+
             const ta = String(ev.tasterId);
             const sa = String(ev.sampleId);
             if(!t.evaluations[ta]) t.evaluations[ta] = {};
