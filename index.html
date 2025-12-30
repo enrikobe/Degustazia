@@ -477,12 +477,19 @@
 .sync-led.syncing{ background:#f1c40f; animation: blinkSync .8s linear infinite; }
 
 
-/* No Select */
-.tasting-page, .tab-btn, .sample-grid, .eval-slider-row, .canvas-tools button { user-select: none; -webkit-user-select: none; }
-input, textarea { user-select: text; -webkit-user-select: text; }
-.evolution-dot { width: 55px; height: 55px; margin: 0 5px; }
-canvas { touch-action: none; }
 
+/* V29 UX tweaks */
+#page-degustazione, #page-degustazione * { -webkit-user-select:none; user-select:none; }
+#page-degustazione input, #page-degustazione textarea { -webkit-user-select:text; user-select:text; }
+#drawingCanvas { touch-action:none; }
+.dot { display:inline-block; width:16px; height:16px; border-radius:999px; 
+       border:2px solid var(--bordeaux); background:transparent; box-sizing:border-box; }
+.dot.on { background:var(--bordeaux); }
+.dot.big { width:55px; height:55px; border-width:3px; }
+.dot.mini { width:12px; height:12px; border-width:2px; }
+.evo-pick-big { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.evo-pick-big .dot { cursor:pointer; }
+.tool-btn, .tool-btn * { -webkit-user-select:none; user-select:none; }
 </style>
 </head>
 
@@ -556,6 +563,13 @@ canvas { touch-action: none; }
                 <h2 id="detailName">Seleziona un campione</h2>
                 <p id="detailSub">-</p>
               </div>
+
+        <div style="margin-top:10px">
+          <div style="font-size:12px;font-weight:950;color:var(--bordeaux);margin-bottom:6px">Evoluzione</div>
+          <div id="detailEvoPick" class="evo-pick-big"></div>
+          <div class="muted" style="margin-top:6px">Tocca un pallino per impostare 1-5.</div>
+        </div>
+
             </div>
             <div class="nav-buttons">
               <button class="btn" onclick="navSample(-1)">◀</button>
@@ -1074,7 +1088,7 @@ canvas { touch-action: none; }
     }
 
     function demoTasting(){
-      const cols = ["Col 1","Col 2","Col 3","Col 4"];
+      const cols = ["Col1","Col2","Col3","Col4"];
       const rows = [
         ["Cuvée Prestige","2021","Franciacorta",""],
         ["Cuvée Prestige","2020","Franciacorta",""],
@@ -2670,18 +2684,7 @@ function renderArchive(){
       const c = cols4(p.cols);
       return (c[0] + (c[1]?" "+c[1]:"")).trim();
     }
-    
-function drawEvoDots(val){
-  let h='<div style="display:flex;gap:2px;justify-content:center">';
-  for(let i=1;i<=5;i++){
-    let c = i<=val ? '#444' : '#ccc';
-    h+=`<div style="width:10px;height:10px;border-radius:50%;background:${c}"></div>`;
-  }
-  h+='</div>';
-  return h;
-}
-
-function renderResultsTable(){
+    function renderResultsTable(){
       const wrap = document.getElementById("resultsTableWrap");
       const sel = document.getElementById("resultsDegSelect");
       if(!wrap || !sel) return;
@@ -2698,7 +2701,7 @@ function renderResultsTable(){
         return;
       }
 
-      const tasters = state.tasters.filter(x=> t.evaluations && t.evaluations[x.id] && Object.keys(t.evaluations[x.id]).length > 0);
+      const tasters = state.tasters.filter(x=>(t.tasterIds||[]).includes(x.id));
       const q = (state.ui.resultsSearch||"").toLowerCase();
 
       // Columns Config
@@ -2876,7 +2879,7 @@ function renderResultsTable(){
       document.querySelectorAll(".col-drag").forEach(el=>{
         const c = parseInt(el.dataset.col);
         if(isBlind) el.textContent = "ProdCol"+(c+1);
-        else el.textContent = ["Col 1","Col 2","Col 3","Col 4"][c];
+        else el.textContent = ["Prodotto","Annata","Zona","Extra"][c];
       });
     }
 
@@ -3109,7 +3112,7 @@ function renderResultsTable(){
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
-  const firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
@@ -3119,16 +3122,7 @@ function renderResultsTable(){
 };
 
   // ====== LED ======
-  
-  window.fbPushTabOrder = (tid, uid, order) => {
-     if(!db) return;
-     flashSync();
-     setDoc(doc(db, "tastings", tid, "evaluations", `settings_${uid}`), {
-       tasterId: uid, type: 'settings', tabOrder: order, updatedAt: new Date().toISOString()
-     }, {merge:true});
-  };
-
- const led = document.getElementById('syncLed');
+  const led = document.getElementById('syncLed');
   const setLed = (cls) => {
     if(!led) return;
     led.classList.remove('connected','offline','syncing');
@@ -3384,17 +3378,7 @@ function renderResultsTable(){
           t.evaluations = t.evaluations || {};
           snap.forEach(ds=>{
             const ev = ds.data() || {};
-            
-          snap.forEach(ds=>{
-            const ev = ds.data() || {};
-            if(ev.type === 'settings' && ev.tasterId && ev.tabOrder){
-                if(!state.ui.userTabOrders) state.ui.userTabOrders = {};
-                state.ui.userTabOrders[ev.tasterId] = ev.tabOrder;
-                if(ev.tasterId === state.currentTaster && typeof renderTabs==='function') renderTabs();
-                return;
-            }
             if(!ev.tasterId || !ev.sampleId) return;
-
             const ta = String(ev.tasterId);
             const sa = String(ev.sampleId);
             if(!t.evaluations[ta]) t.evaluations[ta] = {};
@@ -3421,6 +3405,37 @@ function renderResultsTable(){
       };
     }
   }
+
+
+    // V29 helpers
+    function evoDotsHTML(evo, cls){
+      const v = Math.max(0, Math.min(5, parseInt(evo||0,10)||0));
+      const k = cls ? (' '+cls) : '';
+      let h = '';
+      for(let i=1; i<=5; i++){
+        h += '<span class="dot'+k+' '+(i<=v?'on':'')+'"></span>';
+      }
+      return h;
+    }
+
+    function tasterHasAnyData(t, tasterId){
+      const per = t?.evaluations?.[String(tasterId)];
+      if(!per) return false;
+      for(const sid of Object.keys(per)){
+        const ev = per[sid];
+        if(!ev) continue;
+        if(ev.profileKey || (ev.evolution||0)>0 || ev.favourite) return true;
+        const v = ev.data?.vista||{};
+        const o = ev.data?.olfatto||{};
+        const g = ev.data?.gusto||{};
+        const sliders = [v.intensita, v.limpidezza, o.intensita, o.complessita, g.corpo, g.acidita, g.persistenza];
+        if(sliders.some(x=>(parseInt(x||0,10)||0)>0)) return true;
+        if((v.desc||[]).length || (o.desc||[]).length || (g.desc||[]).length) return true;
+        if((v.canvas||'').length>50) return true;
+      }
+      return false;
+    }
+
 </script>
 <!-- FIREBASE CLOUD-ONLY END -->
 
