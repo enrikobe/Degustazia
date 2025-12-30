@@ -476,7 +476,13 @@
 @keyframes blinkSync{ 0%{opacity:1} 50%{opacity:.25} 100%{opacity:1} }
 .sync-led.syncing{ background:#f1c40f; animation: blinkSync .8s linear infinite; }
 
-.canvas-tools button, .canvas-tools label { user-select: none; -webkit-user-select: none; }
+
+/* No Select */
+.tasting-page, .tab-btn, .sample-grid, .eval-slider-row, .canvas-tools button { user-select: none; -webkit-user-select: none; }
+input, textarea { user-select: text; -webkit-user-select: text; }
+.evolution-dot { width: 55px; height: 55px; margin: 0 5px; }
+canvas { touch-action: none; }
+
 </style>
 </head>
 
@@ -2664,7 +2670,18 @@ function renderArchive(){
       const c = cols4(p.cols);
       return (c[0] + (c[1]?" "+c[1]:"")).trim();
     }
-    function renderResultsTable(){
+    
+function drawEvoDots(val){
+  let h='<div style="display:flex;gap:2px;justify-content:center">';
+  for(let i=1;i<=5;i++){
+    let c = i<=val ? '#444' : '#ccc';
+    h+=`<div style="width:10px;height:10px;border-radius:50%;background:${c}"></div>`;
+  }
+  h+='</div>';
+  return h;
+}
+
+function renderResultsTable(){
       const wrap = document.getElementById("resultsTableWrap");
       const sel = document.getElementById("resultsDegSelect");
       if(!wrap || !sel) return;
@@ -3361,14 +3378,12 @@ function renderArchive(){
             
           snap.forEach(ds=>{
             const ev = ds.data() || {};
-
             if(ev.type === 'settings' && ev.tasterId && ev.tabOrder){
                 if(!state.ui.userTabOrders) state.ui.userTabOrders = {};
                 state.ui.userTabOrders[ev.tasterId] = ev.tabOrder;
                 if(ev.tasterId === state.currentTaster && typeof renderTabs==='function') renderTabs();
                 return;
             }
-
             if(!ev.tasterId || !ev.sampleId) return;
 
             const ta = String(ev.tasterId);
