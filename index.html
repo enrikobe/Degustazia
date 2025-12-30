@@ -477,18 +477,38 @@
 .sync-led.syncing{ background:#f1c40f; animation: blinkSync .8s linear infinite; }
 
 
-/* V29 UX tweaks */
+/* V29/V30/V31 UX tweaks */
 #page-degustazione, #page-degustazione * { -webkit-user-select:none; user-select:none; }
 #page-degustazione input, #page-degustazione textarea { -webkit-user-select:text; user-select:text; }
 #drawingCanvas { touch-action:none; }
+
+/* V31: Gray Evolution Dots */
 .dot { display:inline-block; width:16px; height:16px; border-radius:999px; 
-       border:2px solid var(--bordeaux); background:transparent; box-sizing:border-box; }
-.dot.on { background:var(--bordeaux); }
+       border:2px solid #9a9a9a; background:transparent; box-sizing:border-box; }
+.dot.on { background:#6a6a6a; border-color:#4a4a4a; }
 .dot.big { width:55px; height:55px; border-width:3px; }
 .dot.mini { width:12px; height:12px; border-width:2px; }
 .evo-pick-big { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
 .evo-pick-big .dot { cursor:pointer; }
 .tool-btn, .tool-btn * { -webkit-user-select:none; user-select:none; }
+
+/* V31: Assigned tag clickable */
+.assigned-tag { cursor: pointer; transition: all 0.12s; }
+.assigned-tag:hover { opacity: 0.8; transform: scale(0.98); }
+
+/* V31: Print styles */
+@media print {
+  body { background: #fff; }
+  .menu-bar, .btn, #zenBar, #filtersPanel, #filtersOverlay, input, select { display: none !important; }
+  .page { display: block !important; }
+  #page-risultati { display: block !important; }
+  .card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
+  table { page-break-inside: auto; border-collapse: collapse; }
+  tr { page-break-inside: avoid; page-break-after: auto; }
+  thead { display: table-header-group; }
+  th, td { border: 1px solid #ccc; padding: 8px; }
+  .dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
 </style>
 </head>
 
@@ -1662,7 +1682,7 @@
             const p = productById(t,pid);
             const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
             const pm = pc[0] + (pc[1] ? " "+pc[1] : "");
-            assignedHtml = `<div class="assigned-tag" title="Prodotto associato">${esc(pm)}</div>`;
+            assignedHtml = `<div class="assigned-tag" data-sample="${esc(s.id)}" title="Tap per disassociare">${esc(pm)}</div>`;
           }
         }
 
@@ -2138,6 +2158,27 @@
       });
 
       loadCanvasFromEval();
+
+  // V31: Render evolution picker
+  const evoPick = document.getElementById('detailEvoPick');
+  if(evoPick && tId && !isArchived()) {
+    evoPick.innerHTML = evoDotsHTML(ev.evolution, 'big');
+    evoPick.querySelectorAll('.dot').forEach((dot, i) => {
+      const val = i + 1;
+      dot.addEventListener('click', () => {
+        const next = (ev.evolution||0) === val ? 0 : val;
+        ev.evolution = next;
+        ev.progress = calcProgress(ev);
+        ev.overall = calcOverall(ev);
+        saveState();
+        renderGrid();
+        updateDetail();
+      });
+    });
+  } else if(evoPick) {
+    evoPick.innerHTML = evoDotsHTML(ev.evolution, 'big');
+  }
+
     }
 
     function uiSlider(sec, key, value){
@@ -3111,7 +3152,7 @@ function renderArchive(){
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
- const firebaseConfig = {
+  const firebaseConfig = {
   apiKey: "AIzaSyBO8jio2Ylyc5e7qQgkDttiDYVRDUaX0xM",
   authDomain: "degustazia-ed29c.firebaseapp.com",
   projectId: "degustazia-ed29c",
@@ -3297,6 +3338,24 @@ function renderArchive(){
   }
 
   // helper for iterating maps
+
+  // V31: Tap assigned-tag to unassign
+  grid.querySelectorAll('.assigned-tag[data-sample]').forEach(tag => {
+    tag.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sid = String(tag.dataset.sample);
+      if(!sid) return;
+      if(t.blindMap[sid]) {
+        delete t.blindMap[sid];
+        saveState();
+        renderProductsStrip();
+        renderGrid();
+        updateDetail();
+        toast('Prodotto disassociato');
+      }
+    });
+  });
+
   function list(m){ return Array.from(m.entries()); }
 
   // ====== REALTIME LISTENERS (SOURCE OF TRUTH) ======
@@ -3405,7 +3464,7 @@ function renderArchive(){
     }
   }
 
-    // V29 helpers
+    // V29/V31 helpers
     function evoDotsHTML(evo, cls){
       const v = Math.max(0, Math.min(5, parseInt(evo||0,10)||0));
       const k = cls ? (' '+cls) : '';
@@ -3415,6 +3474,7 @@ function renderArchive(){
       }
       return h;
     }
+
     function tasterHasAnyData(t, tasterId){
       const per = t?.evaluations?.[String(tasterId)];
       if(!per) return false;
@@ -3431,6 +3491,25 @@ function renderArchive(){
         if((v.canvas||'').length>50) return true;
       }
       return false;
+    }
+
+    // V31: Per-Taster Sample Order
+    function getSampleOrder(t, tId) {
+      if(!t || !tId) return null;
+      if(!t.evaluations) t.evaluations = {};
+      if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
+      return t.evaluations[String(tId)]._sampleOrder || null;
+    }
+
+    function setSampleOrder(t, tId, order) {
+      if(!t || !tId) return;
+      if(!t.evaluations) t.evaluations = {};
+      if(!t.evaluations[String(tId)]) t.evaluations[String(tId)] = {};
+      t.evaluations[String(tId)]._sampleOrder = order;
+    }
+
+    function printResults() {
+      window.print();
     }
 </script>
 <!-- FIREBASE CLOUD-ONLY END -->
