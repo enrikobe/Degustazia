@@ -524,7 +524,7 @@
 
 .modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999; }
 .modal { background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);width:90%;max-width:350px; }
-.modal-header { background:var(--bordeaux);color:#fff;padding:12px;font-weight:bold; }
+.modal-header { background:var(--bordeaux);color:#fff;padding:12px;font-weight:bold;text-align:center; }
 .pchip { font-size:11px !important; padding:2px 8px !important; }
 </style>
 </head>
@@ -536,7 +536,37 @@
       const sp=document.getElementById("splashScreen");
       if(sp){ sp.classList.add("hide"); setTimeout(()=>sp.style.display="none",500); }
     }, 3000);
-  function forceEnableClear(){
+  window.toggleBlindProduct = function(pid){
+       if(isArchived()) return;
+       const tid = state.ui.currentTastingId;
+       if(!tid) return;
+       const t = state.tastings.find(x=>x.id===tid);
+       if(!t) return;
+
+       const sPid = String(pid);
+       const existingSid = Object.keys(t.blindMap || {}).find(k => String(t.blindMap[k]) === sPid);
+
+       if(existingSid){
+           const currentSid = String(selectedSampleId);
+           if(existingSid === currentSid){
+               delete t.blindMap[currentSid];
+               toast("Dissociato");
+           } else {
+               if(confirm(`Questo prodotto è assegnato al campione ${existingSid}. Spostarlo qui?`)){
+                   delete t.blindMap[existingSid];
+                   t.blindMap[currentSid] = sPid;
+                   toast("Spostato e Assegnato");
+               } else { return; }
+           }
+       } else {
+           if(!selectedSampleId){ toast("Seleziona un campione"); return; }
+           t.blindMap[String(selectedSampleId)] = sPid;
+           toast("Assegnato");
+       }
+       saveState();
+       renderProductsStrip(); renderGrid(); updateDetail();
+    };
+function forceEnableClear(){
     const clrBtns = document.querySelectorAll("button");
     for(let b of clrBtns){
         if(b.innerText.includes("Pulisci") || (b.getAttribute("onclick")||"").includes("clearCanvas")){
@@ -1043,7 +1073,7 @@
 
 .modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999; }
 .modal { background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);width:90%;max-width:350px; }
-.modal-header { background:var(--bordeaux);color:#fff;padding:12px;font-weight:bold; }
+.modal-header { background:var(--bordeaux);color:#fff;padding:12px;font-weight:bold;text-align:center; }
 .pchip { font-size:11px !important; padding:2px 8px !important; }
 </style>
       </head><body>`;
@@ -1084,12 +1114,15 @@
 <div id="editEntityModal" class="modal-overlay" style="display:none">
   <div class="modal">
     <div class="modal-header">Modifica <span id="editEntityTitle"></span></div>
-    <div class="pad">
-       <div class="label">Nome</div>
-       <input id="editEntityName" class="input" />
-       <div class="label" style="margin-top:10px">Colore</div>
-       <input id="editEntityColor" type="color" class="input" style="height:40px;padding:2px;width:100%" />
-       <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+    <div class="pad" style="text-align:center; display:flex; flex-direction:column; align-items:center;">
+       <div class="label" style="width:100%;text-align:center">Nome</div>
+       <input id="editEntityName" class="input" style="text-align:center" />
+       <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
+       <div style="display:flex;justify-content:center;margin:10px 0;">
+          <input id="editEntityColor" type="color" style="opacity:0;width:0;height:0;position:absolute;" onchange="document.getElementById('colorPreview').style.background = this.value" />
+          <div id="colorPreview" onclick="document.getElementById('editEntityColor').click()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
+       </div>
+       <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
           <button class="btn primary" onclick="saveEditEntity()">Salva</button>
        </div>
@@ -1303,7 +1336,19 @@
 
     let state = null;
 
-    function loadState(){ return null; }
+    function loadState(){
+      try{
+        const s = localStorage.getItem("DEGUSTAPP_STATE");
+        if(s){
+           const parsed = JSON.parse(s);
+           Object.assign(state, parsed);
+           if(parsed.descriptors) state.descriptors = parsed.descriptors;
+           if(!state.tastings) state.tastings=[];
+           if(!state.groups) state.groups=[];
+           if(!state.profiles) state.profiles=[];
+        }
+      }catch(e){console.error(e);}
+    }
     function saveState(){
       if(window.__cloudApplying) return;
       localStorage.setItem("DEGUSTAPP_STATE", JSON.stringify(state));
@@ -1792,13 +1837,31 @@
         strip.classList.remove("active"); strip.innerHTML = ""; return;
       }
       strip.classList.add("active");
-      const assigned = new Set(Object.values(t.blindMap || {}).map(x=>String(x)));
+
+      const map = t.blindMap || {};
+      const currentSid = String(selectedSampleId);
+
       strip.innerHTML = (t.products || []).map(p=>{
-        const isAss = assigned.has(String(p.id));
-        if(isAss) return ""; 
-        const c = cols4(p.cols);
-        const main = c[0] + (c[1] ? " "+c[1] : "");
-        return `<span class="pchip" style="cursor:pointer" onclick="assignBlindProduct('${esc(p.id)}')">${esc(main)}</span>`;
+         const pid = String(p.id);
+         const ownerSid = Object.keys(map).find(k => String(map[k]) === pid);
+         const isAssignedToMe = (ownerSid === currentSid);
+         const isAssignedToOther = (ownerSid && !isAssignedToMe);
+
+         let style = "cursor:pointer; transition:all 0.2s;";
+         let icon = "";
+
+         if(isAssignedToMe){
+             style += "background:#444; color:#fff; border-color:#444; font-weight:bold;";
+             icon = "✓ ";
+         } else if(isAssignedToOther){
+             style += "background:#ddd; color:#888; border-color:#ccc; opacity:0.7;";
+             icon = `<span style="font-size:9px">(${ownerSid})</span> `;
+         }
+
+         const c = cols4(p.cols);
+         const main = c[0] + (c[1] ? " "+c[1] : "");
+
+         return `<span class="pchip" style="${style}" onclick="window.toggleBlindProduct('${esc(p.id)}')">${icon}${esc(main)}</span>`;
       }).join("");
     }
 
@@ -1822,50 +1885,7 @@
       updateDetail();
       toast("Associazione rimossa");
     }
-    function attachCardLongPress(card, sid){
-    let timer = null;
-    let isLong = false;
-
-    const start = (e) => {
-        isLong = false;
-        const tid = state.ui.currentTastingId;
-        if(!tid) return;
-        const t = state.tastings.find(x=>x.id===tid);
-
-        if(!t || t.mode !== 'cieca') return;
-        if(!t.blindMap || !t.blindMap[String(sid)]) return;
-
-        timer = setTimeout(() => {
-            isLong = true;
-            delete t.blindMap[String(sid)];
-
-            // FORCE SAVE
-            localStorage.setItem("DEGUSTAPP_STATE", JSON.stringify(state));
-            if(window.cloudRequestSync) window.cloudRequestSync();
-
-            renderProductsStrip(); 
-            renderGrid(); 
-            updateDetail();
-            if(navigator.vibrate) navigator.vibrate(50);
-            toast("Dissociato");
-        }, 800);
-    };
-
-    const end = (e) => {
-        if(timer) clearTimeout(timer);
-        if(isLong) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-    };
-
-    card.addEventListener("pointerdown", start);
-    card.addEventListener("pointerup", end);
-    card.addEventListener("pointerleave", end);
-    card.addEventListener("pointercancel", end);
-    card.addEventListener("contextmenu", e => { if(isLong) e.preventDefault(); });
-}
-function renderGrid(){
+    function renderGrid(){
       const grid = document.getElementById("samplesGrid");
       const t = getTasting();
       if(!grid) return;
@@ -1913,7 +1933,7 @@ function renderGrid(){
             const p = productById(t,pid);
             const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
             const pm = pc[0] + (pc[1] ? " "+pc[1] : "");
-            assignedHtml = `<span class="pchip" style="pointer-events:none; font-size:10px; padding:2px 6px; margin:2px auto; display:inline-block; width:auto; border:1px solid #ccc; background:#f0f0f0; color:#333;">${esc(pm)}</span>`;
+            assignedHtml = `<span class="pchip" style="pointer-events:none; font-size:10px; padding:2px 6px; margin:2px 0; margin-right:auto; display:inline-block; width:auto; background:#444; color:#fff; border-color:#333; box-shadow:0 1px 2px rgba(0,0,0,0.2);">${esc(pm)}</span>`;
           }
         }
         const evo = ev.evolution || 0;
@@ -1945,7 +1965,7 @@ function renderGrid(){
       }).join("");
       // Listeners
       grid.querySelectorAll(".sample-card").forEach(card=>{
-        attachCardLongPress(card, card.dataset.sampleid); card.addEventListener("click", ()=>{ const sid = String(card.dataset.sampleid); if(sid) selectSample(sid); });
+        card.addEventListener("click", ()=>{ const sid = String(card.dataset.sampleid); if(sid) selectSample(sid); });
       });
       grid.querySelectorAll(".fav-heart").forEach(h=>{
          if(isArchived() || !currentTasterId()) { h.classList.add("disabled"); return; }
@@ -2148,60 +2168,51 @@ function renderGrid(){
     }
 
     function onCanvasDown(e){
-      if(isArchived()) return;
-      if(!currentTasterId() || !selectedSampleId) return;
-      if(!ctx || !canvas) return;
-      isDrawing = true;
-      canvas.setPointerCapture?.(e.pointerId);
-      const p = canvasPoint(e);
-      lastX = p.x; lastY = p.y;
+      if(isArchived() || !currentTasterId()) return;
+      const cvs = document.getElementById("noteCanvas");
+      const rect = cvs.getBoundingClientRect();
+      const x = (e.clientX||e.touches[0].clientX) - rect.left;
+      const y = (e.clientY||e.touches[0].clientY) - rect.top;
+      const ctx = cvs.getContext("2d");
       ctx.beginPath();
-      ctx.moveTo(lastX,lastY);
+      ctx.moveTo(x, y);
+      state.ui.isDrawing = true;
+      if(state.ui.canvasTool === 'eraser'){
+          ctx.globalCompositeOperation = "destination-out";
+          ctx.lineWidth = 15;
+      } else {
+          ctx.globalCompositeOperation = "source-over";
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = "#000";
+      }
     }
 
     function onCanvasMove(e){
-      if(!isDrawing) return;
-      if(isArchived()) return;
-      if(!ctx || !canvas) return;
-      const p = canvasPoint(e);
-
-      if(currentTool==="eraser"){
-        ctx.globalCompositeOperation = "destination-out";
-        ctx.lineWidth = 16;
-      }else{
-        ctx.globalCompositeOperation = "source-over";
-        ctx.lineWidth = 2.2;
-        ctx.strokeStyle = "#111";
-      }
-
-      const dx = p.x - lastX;
-      const dy = p.y - lastY;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-
-      if(dist > 1){
-        ctx.quadraticCurveTo(lastX, lastY, (lastX+p.x)/2, (lastY+p.y)/2);
-        ctx.stroke();
-      }else{
-        ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-      }
-      lastX = p.x; lastY = p.y;
+      if(!state.ui.isDrawing) return;
+      e.preventDefault();
+      const cvs = document.getElementById("noteCanvas");
+      const rect = cvs.getBoundingClientRect();
+      const x = (e.clientX||e.touches[0].clientX) - rect.left;
+      const y = (e.clientY||e.touches[0].clientY) - rect.top;
+      const ctx = cvs.getContext("2d");
+      ctx.lineTo(x, y);
+      ctx.stroke();
     }
 
-    function onCanvasUp(){
-      if(!isDrawing) return;
-      isDrawing = false;
-      if(isArchived()) return;
-      if(!ctx || !canvas) return;
-
+    function onCanvasUp(e){
+      if(!state.ui.isDrawing) return;
+      state.ui.isDrawing = false;
+      const cvs = document.getElementById("noteCanvas");
+      const ctx = cvs.getContext("2d");
+      ctx.closePath();
+      ctx.globalCompositeOperation = "source-over";
       const t = getTasting();
-      const tId = currentTasterId();
-      if(t && tId && selectedSampleId){
-        try{
-          const ev = getEval(t,tId,selectedSampleId);
-          ev.data.vista.canvas = canvas.toDataURL();
-          saveState();
-        }catch{}
+      const tid = currentTasterId();
+      const sid = selectedSampleId;
+      if(t && tid && sid){
+         const ev = getEval(t, tid, sid);
+         ev.canvas = cvs.toDataURL();
+         saveState();
       }
     }
 
@@ -2224,17 +2235,22 @@ function renderGrid(){
          ev.notes = "";
          const txt = document.getElementById("noteText");
          if(txt) txt.value = "";
-         saveState();
+         localStorage.setItem("DEGUSTAPP_STATE", JSON.stringify(state));
+         if(window.cloudRequestSync) window.cloudRequestSync();
+         toast("Appunti cancellati");
+         if(typeof setTool === 'function') setTool('pen');
       }
     }
     function clearCanvasVisualOnly(){
       if(!ctx || !canvas) return;
       ctx.clearRect(0,0,canvas.width,canvas.height);
     }
-    function setTool(tool, btn){
-      currentTool = tool;
-      document.querySelectorAll(".tool-btn").forEach(b=>b.classList.remove("active"));
-      btn?.classList.add("active");
+    function setTool(t){
+      state.ui.canvasTool = t;
+      document.querySelectorAll(".tool-btn").forEach(b=>{
+         if(b.dataset.tool===t) b.classList.add("active");
+         else b.classList.remove("active");
+      });
     }
     function loadCanvasFromEval(){
       clearCanvasVisualOnly();
@@ -2729,14 +2745,21 @@ function renderAnagrafiche(){
       btn.classList.add("active");
     }
 
-    function addDesc(sec, type, val, input){
-      const v = val.trim();
-      if(!v) return;
-      state.descriptors[sec][type].push(v);
-      saveState();
-      renderAnagrafiche();
-      input.value=""; input.focus();
+    function addDesc(sec, col, val){
+    if(!val) return;
+    val = val.trim();
+    if(!state.descriptors) state.descriptors = { vista:{white:[],red:[]}, olfatto:{white:[],red:[]}, gusto:{white:[],red:[]} };
+    if(!state.descriptors[sec]) state.descriptors[sec] = {white:[],red:[]};
+    if(!state.descriptors[sec][col]) state.descriptors[sec][col] = [];
+
+    const list = state.descriptors[sec][col];
+    if(!list.includes(val)){
+        list.push(val);
+        saveState();
+        renderDescriptors();
+        toast("Descrittore aggiunto");
     }
+}
     function removeDesc(sec, type, val){
       if(!confirm("Eliminare descrittore?")) return;
       state.descriptors[sec][type] = state.descriptors[sec][type].filter(x=>x!==val);
@@ -3394,17 +3417,7 @@ function renderArchive(){
       setTimeout(initCanvas, 500);
       window.addEventListener("resize", initCanvas);
     });
-  function forceEnableClear(){
-    const clrBtns = document.querySelectorAll("button");
-    for(let b of clrBtns){
-        if(b.innerText.includes("Pulisci") || (b.getAttribute("onclick")||"").includes("clearCanvas")){
-            b.disabled = false;
-            b.style.pointerEvents = "auto";
-            b.style.opacity = "1";
-        }
-    }
-}
-
+  
 let currentEditEntity = null;
 function openGroupEditModal(key){
     const t = getTasting();
@@ -3412,9 +3425,12 @@ function openGroupEditModal(key){
     if(!g) return;
     currentEditEntity = { type: 'group', key: key };
     document.getElementById("editEntityTitle").innerText = "Gruppo";
-    document.getElementById("editEntityName").value = g.label;
+    const inp = document.getElementById("editEntityName");
+    inp.value = g.label;
     document.getElementById("editEntityColor").value = "#" + g.color;
+    document.getElementById("colorPreview").style.background = "#" + g.color;
     document.getElementById("editEntityModal").style.display = "flex";
+    setTimeout(()=>inp.select(), 50);
 }
 function openProfileEditModal(key){
     const t = getTasting();
@@ -3422,9 +3438,12 @@ function openProfileEditModal(key){
     if(!p) return;
     currentEditEntity = { type: 'profile', key: key };
     document.getElementById("editEntityTitle").innerText = "Profilo";
-    document.getElementById("editEntityName").value = p.label;
+    const inp = document.getElementById("editEntityName");
+    inp.value = p.label;
     document.getElementById("editEntityColor").value = "#" + p.color;
+    document.getElementById("colorPreview").style.background = "#" + p.color;
     document.getElementById("editEntityModal").style.display = "flex";
+    setTimeout(()=>inp.select(), 50);
 }
 function closeEditEntityModal(){ document.getElementById("editEntityModal").style.display = "none"; currentEditEntity = null; }
 function saveEditEntity(){
@@ -3432,6 +3451,9 @@ function saveEditEntity(){
     const t = getTasting();
     const name = document.getElementById("editEntityName").value.trim();
     const col = document.getElementById("editEntityColor").value.substring(1);
+
+    closeEditEntityModal();
+
     if(!name) return;
     if(currentEditEntity.type === 'group'){
         if(!t.groups || !t.groups.length) t.groups = clone(state.groups);
@@ -3444,7 +3466,6 @@ function saveEditEntity(){
     }
     saveState();
     renderGroupOptions(); renderProfileOptions(); renderGroupFilterBtns(); renderGrid(); updateDetail();
-    closeEditEntityModal();
 }
 function addNewLocalGroup(){
     const t = getTasting();
@@ -3461,6 +3482,46 @@ function addNewLocalProfile(){
     saveState(); renderProfileOptions(); openProfileEditModal(newKey);
 }
 
+window.toggleBlindProduct = function(pid){
+       if(isArchived()) return;
+       const tid = state.ui.currentTastingId;
+       if(!tid) return;
+       const t = state.tastings.find(x=>x.id===tid);
+       if(!t) return;
+
+       const sPid = String(pid);
+       const existingSid = Object.keys(t.blindMap || {}).find(k => String(t.blindMap[k]) === sPid);
+
+       if(existingSid){
+           const currentSid = String(selectedSampleId);
+           if(existingSid === currentSid){
+               delete t.blindMap[currentSid];
+               toast("Dissociato");
+           } else {
+               if(confirm(`Questo prodotto è assegnato al campione ${existingSid}. Spostarlo qui?`)){
+                   delete t.blindMap[existingSid];
+                   t.blindMap[currentSid] = sPid;
+                   toast("Spostato e Assegnato");
+               } else { return; }
+           }
+       } else {
+           if(!selectedSampleId){ toast("Seleziona un campione"); return; }
+           t.blindMap[String(selectedSampleId)] = sPid;
+           toast("Assegnato");
+       }
+       saveState();
+       renderProductsStrip(); renderGrid(); updateDetail();
+    };
+function forceEnableClear(){
+    const clrBtns = document.querySelectorAll("button");
+    for(let b of clrBtns){
+        if(b.innerText.includes("Pulisci") || (b.getAttribute("onclick")||"").includes("clearCanvas")){
+            b.disabled = false;
+            b.style.pointerEvents = "auto";
+            b.style.opacity = "1";
+        }
+    }
+}
 </script>
 
 <!-- FIREBASE CLOUD-ONLY START -->
@@ -3792,6 +3853,36 @@ function addNewLocalProfile(){
       }
       return false;
     }
+window.toggleBlindProduct = function(pid){
+       if(isArchived()) return;
+       const tid = state.ui.currentTastingId;
+       if(!tid) return;
+       const t = state.tastings.find(x=>x.id===tid);
+       if(!t) return;
+
+       const sPid = String(pid);
+       const existingSid = Object.keys(t.blindMap || {}).find(k => String(t.blindMap[k]) === sPid);
+
+       if(existingSid){
+           const currentSid = String(selectedSampleId);
+           if(existingSid === currentSid){
+               delete t.blindMap[currentSid];
+               toast("Dissociato");
+           } else {
+               if(confirm(`Questo prodotto è assegnato al campione ${existingSid}. Spostarlo qui?`)){
+                   delete t.blindMap[existingSid];
+                   t.blindMap[currentSid] = sPid;
+                   toast("Spostato e Assegnato");
+               } else { return; }
+           }
+       } else {
+           if(!selectedSampleId){ toast("Seleziona un campione"); return; }
+           t.blindMap[String(selectedSampleId)] = sPid;
+           toast("Assegnato");
+       }
+       saveState();
+       renderProductsStrip(); renderGrid(); updateDetail();
+    };
 function forceEnableClear(){
     const clrBtns = document.querySelectorAll("button");
     for(let b of clrBtns){
@@ -3809,12 +3900,15 @@ function forceEnableClear(){
 <div id="editEntityModal" class="modal-overlay" style="display:none">
   <div class="modal">
     <div class="modal-header">Modifica <span id="editEntityTitle"></span></div>
-    <div class="pad">
-       <div class="label">Nome</div>
-       <input id="editEntityName" class="input" />
-       <div class="label" style="margin-top:10px">Colore</div>
-       <input id="editEntityColor" type="color" class="input" style="height:40px;padding:2px;width:100%" />
-       <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+    <div class="pad" style="text-align:center; display:flex; flex-direction:column; align-items:center;">
+       <div class="label" style="width:100%;text-align:center">Nome</div>
+       <input id="editEntityName" class="input" style="text-align:center" />
+       <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
+       <div style="display:flex;justify-content:center;margin:10px 0;">
+          <input id="editEntityColor" type="color" style="opacity:0;width:0;height:0;position:absolute;" onchange="document.getElementById('colorPreview').style.background = this.value" />
+          <div id="colorPreview" onclick="document.getElementById('editEntityColor').click()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
+       </div>
+       <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
           <button class="btn primary" onclick="saveEditEntity()">Salva</button>
        </div>
