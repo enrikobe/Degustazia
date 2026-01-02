@@ -205,6 +205,8 @@
       background:rgba(122,41,56,.05);
     }
     .sample-card.dragging{opacity:.25}
+    .sample-card.dropover{ border-color: var(--focus-blue) !important; box-shadow: 0 0 0 3px rgba(74,144,226,.35) !important; }
+
     .sample-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;min-width:0}
     .sample-id-col{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
     .sample-id{font-size:20px;font-weight:950;color:var(--bordeaux);line-height:1}
@@ -537,35 +539,17 @@
       if(sp){ sp.classList.add("hide"); setTimeout(()=>sp.style.display="none",500); }
     }, 3000);
   window.toggleBlindProduct = function(pid){
-       if(isArchived()) return;
-       const tid = state.ui.currentTastingId;
-       if(!tid) return;
-       const t = state.tastings.find(x=>x.id===tid);
-       if(!t) return;
+      if(isArchived()) return;
+      const t = getTasting();
+      if(!t || t.mode!=="cieca") return;
 
-       const sPid = String(pid);
-       const existingSid = Object.keys(t.blindMap || {}).find(k => String(t.blindMap[k]) === sPid);
+      const sid = String(selectedSampleId || "");
+      if(!sid){ toast("Seleziona un campione (oppure trascina il prodotto sul campione)"); return; }
 
-       if(existingSid){
-           const currentSid = String(selectedSampleId);
-           if(existingSid === currentSid){
-               delete t.blindMap[currentSid];
-               toast("Dissociato");
-           } else {
-               if(confirm(`Questo prodotto è assegnato al campione ${existingSid}. Spostarlo qui?`)){
-                   delete t.blindMap[existingSid];
-                   t.blindMap[currentSid] = sPid;
-                   toast("Spostato e Assegnato");
-               } else { return; }
-           }
-       } else {
-           if(!selectedSampleId){ toast("Seleziona un campione"); return; }
-           t.blindMap[String(selectedSampleId)] = sPid;
-           toast("Assegnato");
-       }
-       saveState();
-       renderProductsStrip(); renderGrid(); updateDetail();
+      window.assignProductToSample(pid, sid);
     };
+
+
 function forceEnableClear(){
     const clrBtns = document.querySelectorAll("button");
     for(let b of clrBtns){
@@ -877,12 +861,16 @@ function forceEnableClear(){
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <button class="btn" onclick="printResults()">📄 Stampa</button>&nbsp; <label style="font-size:12px;font-weight:950;">Degustazione</label>
-          <select id="resultsDegSelect" class="select" onchange="renderResultsTable()"></select>
-
-          <label style="font-size:12px;font-weight:950;">Cerca</label>
-          <input class="input" style="padding:8px 10px;" placeholder="testo libero..." oninput="onResultsSearch(this.value)" />
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <button class="btn" onclick="printResults()">📄 Stampa</button>
+            <label style="font-size:12px;font-weight:950;">Degustazione</label>
+            <select id="resultsDegSelect" class="select" onchange="renderResultsTable()"></select>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <label style="font-size:12px;font-weight:950;">Cerca nella degustazione selezionata</label>
+            <input id="resultsSearchInput" class="input" style="padding:8px 10px;flex:1;min-width:240px;max-width:420px;" placeholder="ID, degustatore, profilo, gruppo, descrittori..." oninput="onResultsSearch(this.value)" />
+          </div>
         </div>
 
         <div class="content-scroll">
@@ -1349,11 +1337,18 @@ function forceEnableClear(){
         }
       }catch(e){console.error(e);}
     }
-    function saveState(){
-      if(window.__cloudApplying) return;
-      localStorage.setItem("DEGUSTAPP_STATE", JSON.stringify(state));
-      if(typeof window.cloudRequestSync === 'function') window.cloudRequestSync();
-    }
+    function saveState(opts){
+  // opts: { skipCloud: true } per evitare sync forzato
+  const skipCloud = !!(opts && opts.skipCloud);
+
+  try{
+    localStorage.setItem("DEGUSTAPPSTATE", JSON.stringify(state));
+  }catch(e){ /* ignore quota/private mode */ }
+
+  if(window.cloudApplying || skipCloud) return;
+  if(typeof window.cloudRequestSync === "function") window.cloudRequestSync();
+}
+
 
     function cols4(cols){
       const c = (cols ?? []).slice(0,4).map(x=>String(x ?? "").trim());
@@ -1829,6 +1824,114 @@ function forceEnableClear(){
       saveState();
       renderProductsStrip(); renderGrid(); updateDetail(); toast("Prodotto associato");
     }
+    
+    // ====== BLIND MODE: Product registry + Drag&Drop ======
+    function ensureBlindProductsRegistry(t){
+      if(!t || t.mode!=="cieca") return;
+      state._blindProductsBackup = state._blindProductsBackup || {};
+      const key = String(t.id);
+      if(Array.isArray(t.products) && t.products.length){
+        if(!Array.isArray(t.productsMaster) || !t.productsMaster.length){
+          t.productsMaster = clone(t.products);
+        }
+        state._blindProductsBackup[key] = clone(t.productsMaster || t.products);
+      } else {
+        const bk = state._blindProductsBackup[key];
+        if(Array.isArray(bk) && bk.length){
+          t.products = clone(bk);
+          t.productsMaster = clone(bk);
+        }
+      }
+    }
+
+    window.handleProductDragStart = function(e, pid){
+      try{ e.dataTransfer.setData("text/plain", String(pid)); }catch(err){}
+      e.dataTransfer.effectAllowed = "move";
+      const el = e.currentTarget || e.target;
+      if(el) el.style.opacity = "0.5";
+    };
+
+    window.handleProductDragEnd = function(e){
+      const el = e.currentTarget || e.target;
+      if(el) el.style.opacity = "1";
+    };
+
+    window.handleSampleDragOver = function(e){
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const card = e.currentTarget;
+      if(card) card.classList.add('dropover');
+    };
+
+    window.handleSampleDragLeave = function(e){
+      const card = e.currentTarget;
+      if(card) card.classList.remove('dropover');
+    };
+
+    window.handleProductDrop = function(e, sid){
+      e.preventDefault();
+      e.stopPropagation();
+      const card = e.currentTarget;
+      if(card) card.classList.remove('dropover');
+      const pid = (e.dataTransfer && e.dataTransfer.getData("text/plain")) || "";
+      if(!pid) return;
+      window.assignProductToSample(pid, sid);
+    };
+
+    window.assignProductToSample = function(pid, sid){
+      if(isArchived()) return;
+      const tid = state.ui.currentTastingId;
+      if(!tid) return;
+      const t = state.tastings.find(x=>x.id===tid);
+      if(!t || t.mode!=="cieca") return;
+
+      ensureBlindProductsRegistry(t);
+
+      if(!t.blindMap) t.blindMap = {};
+      const sPid = String(pid);
+      const sSid = String(sid);
+
+      const pool = (t.productsMaster || t.products || []);
+      const exists = pool.find(p=>String(p.id)===sPid);
+      if(!exists){ toast("Prodotto non trovato"); return; }
+
+      const ownerSid = Object.keys(t.blindMap).find(k => String(t.blindMap[k]) === sPid);
+      if(ownerSid && ownerSid !== sSid){
+        if(!confirm(`Questo prodotto è assegnato al campione ${ownerSid}. Spostarlo sul campione ${sSid}?`)) return;
+        delete t.blindMap[ownerSid];
+      }
+
+      t.blindMap[sSid] = sPid;
+      try{ localStorage.setItem("DEGUSTAPPSTATE", JSON.stringify(state)); }catch(e){}
+
+      renderProductsStrip();
+      renderGrid();
+      updateDetail();
+      toast("Assegnato");
+    };
+
+    window.dissociateBlindSample = function(sid){
+      if(isArchived()) return;
+      const tid = state.ui.currentTastingId;
+      if(!tid) return;
+      const t = state.tastings.find(x=>x.id===tid);
+      if(!t || t.mode!=="cieca") return;
+
+      ensureBlindProductsRegistry(t);
+
+      if(!t.blindMap) t.blindMap = {};
+      const sSid = String(sid);
+      if(!t.blindMap[sSid]) return;
+      delete t.blindMap[sSid];
+
+      try{ localStorage.setItem("DEGUSTAPPSTATE", JSON.stringify(state)); }catch(e){}
+
+      renderProductsStrip();
+      renderGrid();
+      updateDetail();
+      toast("Dissociato");
+    };
+
     function renderProductsStrip(){
       const strip = document.getElementById("productsStrip");
       const t = getTasting();
@@ -1836,32 +1939,39 @@ function forceEnableClear(){
       if(!t || t.mode!=="cieca" || isArchived()){
         strip.classList.remove("active"); strip.innerHTML = ""; return;
       }
+
+      ensureBlindProductsRegistry(t);
+
       strip.classList.add("active");
-
       const map = t.blindMap || {};
-      const currentSid = String(selectedSampleId);
+      const currentSid = String(selectedSampleId || "");
+      const pool = (t.productsMaster || t.products || []);
 
-      strip.innerHTML = (t.products || []).map(p=>{
+      strip.innerHTML = pool.map(p=>{
          const pid = String(p.id);
          const ownerSid = Object.keys(map).find(k => String(map[k]) === pid);
-         const isAssignedToMe = (ownerSid === currentSid);
-         const isAssignedToOther = (ownerSid && !isAssignedToMe);
+         const isAssignedToMe = (ownerSid && ownerSid === currentSid);
+         const isAssigned = !!ownerSid;
 
-         let style = "cursor:pointer; transition:all 0.2s;";
+         let style = "cursor:grab; transition:all 0.18s;";
          let icon = "";
 
          if(isAssignedToMe){
-             style += "background:#444; color:#fff; border-color:#444; font-weight:bold;";
-             icon = "✓ ";
-         } else if(isAssignedToOther){
-             style += "background:#ddd; color:#888; border-color:#ccc; opacity:0.7;";
-             icon = `<span style="font-size:9px">(${ownerSid})</span> `;
+           style += "background:#444; color:#fff; border-color:#444; font-weight:bold;";
+           icon = "✓ ";
+         } else if(isAssigned){
+           style += "background:#eee; color:#777; border-color:#ccc;";
+           icon = `<span style="font-size:9px">(${esc(ownerSid)})</span> `;
          }
 
          const c = cols4(p.cols);
-         const main = c[0] + (c[1] ? " "+c[1] : "");
+         const main = (c[0] + (c[1] ? " "+c[1] : "")).trim() || ("Prodotto " + pid);
 
-         return `<span class="pchip" style="${style}" onclick="window.toggleBlindProduct('${esc(p.id)}')">${icon}${esc(main)}</span>`;
+         return `<span class="pchip" draggable="true" style="${style}"
+                      ondragstart="window.handleProductDragStart(event, '${esc(p.id)}')"
+                      ondragend="window.handleProductDragEnd(event)"
+                      onclick="window.toggleBlindProduct('${esc(p.id)}')"
+                      title="Trascina su un campione per associare (o clicca dopo aver selezionato un campione)">${icon}${esc(main)}</span>`;
       }).join("");
     }
 
@@ -1933,7 +2043,7 @@ function forceEnableClear(){
             const p = productById(t,pid);
             const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
             const pm = pc[0] + (pc[1] ? " "+pc[1] : "");
-            assignedHtml = `<span class="pchip" style="pointer-events:none; font-size:10px; padding:2px 6px; margin:2px 0; margin-right:auto; display:inline-block; width:auto; background:#444; color:#fff; border-color:#333; box-shadow:0 1px 2px rgba(0,0,0,0.2);">${esc(pm)}</span>`;
+            assignedHtml = `<span class="pchip" onclick="event.stopPropagation(); window.dissociateBlindSample('${esc(s.id)}'); return false;" title="Clicca per dissociare" style="cursor:pointer; user-select:none; font-size:10px; padding:2px 6px; margin:2px 0; margin-right:auto; display:inline-block; width:auto; background:#444; color:#fff; border-color:#333; box-shadow:0 1px 2px rgba(0,0,0,0.2);">${esc(pm)}</span>`;
           }
         }
         const evo = ev.evolution || 0;
@@ -1944,7 +2054,7 @@ function forceEnableClear(){
         const l3 = blind ? "" : (c[2]||"");
         const l4 = blind ? "" : (c[3]||"");
         return `
-          <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg}">
+          <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" ondragover="window.handleSampleDragOver(event)" ondragleave="window.handleSampleDragLeave(event)" ondrop="window.handleProductDrop(event, '${esc(s.id)}')" style="background:${groupBg}">
             <div class="sample-top">
               <div class="sample-id-col"><div class="sample-id">${esc(String(s.id).padStart(2,"0"))}</div></div>
               <div class="sample-meta">
@@ -2948,8 +3058,7 @@ function renderArchive(){
       sel.innerHTML = `<option value="">Seleziona...</option>` + opts.join("");
     }
     function onResultsSearch(val){
-      state.ui.resultsSearch = val;
-      saveState();
+      state.ui.resultsSearch = String(val || "");
       renderResultsTable();
     }
     
@@ -3013,7 +3122,9 @@ function renderArchive(){
 
       t.samples.forEach(s=>{
         const name = getSampleName(t, s);
-        const sampleText = (name + " " + s.id).toLowerCase();
+        const g = groupDef(t, s.groupKey);
+        const groupLabel = g ? (g.label+" "+g.key) : "";
+        const sampleText = (name + " " + s.id + " " + groupLabel).toLowerCase();
 
         let tasterRowsHtml = "";
         let visibleTasterRows = 0;
@@ -3032,12 +3143,15 @@ function renderArchive(){
            const g_d = (ev.data?.gusto?.desc || []).join(", ");
 
            const rowText = [
-              tas.name, pLabel, 
-              evo > 0 ? "evoluzione" : "", 
-              ev.favourite ? "preferito" : "", 
+              tas.name, tas.email||"",
+              pLabel,
+              groupLabel,
+              "campione "+s.id,
+              evo > 0 ? "evoluzione" : "",
+              ev.favourite ? "preferito" : "",
+              String(ev.overall||""), String(ev.progress||""),
               v_d, o_d, g_d,
-              ev.overall,
-              sampleText 
+              sampleText
            ].join(" ").toLowerCase();
 
            if(!q || rowText.includes(q)){
@@ -3125,14 +3239,33 @@ function renderArchive(){
       draft.id = id;
       draft.items = [];
 
-      // Load samples
-      t.samples.forEach(s=>{
-        draft.items.push({
-          use: true,
-          id: s.id,
-          c1: s.cols[0], c2: s.cols[1], c3: s.cols[2], c4: s.cols[3]
+      const isBlind = t.mode === "cieca";
+
+      if(isBlind){
+        const n = Math.max((t.samples||[]).length, (t.products||[]).length);
+        for(let i=0;i<n;i++){
+          const s = (t.samples||[])[i] || { id:"", cols:["","","",""] };
+          const p = (t.products||[])[i] || { id:null, cols:["","","",""] };
+          const pc = cols4(p.cols);
+          draft.items.push({
+            use: true,
+            id: s.id || "",
+            pid: p.id || null,
+            c1: pc[0], c2: pc[1], c3: pc[2], c4: pc[3]
+          });
+        }
+      } else {
+        // Load samples
+        t.samples.forEach(s=>{
+          draft.items.push({
+            use: true,
+            id: s.id,
+            pid: null,
+            c1: s.cols[0], c2: s.cols[1], c3: s.cols[2], c4: s.cols[3]
+          });
         });
-      });
+      }
+
       // Add extra blank rows
       for(let i=0;i<5;i++) addDraftRow(false);
 
@@ -3147,10 +3280,12 @@ function renderArchive(){
       onModeChanged();
     }
 
+
     function addDraftRow(render=true){
-      draft.items.push({ use:true, id:"", c1:"", c2:"", c3:"", c4:"" });
+      draft.items.push({ use:true, id:"", pid:null, c1:"", c2:"", c3:"", c4:"" });
       if(render) renderDraftTable();
     }
+
 
     function renderDraftTasters(selectedIds){
       const sel = new Set(selectedIds || []);
@@ -3271,21 +3406,29 @@ function renderArchive(){
 
       const mode = document.getElementById("degMode").value;
       const status = document.getElementById("degStatus").value;
+      const isBlind = (mode === "cieca");
 
       // Get tasters
       const tIds = [];
       document.querySelectorAll("#draftTasters input:checked").forEach(cb=>tIds.push(parseInt(cb.value)));
       if(!tIds.length){ toast("Seleziona almeno un degustatore"); return; }
 
-      // 1. FILTER: keep only USE=true AND non-empty rows
+      // FILTER:
+      // - Scoperta: mantiene righe con dati (o ID)
+      // - Cieca: mantiene righe con ID e/o dati prodotto (MAI “spariscono” i campioni inseriti)
       const validItems = draft.items.filter(it => {
-         if(!it.use) return false;
-         const hasData = (it.c1||"").trim() || (it.c2||"").trim() || (it.c3||"").trim() || (it.c4||"").trim();
-         return !!hasData;
+        if(!it.use) return false;
+        const hasId = String(it.id||"").trim();
+        const hasCols = (it.c1||"").trim() || (it.c2||"").trim() || (it.c3||"").trim() || (it.c4||"").trim();
+        return !!(hasId || hasCols);
       });
 
-      if(!validItems.length){ toast("Nessun campione valido inserito"); return; }
-      // Auto-assign IDs 01..XX to items with data but no ID
+      if(!validItems.length){
+        toast(isBlind ? "Nessun campione/prodotto valido inserito" : "Nessun campione valido inserito");
+        return;
+      }
+
+      // Auto-assign IDs 01..XX to items with no ID (vale anche in cieca)
       const usedIds = new Set(validItems.map(x=>String(x.id||"").trim()).filter(Boolean));
       let nextId = 1;
       validItems.forEach(it=>{
@@ -3296,55 +3439,57 @@ function renderArchive(){
         usedIds.add(cand);
         nextId++;
       });
-    
 
-      // 2. Map to samples
-      const samples = validItems.map((it,i)=>({
-        id: it.id ? it.id : uid(), // will be formatted by ensureTastingSampleIds later
-        cols: [it.c1, it.c2, it.c3, it.c4],
-        groupKey: null // reset group on recreation? Or preserve? Preserving is hard if reordered. Simple way: reset.
-      }));
-
-      // If editing, preserve evals and blindMap if possible
+      // Preserve existing data if editing
       let evals = {};
       let blindMap = {};
-      let products = null;
       let existing = null;
 
       if(draft.id){
         existing = state.tastings.find(x=>x.id===draft.id);
         if(existing){
-          // Try to preserve evals by ID if ID matches
           evals = existing.evaluations;
-          blindMap = existing.blindMap;
-          products = existing.products;
-
-          // If we are just updating metadata/adding rows, we might want to keep sample IDs stable
-          // For simplicity in this logic, we use the input ID. If user cleared ID, it regenerates.
+          blindMap = existing.blindMap || {};
         }
       }
 
-      // If Blind mode, samples become just ID placeholders, real content goes to products
-      let finalSamples = samples;
+      let finalSamples = null;
       let finalProducts = null;
 
-      if(mode==="cieca"){
-        // In blind mode, the table input defines the PRODUCTS.
-        // We need to generate anonymous SAMPLES (1..N) separately? 
-        // OR does the user input the anonymous samples?
-        // Usually: User inputs the Real Products. The App generates Sample 1..N.
-        // Let's assume the table IS the list of products.
-        finalProducts = samples.map(s=>({ id:s.id, cols:s.cols })); // Real products
-        // Generate anonymous samples based on count
-        finalSamples = samples.map((_,i)=>({
-           id: String(i+1).padStart(2,"0"),
-           cols: ["","","",""], // Empty visible cols
-           groupKey: null
+      if(isBlind){
+        // In cieca:
+        // - ID colonna = ID campione (anonimo) -> NON si rinumera/azzera
+        // - Col1..Col4 = descrizione prodotto -> salvata in t.products
+        finalSamples = validItems.map(it=>({
+          id: it.id ? it.id : uid(),
+          cols: ["","","",""],
+          groupKey: null
         }));
-        // If editing, we might want to preserve blindMap
+
+        const prevProducts = (existing && Array.isArray(existing.products)) ? existing.products : [];
+        finalProducts = validItems.map((it,i)=>({
+          id: it.pid || (prevProducts[i] ? prevProducts[i].id : uid()),
+          cols: [it.c1, it.c2, it.c3, it.c4]
+        }));
+
+        // Ripulisci blindMap: conserva solo associazioni che puntano a sampleId/prodId ancora esistenti
+        const sSet = new Set(finalSamples.map(s=>String(s.id)));
+        const pSet = new Set(finalProducts.map(p=>String(p.id)));
+        const cleaned = {};
+        Object.keys(blindMap||{}).forEach(sid=>{
+          const pid = String(blindMap[sid]);
+          if(sSet.has(String(sid)) && pSet.has(pid)) cleaned[String(sid)] = pid;
+        });
+        blindMap = cleaned;
+
       } else {
-        // Discovery mode: Table IS the samples
+        finalSamples = validItems.map(it=>({
+          id: it.id ? it.id : uid(),
+          cols: [it.c1, it.c2, it.c3, it.c4],
+          groupKey: null
+        }));
         finalProducts = null;
+        blindMap = {};
       }
 
       const newT = {
@@ -3366,7 +3511,6 @@ function renderArchive(){
       ensureTastingSampleIds(newT);
 
       if(existing){
-        // Replace
         const idx = state.tastings.findIndex(x=>x.id===existing.id);
         state.tastings[idx] = newT;
       } else {
@@ -3378,6 +3522,7 @@ function renderArchive(){
       closeModal("modalTasting");
       toast("Degustazione salvata");
     }
+
 
     // Init
     window.addEventListener("DOMContentLoaded", ()=>{
