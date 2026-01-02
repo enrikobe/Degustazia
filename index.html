@@ -205,8 +205,6 @@
       background:rgba(122,41,56,.05);
     }
     .sample-card.dragging{opacity:.25}
-    .sample-card.dropover{ border-color: var(--focus-blue) !important; box-shadow: 0 0 0 3px rgba(74,144,226,.35) !important; }
-
     .sample-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;min-width:0}
     .sample-id-col{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
     .sample-id{font-size:20px;font-weight:950;color:var(--bordeaux);line-height:1}
@@ -539,16 +537,39 @@
       if(sp){ sp.classList.add("hide"); setTimeout(()=>sp.style.display="none",500); }
     }, 3000);
   window.toggleBlindProduct = function(pid){
-      if(isArchived()) return;
-      const t = getTasting();
-      if(!t || t.mode!=="cieca") return;
+  if(isArchived()) return;
 
-      const sid = String(selectedSampleId || "");
-      if(!sid){ toast("Seleziona un campione (oppure trascina il prodotto sul campione)"); return; }
+  const t = getTasting();
+  if(!t || t.mode!=="cieca") return;
 
-      window.assignProductToSample(pid, sid);
-    };
+  if(!t.blindMap) t.blindMap = {};
 
+  const sid = String(selectedSampleId || "");
+  if(!sid){ toast("Seleziona un campione"); return; }
+
+  const sPid = String(pid);
+  const ownerSid = Object.keys(t.blindMap).find(k => String(t.blindMap[k]) === sPid);
+
+  // Se già assegnato ad un altro campione: chiedi se spostare
+  if(ownerSid && ownerSid !== sid){
+    if(!confirm(`Questo prodotto è assegnato al campione ${ownerSid}. Spostarlo sul campione ${sid}?`)) return;
+    delete t.blindMap[ownerSid];
+  }
+
+  // Toggle sul campione selezionato
+  if(String(t.blindMap[sid] || "") === sPid){
+    delete t.blindMap[sid];
+    toast("Dissociato");
+  } else {
+    t.blindMap[sid] = sPid;
+    toast(ownerSid && ownerSid !== sid ? "Spostato e assegnato" : "Assegnato");
+  }
+
+  saveState();
+  renderProductsStrip();
+  renderGrid();
+  updateDetail();
+};
 
 function forceEnableClear(){
     const clrBtns = document.querySelectorAll("button");
@@ -861,16 +882,12 @@ function forceEnableClear(){
           </div>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:12px;">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <button class="btn" onclick="printResults()">📄 Stampa</button>
-            <label style="font-size:12px;font-weight:950;">Degustazione</label>
-            <select id="resultsDegSelect" class="select" onchange="renderResultsTable()"></select>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <label style="font-size:12px;font-weight:950;">Cerca nella degustazione selezionata</label>
-            <input id="resultsSearchInput" class="input" style="padding:8px 10px;flex:1;min-width:240px;max-width:420px;" placeholder="ID, degustatore, profilo, gruppo, descrittori..." oninput="onResultsSearch(this.value)" />
-          </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <button class="btn" onclick="printResults()">📄 Stampa</button>&nbsp; <label style="font-size:12px;font-weight:950;">Degustazione</label>
+          <select id="resultsDegSelect" class="select" onchange="renderResultsTable()"></select>
+
+          <label style="font-size:12px;font-weight:950;">Cerca</label>
+          <input class="input" style="padding:8px 10px;" placeholder="testo libero..." oninput="onResultsSearch(this.value)" />
         </div>
 
         <div class="content-scroll">
@@ -1825,76 +1842,24 @@ function forceEnableClear(){
       renderProductsStrip(); renderGrid(); updateDetail(); toast("Prodotto associato");
     }
     
-    // ====== BLIND MODE: Product registry + Drag&Drop ======
-    function ensureBlindProductsRegistry(t){
-      if(!t || t.mode!=="cieca") return;
-      state._blindProductsBackup = state._blindProductsBackup || {};
-      const key = String(t.id);
-      if(Array.isArray(t.products) && t.products.length){
-        if(!Array.isArray(t.productsMaster) || !t.productsMaster.length){
-          t.productsMaster = clone(t.products);
-        }
-        state._blindProductsBackup[key] = clone(t.productsMaster || t.products);
-      } else {
-        const bk = state._blindProductsBackup[key];
-        if(Array.isArray(bk) && bk.length){
-          t.products = clone(bk);
-          t.productsMaster = clone(bk);
-        }
-      }
+
+    // ========= Blind mode: Product DnD + Assign/Dissociate (robust) =========
+    function getActiveBlindTasting(){
+      const t = getTasting();
+      if(!t || t.mode!=="cieca") return null;
+      return t;
     }
-
-    window.handleProductDragStart = function(e, pid){
-      try{ e.dataTransfer.setData("text/plain", String(pid)); }catch(err){}
-      e.dataTransfer.effectAllowed = "move";
-      const el = e.currentTarget || e.target;
-      if(el) el.style.opacity = "0.5";
-    };
-
-    window.handleProductDragEnd = function(e){
-      const el = e.currentTarget || e.target;
-      if(el) el.style.opacity = "1";
-    };
-
-    window.handleSampleDragOver = function(e){
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      const card = e.currentTarget;
-      if(card) card.classList.add('dropover');
-    };
-
-    window.handleSampleDragLeave = function(e){
-      const card = e.currentTarget;
-      if(card) card.classList.remove('dropover');
-    };
-
-    window.handleProductDrop = function(e, sid){
-      e.preventDefault();
-      e.stopPropagation();
-      const card = e.currentTarget;
-      if(card) card.classList.remove('dropover');
-      const pid = (e.dataTransfer && e.dataTransfer.getData("text/plain")) || "";
-      if(!pid) return;
-      window.assignProductToSample(pid, sid);
-    };
 
     window.assignProductToSample = function(pid, sid){
       if(isArchived()) return;
-      const tid = state.ui.currentTastingId;
-      if(!tid) return;
-      const t = state.tastings.find(x=>x.id===tid);
-      if(!t || t.mode!=="cieca") return;
-
-      ensureBlindProductsRegistry(t);
-
+      const t = getActiveBlindTasting();
+      if(!t) return;
       if(!t.blindMap) t.blindMap = {};
+
       const sPid = String(pid);
       const sSid = String(sid);
 
-      const pool = (t.productsMaster || t.products || []);
-      const exists = pool.find(p=>String(p.id)===sPid);
-      if(!exists){ toast("Prodotto non trovato"); return; }
-
+      // If product already assigned elsewhere, ask to move
       const ownerSid = Object.keys(t.blindMap).find(k => String(t.blindMap[k]) === sPid);
       if(ownerSid && ownerSid !== sSid){
         if(!confirm(`Questo prodotto è assegnato al campione ${ownerSid}. Spostarlo sul campione ${sSid}?`)) return;
@@ -1902,77 +1867,104 @@ function forceEnableClear(){
       }
 
       t.blindMap[sSid] = sPid;
-      try{ localStorage.setItem("DEGUSTAPPSTATE", JSON.stringify(state)); }catch(e){}
-
+      saveState({skipCloud:false});
       renderProductsStrip();
       renderGrid();
       updateDetail();
-      toast("Assegnato");
+      toast("✓ Assegnato");
     };
 
     window.dissociateBlindSample = function(sid){
       if(isArchived()) return;
-      const tid = state.ui.currentTastingId;
-      if(!tid) return;
-      const t = state.tastings.find(x=>x.id===tid);
-      if(!t || t.mode!=="cieca") return;
-
-      ensureBlindProductsRegistry(t);
-
-      if(!t.blindMap) t.blindMap = {};
+      const t = getActiveBlindTasting();
+      if(!t || !t.blindMap) return;
       const sSid = String(sid);
       if(!t.blindMap[sSid]) return;
       delete t.blindMap[sSid];
-
-      try{ localStorage.setItem("DEGUSTAPPSTATE", JSON.stringify(state)); }catch(e){}
-
+      saveState({skipCloud:false});
       renderProductsStrip();
       renderGrid();
       updateDetail();
-      toast("Dissociato");
+      toast("✓ Dissociato");
     };
 
-    function renderProductsStrip(){
+    window.handleProductDragStart = function(e){
+      const pid = e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.pid : null;
+      if(!pid) return;
+      e.dataTransfer.setData("text/plain", pid);
+      e.dataTransfer.effectAllowed = "move";
+      try{ e.currentTarget.style.opacity = "0.55"; }catch(_e){}
+    };
+
+    window.handleProductDragEnd = function(e){
+      try{ e.currentTarget.style.opacity = "1"; }catch(_e){}
+    };
+
+    window.handleSampleDragOver = function(e){
+      e.preventDefault();
+      if(e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    };
+
+    window.handleSampleDrop = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const pid = e.dataTransfer.getData("text/plain");
+      const sid = e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.sampleid : null;
+      if(!pid || !sid) return;
+      window.assignProductToSample(pid, sid);
+    };
+function renderProductsStrip(){
       const strip = document.getElementById("productsStrip");
       const t = getTasting();
       if(!strip) return;
       if(!t || t.mode!=="cieca" || isArchived()){
         strip.classList.remove("active"); strip.innerHTML = ""; return;
       }
-
-      ensureBlindProductsRegistry(t);
-
       strip.classList.add("active");
+
       const map = t.blindMap || {};
       const currentSid = String(selectedSampleId || "");
-      const pool = (t.productsMaster || t.products || []);
 
-      strip.innerHTML = pool.map(p=>{
+      strip.innerHTML = (t.products || []).map(p=>{
          const pid = String(p.id);
          const ownerSid = Object.keys(map).find(k => String(map[k]) === pid);
          const isAssignedToMe = (ownerSid && ownerSid === currentSid);
-         const isAssigned = !!ownerSid;
+         const isAssignedToOther = (ownerSid && ownerSid !== currentSid);
 
-         let style = "cursor:grab; transition:all 0.18s;";
+         let style = "cursor:grab; transition:all 0.2s;";
          let icon = "";
+         let cls = "pchip blind-prod";
 
          if(isAssignedToMe){
            style += "background:#444; color:#fff; border-color:#444; font-weight:bold;";
            icon = "✓ ";
-         } else if(isAssigned){
-           style += "background:#eee; color:#777; border-color:#ccc;";
-           icon = `<span style="font-size:9px">(${esc(ownerSid)})</span> `;
+         } else if(isAssignedToOther){
+           style += "background:#ddd; color:#888; border-color:#ccc; opacity:0.65; cursor:not-allowed;";
+           icon = `(${ownerSid}) `;
+           cls += " disabled";
          }
 
          const c = cols4(p.cols);
-         const main = (c[0] + (c[1] ? " "+c[1] : "")).trim() || ("Prodotto " + pid);
+         const main = c[0] + (c[1] ? " "+c[1] : "");
 
-         return `<span class="pchip" draggable="true" style="${style}"
-                      ondragstart="window.handleProductDragStart(event, '${esc(p.id)}')"
-                      ondragend="window.handleProductDragEnd(event)"
-                      onclick="window.toggleBlindProduct('${esc(p.id)}')"
-                      title="Trascina su un campione per associare (o clicca dopo aver selezionato un campione)">${icon}${esc(main)}</span>`;
+         return `<span class="${cls}" data-pid="${esc(p.id)}" style="${style}" title="Trascina su un campione (o clicca dopo aver selezionato il campione)">${esc(icon)}${esc(main)}</span>`;
       }).join("");
+
+      // Bind events (robust)
+      strip.querySelectorAll(".blind-prod").forEach(el=>{
+        const pid = el.dataset.pid;
+        const disabled = el.classList.contains("disabled");
+        el.draggable = !disabled;
+        if(!disabled){
+          el.addEventListener("dragstart", window.handleProductDragStart);
+          el.addEventListener("dragend", window.handleProductDragEnd);
+          el.addEventListener("click", ()=>{
+            const sid = String(selectedSampleId || "");
+            if(!sid){ toast("Seleziona un campione"); return; }
+            window.assignProductToSample(pid, sid);
+          });
+        }
+      });
     }
 
     function unassignBlindFromSample(sampleId){
@@ -2043,7 +2035,7 @@ function forceEnableClear(){
             const p = productById(t,pid);
             const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
             const pm = pc[0] + (pc[1] ? " "+pc[1] : "");
-            assignedHtml = `<span class="pchip" onclick="event.stopPropagation(); window.dissociateBlindSample('${esc(s.id)}'); return false;" title="Clicca per dissociare" style="cursor:pointer; user-select:none; font-size:10px; padding:2px 6px; margin:2px 0; margin-right:auto; display:inline-block; width:auto; background:#444; color:#fff; border-color:#333; box-shadow:0 1px 2px rgba(0,0,0,0.2);">${esc(pm)}</span>`;
+            assignedHtml = `<span class="pchip blind-assigned" data-sid="${esc(s.id)}" style="font-size:10px; padding:2px 6px; margin:2px 0; margin-right:auto; display:inline-block; width:auto; background:#444; color:#fff; border-color:#333; box-shadow:0 1px 2px rgba(0,0,0,0.2); cursor:pointer;">${esc(pm)}</span>`;
           }
         }
         const evo = ev.evolution || 0;
@@ -2054,7 +2046,7 @@ function forceEnableClear(){
         const l3 = blind ? "" : (c[2]||"");
         const l4 = blind ? "" : (c[3]||"");
         return `
-          <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" ondragover="window.handleSampleDragOver(event)" ondragleave="window.handleSampleDragLeave(event)" ondrop="window.handleProductDrop(event, '${esc(s.id)}')" style="background:${groupBg}">
+          <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg}">
             <div class="sample-top">
               <div class="sample-id-col"><div class="sample-id">${esc(String(s.id).padStart(2,"0"))}</div></div>
               <div class="sample-meta">
@@ -2077,6 +2069,16 @@ function forceEnableClear(){
       grid.querySelectorAll(".sample-card").forEach(card=>{
         card.addEventListener("click", ()=>{ const sid = String(card.dataset.sampleid); if(sid) selectSample(sid); });
       });
+      // Blind mode: accept product drops + enable dissociation
+      if(blind && !isArchived()) {
+        grid.querySelectorAll('.sample-card').forEach(card=>{
+          card.addEventListener('dragover', window.handleSampleDragOver);
+          card.addEventListener('drop', window.handleSampleDrop);
+        });
+        grid.querySelectorAll('.blind-assigned').forEach(tag=>{
+          tag.addEventListener('click', (e)=>{ e.stopPropagation(); const sid = tag.dataset.sid; if(sid) window.dissociateBlindSample(sid); });
+        });
+      }
       grid.querySelectorAll(".fav-heart").forEach(h=>{
          if(isArchived() || !currentTasterId()) { h.classList.add("disabled"); return; }
          h.addEventListener("click", e=>{ e.stopPropagation(); const sid = h.dataset.favSample; if(!sid) return; toggleFavourite(sid); });
@@ -3058,8 +3060,37 @@ function renderArchive(){
       sel.innerHTML = `<option value="">Seleziona...</option>` + opts.join("");
     }
     function onResultsSearch(val){
-      state.ui.resultsSearch = String(val || "");
-      renderResultsTable();
+      const wrap = document.getElementById("resultsTableWrap");
+      if(!wrap) return;
+      const table = wrap.querySelector("table");
+      if(!table) return;
+      const tbody = table.querySelector("tbody");
+      if(!tbody) return;
+
+      const q = String(val||"").toLowerCase().trim();
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+
+      if(!q){
+        rows.forEach(r=>{ r.style.display=""; });
+        return;
+      }
+
+      // 1) Hide/show taster rows based on data-search
+      rows.forEach(r=>{
+        const type = r.dataset.rowtype || "";
+        if(type === "taster"){
+          const hay = String(r.dataset.search||"").toLowerCase();
+          r.style.display = hay.includes(q) ? "" : "none";
+        }
+      });
+
+      // 2) Hide/show sample header rows depending on visible taster rows of same sample
+      const headers = Array.from(tbody.querySelectorAll('tr[data-rowtype="sample"]'));
+      headers.forEach(h=>{
+        const sid = h.dataset.sampleid;
+        const anyVisible = Array.from(tbody.querySelectorAll('tr[data-rowtype="taster"][data-sampleid="'+sid+'"]')).some(r=>r.style.display!=="none");
+        h.style.display = anyVisible ? "" : "none";
+      });
     }
     
     function getSampleName(t, s){
@@ -3122,9 +3153,7 @@ function renderArchive(){
 
       t.samples.forEach(s=>{
         const name = getSampleName(t, s);
-        const g = groupDef(t, s.groupKey);
-        const groupLabel = g ? (g.label+" "+g.key) : "";
-        const sampleText = (name + " " + s.id + " " + groupLabel).toLowerCase();
+        const sampleText = (name + " " + s.id).toLowerCase();
 
         let tasterRowsHtml = "";
         let visibleTasterRows = 0;
@@ -3142,15 +3171,17 @@ function renderArchive(){
            const o_d = (ev.data?.olfatto?.desc || []).join(", ");
            const g_d = (ev.data?.gusto?.desc || []).join(", ");
 
+           const g = groupDef(t, s.groupKey);
+           const gLabel = g ? g.label : "";
+
            const rowText = [
-              tas.name, tas.email||"",
-              pLabel,
-              groupLabel,
-              "campione "+s.id,
+              s.id, name,
+              gLabel,
+              tas.name, pLabel,
               evo > 0 ? "evoluzione" : "",
               ev.favourite ? "preferito" : "",
-              String(ev.overall||""), String(ev.progress||""),
               v_d, o_d, g_d,
+              (ev.overall||""),
               sampleText
            ].join(" ").toLowerCase();
 
@@ -3180,7 +3211,7 @@ function renderArchive(){
 
                const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div style="width:8px;height:8px;border-radius:50%;background:${i<=evo?'#7a2938':'#eee'};border:1px solid #999;"></div>`).join('')}</div>`;
 
-               tasterRowsHtml += `<tr style="background:#fff; border-bottom:1px solid #eee;">
+               tasterRowsHtml += `<tr data-rowtype="taster" data-sampleid="${esc(s.id)}" data-search="${esc(rowText)}" style="background:#fff; border-bottom:1px solid #eee;">
                   <td style="padding:8px; color:#666;">${esc(tas.name)}</td>
                   <td style="padding:8px;">${profHtml}</td>
                   <td style="padding:8px;">${evoHtml}</td>
@@ -3199,7 +3230,7 @@ function renderArchive(){
 
         if(visibleTasterRows > 0){
            anyRowShown = true;
-           html += `<tr style="background:#f9f5f0; border-top:2px solid #ccc;">
+           html += `<tr data-rowtype="sample" data-sampleid="${esc(s.id)}" data-search="${esc(sampleText + " " + name + " " + (groupDef(t,s.groupKey)?.label||""))}" style="background:#f9f5f0; border-top:2px solid #ccc;">
                    <td colspan="${cols.length}" style="padding:10px; font-weight:bold; font-size:14px; color:#333; border-bottom:1px solid #ddd;">
                      <span style="color:#7a2938; margin-right:8px;">${esc(s.id)}</span> ${esc(name)}
                    </td>
