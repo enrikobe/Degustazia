@@ -521,6 +521,11 @@
     .group-option, .profile-option { width: auto !important; font-size: 13px !important; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 4px !important; }
     #groupOptions + div.muted { display: none; }
 
+
+.modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999; }
+.modal { background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);width:90%;max-width:350px; }
+.modal-header { background:var(--bordeaux);color:#fff;padding:12px;font-weight:bold; }
+.pchip { font-size:11px !important; padding:2px 8px !important; }
 </style>
 </head>
 
@@ -531,7 +536,17 @@
       const sp=document.getElementById("splashScreen");
       if(sp){ sp.classList.add("hide"); setTimeout(()=>sp.style.display="none",500); }
     }, 3000);
-  </script>
+  function forceEnableClear(){
+    const clrBtns = document.querySelectorAll("button");
+    for(let b of clrBtns){
+        if(b.innerText.includes("Pulisci") || (b.getAttribute("onclick")||"").includes("clearCanvas")){
+            b.disabled = false;
+            b.style.pointerEvents = "auto";
+            b.style.opacity = "1";
+        }
+    }
+}
+</script>
 
   <div id="zenBar" class="zen-bar">
     <button class="btn primary" onclick="toggleFiltersPanel()">Filtri</button>
@@ -1025,6 +1040,11 @@
     .group-option, .profile-option { width: auto !important; font-size: 13px !important; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 4px !important; }
     #groupOptions + div.muted { display: none; }
 
+
+.modal-overlay { position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999; }
+.modal { background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);width:90%;max-width:350px; }
+.modal-header { background:var(--bordeaux);color:#fff;padding:12px;font-weight:bold; }
+.pchip { font-size:11px !important; padding:2px 8px !important; }
 </style>
       </head><body>`;
 
@@ -1060,7 +1080,24 @@
 
       const tblWrap = document.getElementById("resultsTableWrap");
       if(tblWrap) h += `<div style="width:100%">${tblWrap.innerHTML}</div>`;
-      h += `</body></html>`;
+      h += `
+<div id="editEntityModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">Modifica <span id="editEntityTitle"></span></div>
+    <div class="pad">
+       <div class="label">Nome</div>
+       <input id="editEntityName" class="input" />
+       <div class="label" style="margin-top:10px">Colore</div>
+       <input id="editEntityColor" type="color" class="input" style="height:40px;padding:2px;width:100%" />
+       <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+          <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
+          <button class="btn primary" onclick="saveEditEntity()">Salva</button>
+       </div>
+    </div>
+  </div>
+</div>
+
+</body></html>`;
 
       win.document.write(h);
       win.document.close();
@@ -1268,8 +1305,8 @@
 
     function loadState(){ return null; }
     function saveState(){
-      // CLOUD-ONLY: niente localStorage
       if(window.__cloudApplying) return;
+      localStorage.setItem("DEGUSTAPP_STATE", JSON.stringify(state));
       if(typeof window.cloudRequestSync === 'function') window.cloudRequestSync();
     }
 
@@ -1601,23 +1638,14 @@
       let timer = null; let activeEl = null;
       wrap.addEventListener("pointerdown", (e)=>{
           const el = e.target.closest(".profile-option");
-          if(!el) return;
+          if(!el || el.innerText.includes("Nuovo")) return;
           activeEl = el;
           timer = setTimeout(()=>{
              if(!activeEl) return;
              const key = activeEl.dataset.profile;
-             const t = getTasting();
-             if(!t) return;
-             if(!t.profiles || !t.profiles.length) t.profiles = clone(state.profiles);
-             const p = t.profiles.find(x=>x.key===key);
-             if(!p) return;
-             try{ activeEl.releasePointerCapture(e.pointerId); }catch{}
-             const name = prompt("Rinomina profilo (questa degustazione)", p.label);
+             try{ activeEl.releasePointerCapture(e.pointerId); }catch(e){}
              activeEl = null;
-             if(name===null) return;
-             const v = name.trim(); if(!v) return;
-             p.label = v; saveState();
-             renderProfileOptions(); renderGrid(); updateDetail(); toast("Profilo rinominato");
+             openProfileEditModal(key);
           }, 650);
       });
       const clear = ()=>{ if(timer){ clearTimeout(timer); timer=null; } activeEl = null; };
@@ -1628,10 +1656,12 @@
       const t = getTasting();
       if(!wrap || !t) return;
       const profiles = profilesForTasting(t);
-      wrap.innerHTML = profiles.map(p=>{
+      const listHtml = profiles.map(p=>{
         const rgb = hexToRgbParts(p.color);
         return `<div class="profile-option" data-profile="${esc(p.key)}" data-hascolor="1" style="--pcol-r:${rgb.r};--pcol-g:${rgb.g};--pcol-b:${rgb.b}" onclick="toggleProfile('${esc(p.key)}')">${esc(p.label)}</div>`;
       }).join("");
+      const addBtn = `<div class="profile-option" onclick="addNewLocalProfile()" style="border:1px dashed #ccc;background:#f9f9f9;justify-content:center;color:#666;cursor:pointer;">+ Nuovo</div>`;
+      wrap.innerHTML = listHtml + addBtn;
       attachProfileRenameLongPress();
     }
     function renderGroupOptions(){
@@ -1639,12 +1669,14 @@
       const t = getTasting();
       if(!wrap || !t) return;
       const groups = groupsForTasting(t);
-      wrap.innerHTML = groups.map(g=>`
+      const listHtml = groups.map(g=>`
         <div class="group-option" data-group="${esc(g.key)}" onclick="toggleGroup('${esc(g.key)}')" style="border-left:8px solid #${esc(g.color)};background:${hexToRgba(g.color,0.1)}">
           <span class="group-swatch" style="background:#${esc(g.color)}"></span>
           <span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(g.label)}</span>
         </div>
       `).join("");
+      const addBtn = `<div class="group-option" onclick="addNewLocalGroup()" style="border:1px dashed #ccc;background:#f9f9f9;justify-content:center;color:#666;cursor:pointer;">+ Nuovo</div>`;
+      wrap.innerHTML = listHtml + addBtn;
       attachGroupRenameLongPress();
     }
 
@@ -1655,23 +1687,14 @@
       let timer = null; let activeEl = null;
       wrap.addEventListener("pointerdown", (e)=>{
           const el = e.target.closest(".group-option");
-          if(!el) return;
+          if(!el || el.innerText.includes("Nuovo")) return;
           activeEl = el;
           timer = setTimeout(()=>{
              if(!activeEl) return;
              const key = activeEl.dataset.group;
-             const t = getTasting();
-             if(!t) return;
-             if(!t.groups || !t.groups.length) t.groups = clone(state.groups);
-             const g = t.groups.find(x=>x.key===key);
-             if(!g) return;
-             try{ activeEl.releasePointerCapture(e.pointerId); }catch{}
-             const name = prompt("Rinomina gruppo (questa degustazione)", g.label);
+             try{ activeEl.releasePointerCapture(e.pointerId); }catch(e){}
              activeEl = null; 
-             if(name===null) return;
-             const v = name.trim(); if(!v) return;
-             g.label = v; saveState();
-             renderGroupOptions(); renderGroupFilterBtns(); renderGrid(); updateDetail(); toast("Gruppo rinominato");
+             openGroupEditModal(key);
           }, 650);
       });
       const clear = ()=>{ if(timer){ clearTimeout(timer); timer=null; } activeEl = null; };
@@ -1799,7 +1822,50 @@
       updateDetail();
       toast("Associazione rimossa");
     }
-    function renderGrid(){
+    function attachCardLongPress(card, sid){
+    let timer = null;
+    let isLong = false;
+
+    const start = (e) => {
+        isLong = false;
+        const tid = state.ui.currentTastingId;
+        if(!tid) return;
+        const t = state.tastings.find(x=>x.id===tid);
+
+        if(!t || t.mode !== 'cieca') return;
+        if(!t.blindMap || !t.blindMap[String(sid)]) return;
+
+        timer = setTimeout(() => {
+            isLong = true;
+            delete t.blindMap[String(sid)];
+
+            // FORCE SAVE
+            localStorage.setItem("DEGUSTAPP_STATE", JSON.stringify(state));
+            if(window.cloudRequestSync) window.cloudRequestSync();
+
+            renderProductsStrip(); 
+            renderGrid(); 
+            updateDetail();
+            if(navigator.vibrate) navigator.vibrate(50);
+            toast("Dissociato");
+        }, 800);
+    };
+
+    const end = (e) => {
+        if(timer) clearTimeout(timer);
+        if(isLong) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    };
+
+    card.addEventListener("pointerdown", start);
+    card.addEventListener("pointerup", end);
+    card.addEventListener("pointerleave", end);
+    card.addEventListener("pointercancel", end);
+    card.addEventListener("contextmenu", e => { if(isLong) e.preventDefault(); });
+}
+function renderGrid(){
       const grid = document.getElementById("samplesGrid");
       const t = getTasting();
       if(!grid) return;
@@ -1847,7 +1913,7 @@
             const p = productById(t,pid);
             const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
             const pm = pc[0] + (pc[1] ? " "+pc[1] : "");
-            assignedHtml = `<div class="assigned-tag" style="cursor:pointer" onclick="unassignBlindFromSample(this.dataset.sid); event.stopPropagation();" data-sid="${esc(s.id)}" title="Clicca per rimuovere">${esc(pm)} <span style="margin-left:4px;font-weight:bold;color:#a00;">×</span></div>`;
+            assignedHtml = `<span class="pchip" style="pointer-events:none; font-size:10px; padding:2px 6px; margin:2px auto; display:inline-block; width:auto; border:1px solid #ccc; background:#f0f0f0; color:#333;">${esc(pm)}</span>`;
           }
         }
         const evo = ev.evolution || 0;
@@ -1879,7 +1945,7 @@
       }).join("");
       // Listeners
       grid.querySelectorAll(".sample-card").forEach(card=>{
-        card.addEventListener("click", ()=>{ const sid = String(card.dataset.sampleid); if(sid) selectSample(sid); });
+        attachCardLongPress(card, card.dataset.sampleid); card.addEventListener("click", ()=>{ const sid = String(card.dataset.sampleid); if(sid) selectSample(sid); });
       });
       grid.querySelectorAll(".fav-heart").forEach(h=>{
          if(isArchived() || !currentTasterId()) { h.classList.add("disabled"); return; }
@@ -1887,7 +1953,7 @@
       });
       grid.querySelectorAll(".dot[data-dot-evo]").forEach(dot=>{
          if(isArchived() || !currentTasterId()) { dot.classList.add("disabled"); return; }
-         dot.addEventListener("click", e=>{ e.stopPropagation(); const sid = dot.dataset.dotSample; const val = parseIntSafe(dot.dataset.dotEvo,0); setEvolutionForSample(sid, val); });
+         dot.addEventListener("click", e=>{ e.stopPropagation(); const sid = dot.dataset.dotSample; const val = parseIntSafe(dot.dataset.dotEvo,0); if(selectedSampleId!==sid) selectSample(sid); else setEvolutionForSample(sid, val); });
       });
       if(!isArchived() && eligibleForReorder()) attachReorderDnD();
     }
@@ -2140,10 +2206,26 @@
     }
 
     function clearCanvas(){
-      if(isArchived()) return;
-      if(!ctx || !canvas) return;
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      onCanvasUp(); 
+      const cvs = document.getElementById("noteCanvas");
+      if(!cvs) return;
+      const ctx = cvs.getContext("2d");
+      ctx.clearRect(0,0,cvs.width,cvs.height);
+      const tid = state.ui.currentTastingId;
+      if(!tid) return;
+      const t = state.tastings.find(x=>x.id===tid);
+      const uId = currentTasterId();
+      const sid = selectedSampleId;
+      if(t && uId && sid){
+         if(!t.evaluations) t.evaluations={};
+         if(!t.evaluations[uId]) t.evaluations[uId]={};
+         if(!t.evaluations[uId][sid]) t.evaluations[uId][sid]=blankEval();
+         const ev = t.evaluations[uId][sid];
+         ev.canvas = null;
+         ev.notes = "";
+         const txt = document.getElementById("noteText");
+         if(txt) txt.value = "";
+         saveState();
+      }
     }
     function clearCanvasVisualOnly(){
       if(!ctx || !canvas) return;
@@ -2214,7 +2296,7 @@
       if(next>=0 && next<ids.length) selectSample(ids[next]);
     }
 
-    function updateDetail(){
+    function updateDetail(){ setTimeout(forceEnableClear,0);
       const t = getTasting();
       const tId = currentTasterId();
       const s = t ? t.samples.find(x=>String(x.id)===String(selectedSampleId)) : null;
@@ -2730,20 +2812,18 @@ function renderAnagrafiche(){
     function copyTasting(id){
       const t = state.tastings.find(x=>x.id===id);
       if(!t) return;
-      const c = JSON.parse(JSON.stringify(t));
-      c.id = uid();
-      c.title = (t.title||"") + " (Copia)";
-      c.status = "attiva";
-      c.createdAt = new Date().toISOString();
-      c.finishedAt = null;
-      c.evaluations = {}; // Reset evaluations
-      c.blindMap = {};    // Reset blind associations (V12 req)
-      // c.products is kept
-      state.tastings.unshift(c);
+      if(!confirm("Duplicare questa degustazione?")) return;
+      const newT = clone(t);
+      newT.id = uid();
+      newT.title = newT.title + " (Copia)";
+      newT.status = "bozza";
+      newT.createdAt = nowIso();
+      newT.evaluations = {}; 
+      newT.blindMap = clone(t.blindMap || {});
+      state.tastings.unshift(newT);
       saveState();
-      go("preparazione", document.getElementById("btnMenuPrep"));
-      renderPreparation();
-      toast("Copia creata");
+      renderArchive();
+      toast("Degustazione duplicata");
     }
     function openComparison(id){
       go("risultati", document.getElementById("btnMenuRes"));
@@ -3314,7 +3394,74 @@ function renderArchive(){
       setTimeout(initCanvas, 500);
       window.addEventListener("resize", initCanvas);
     });
-  </script>
+  function forceEnableClear(){
+    const clrBtns = document.querySelectorAll("button");
+    for(let b of clrBtns){
+        if(b.innerText.includes("Pulisci") || (b.getAttribute("onclick")||"").includes("clearCanvas")){
+            b.disabled = false;
+            b.style.pointerEvents = "auto";
+            b.style.opacity = "1";
+        }
+    }
+}
+
+let currentEditEntity = null;
+function openGroupEditModal(key){
+    const t = getTasting();
+    const g = groupDef(t, key);
+    if(!g) return;
+    currentEditEntity = { type: 'group', key: key };
+    document.getElementById("editEntityTitle").innerText = "Gruppo";
+    document.getElementById("editEntityName").value = g.label;
+    document.getElementById("editEntityColor").value = "#" + g.color;
+    document.getElementById("editEntityModal").style.display = "flex";
+}
+function openProfileEditModal(key){
+    const t = getTasting();
+    const p = profileDef(t, key);
+    if(!p) return;
+    currentEditEntity = { type: 'profile', key: key };
+    document.getElementById("editEntityTitle").innerText = "Profilo";
+    document.getElementById("editEntityName").value = p.label;
+    document.getElementById("editEntityColor").value = "#" + p.color;
+    document.getElementById("editEntityModal").style.display = "flex";
+}
+function closeEditEntityModal(){ document.getElementById("editEntityModal").style.display = "none"; currentEditEntity = null; }
+function saveEditEntity(){
+    if(!currentEditEntity) return;
+    const t = getTasting();
+    const name = document.getElementById("editEntityName").value.trim();
+    const col = document.getElementById("editEntityColor").value.substring(1);
+    if(!name) return;
+    if(currentEditEntity.type === 'group'){
+        if(!t.groups || !t.groups.length) t.groups = clone(state.groups);
+        const g = t.groups.find(x=>x.key===currentEditEntity.key);
+        if(g){ g.label = name; g.color = col; toast("Gruppo aggiornato"); }
+    } else {
+        if(!t.profiles || !t.profiles.length) t.profiles = clone(state.profiles);
+        const p = t.profiles.find(x=>x.key===currentEditEntity.key);
+        if(p){ p.label = name; p.color = col; toast("Profilo aggiornato"); }
+    }
+    saveState();
+    renderGroupOptions(); renderProfileOptions(); renderGroupFilterBtns(); renderGrid(); updateDetail();
+    closeEditEntityModal();
+}
+function addNewLocalGroup(){
+    const t = getTasting();
+    if(!t.groups || !t.groups.length) t.groups = clone(state.groups);
+    const newKey = "lg_" + Date.now() + "_" + Math.floor(Math.random()*999);
+    t.groups.push({ key: newKey, label: "Nuovo Gruppo", color: "999999" });
+    saveState(); renderGroupOptions(); openGroupEditModal(newKey);
+}
+function addNewLocalProfile(){
+    const t = getTasting();
+    if(!t.profiles || !t.profiles.length) t.profiles = clone(state.profiles);
+    const newKey = "lp_" + Date.now() + "_" + Math.floor(Math.random()*999);
+    t.profiles.push({ key: newKey, label: "Nuovo Profilo", color: "999999" });
+    saveState(); renderProfileOptions(); openProfileEditModal(newKey);
+}
+
+</script>
 
 <!-- FIREBASE CLOUD-ONLY START -->
 <script type="module">
@@ -3645,8 +3792,35 @@ function renderArchive(){
       }
       return false;
     }
+function forceEnableClear(){
+    const clrBtns = document.querySelectorAll("button");
+    for(let b of clrBtns){
+        if(b.innerText.includes("Pulisci") || (b.getAttribute("onclick")||"").includes("clearCanvas")){
+            b.disabled = false;
+            b.style.pointerEvents = "auto";
+            b.style.opacity = "1";
+        }
+    }
+}
 </script>
 <!-- FIREBASE CLOUD-ONLY END -->
+
+
+<div id="editEntityModal" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-header">Modifica <span id="editEntityTitle"></span></div>
+    <div class="pad">
+       <div class="label">Nome</div>
+       <input id="editEntityName" class="input" />
+       <div class="label" style="margin-top:10px">Colore</div>
+       <input id="editEntityColor" type="color" class="input" style="height:40px;padding:2px;width:100%" />
+       <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px">
+          <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
+          <button class="btn primary" onclick="saveEditEntity()">Salva</button>
+       </div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
