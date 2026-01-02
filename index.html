@@ -515,6 +515,12 @@
   .dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
 
+
+    /* Grid for Options */
+    #groupOptions, #profileOptions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .group-option, .profile-option { width: auto !important; font-size: 13px !important; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 4px !important; }
+    #groupOptions + div.muted { display: none; }
+
 </style>
 </head>
 
@@ -734,7 +740,7 @@
                 </div>
                 <div class="form-group">
                   <label>Colore (RRGGBB)</label>
-                  <input class="input" id="newProfileColor" placeholder="5a8e3a" value="5a8e3a" />
+                  <input type="color" id="newProfileColor" value="#5a8e3a" style="height:32px;cursor:pointer;" />
                 </div>
                 <button class="btn primary" onclick="addProfile()">Aggiungi</button>
               </div>
@@ -755,7 +761,7 @@
                 </div>
                 <div class="form-group">
                   <label>Colore (RRGGBB)</label>
-                  <input class="input" id="newGroupColor" placeholder="6b8fd6" value="6b8fd6" />
+                  <input type="color" id="newGroupColor" value="#6b8fd6" style="height:32px;cursor:pointer;" />
                 </div>
                 <button class="btn primary" onclick="addGroup()">Aggiungi</button>
               </div>
@@ -1013,7 +1019,13 @@
         table{width:100%; border-collapse:collapse; font-size:11px;}
         th{background:#7a2938; color:#fff; padding:5px; border:1px solid #999;}
         td{padding:5px; border:1px solid #ccc;}
-      </style>
+      
+    /* Grid for Options */
+    #groupOptions, #profileOptions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .group-option, .profile-option { width: auto !important; font-size: 13px !important; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 8px 4px !important; }
+    #groupOptions + div.muted { display: none; }
+
+</style>
       </head><body>`;
 
       h += `<h1>${esc(t.title)}</h1>`;
@@ -1307,6 +1319,11 @@
       return s;
     }
 
+    
+    function groupsForTasting(t){ return (t && Array.isArray(t.groups) && t.groups.length) ? t.groups : state.groups; }
+    function profilesForTasting(t){ return (t && Array.isArray(t.profiles) && t.profiles.length) ? t.profiles : state.profiles; }
+    function descriptorsForTasting(t){ return (t && t.descriptors) ? t.descriptors : state.descriptors; }
+
     function getTasting(){
       return state.tastings.find(t=>t.id===state.currentTastingId) || null;
     }
@@ -1317,14 +1334,8 @@
     function groupsForTasting(t){
       return (t && Array.isArray(t.groups) && t.groups.length) ? t.groups : state.groups;
     }
-    function groupDef(t,key){
-      if(!key) return null;
-      return groupsForTasting(t).find(x=>x.key===key) || null;
-    }
-    function profileDef(key){
-      if(!key) return null;
-      return state.profiles.find(p=>p.key===key) || null;
-    }
+    function groupDef(t, key){ return groupsForTasting(t).find(g=>g.key===key); }
+    function profileDef(t, key){ return profilesForTasting(t).find(p=>p.key===key); }
     function productById(t,pid){
       if(!t || !Array.isArray(t.products)) return null;
       return t.products.find(p=>String(p.id)===String(pid)) || null;
@@ -1583,55 +1594,88 @@
       wrap.innerHTML = html;
     }
 
+    function attachProfileRenameLongPress(){
+      const wrap = document.getElementById("profileOptions");
+      if(!wrap || wrap.dataset.lpAttached) return;
+      wrap.dataset.lpAttached = "1";
+      let timer = null; let activeEl = null;
+      wrap.addEventListener("pointerdown", (e)=>{
+          const el = e.target.closest(".profile-option");
+          if(!el) return;
+          activeEl = el;
+          timer = setTimeout(()=>{
+             if(!activeEl) return;
+             const key = activeEl.dataset.profile;
+             const t = getTasting();
+             if(!t) return;
+             if(!t.profiles || !t.profiles.length) t.profiles = clone(state.profiles);
+             const p = t.profiles.find(x=>x.key===key);
+             if(!p) return;
+             try{ activeEl.releasePointerCapture(e.pointerId); }catch{}
+             const name = prompt("Rinomina profilo (questa degustazione)", p.label);
+             activeEl = null;
+             if(name===null) return;
+             const v = name.trim(); if(!v) return;
+             p.label = v; saveState();
+             renderProfileOptions(); renderGrid(); updateDetail(); toast("Profilo rinominato");
+          }, 650);
+      });
+      const clear = ()=>{ if(timer){ clearTimeout(timer); timer=null; } activeEl = null; };
+      wrap.addEventListener("pointerup", clear); wrap.addEventListener("pointercancel", clear); wrap.addEventListener("pointerleave", clear); wrap.addEventListener("scroll", clear);
+    }
     function renderProfileOptions(){
       const wrap = document.getElementById("profileOptions");
-      if(!wrap) return;
-      wrap.innerHTML = state.profiles.map(p=>{
+      const t = getTasting();
+      if(!wrap || !t) return;
+      const profiles = profilesForTasting(t);
+      wrap.innerHTML = profiles.map(p=>{
         const rgb = hexToRgbParts(p.color);
         return `<div class="profile-option" data-profile="${esc(p.key)}" data-hascolor="1" style="--pcol-r:${rgb.r};--pcol-g:${rgb.g};--pcol-b:${rgb.b}" onclick="toggleProfile('${esc(p.key)}')">${esc(p.label)}</div>`;
       }).join("");
+      attachProfileRenameLongPress();
     }
     function renderGroupOptions(){
       const wrap = document.getElementById("groupOptions");
       const t = getTasting();
       if(!wrap || !t) return;
       const groups = groupsForTasting(t);
-      wrap.innerHTML = groups.map(g=>{
-        return `<div class="group-option" data-group="${esc(g.key)}" onclick="toggleGroup('${esc(g.key)}')" style="border-left:8px solid #${esc(g.color)};background:${hexToRgba(g.color,0.1)}">
+      wrap.innerHTML = groups.map(g=>`
+        <div class="group-option" data-group="${esc(g.key)}" onclick="toggleGroup('${esc(g.key)}')" style="border-left:8px solid #${esc(g.color)};background:${hexToRgba(g.color,0.1)}">
           <span class="group-swatch" style="background:#${esc(g.color)}"></span>
           <span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(g.label)}</span>
-        </div>`;
-      }).join("");
+        </div>
+      `).join("");
       attachGroupRenameLongPress();
     }
 
     function attachGroupRenameLongPress(){
-      const els = document.querySelectorAll("#groupOptions .group-option");
-      const t = getTasting();
-      if(!t) return;
-      els.forEach(el=>{
-        let timer=null;
-        el.addEventListener("pointerdown", ()=>{
+      const wrap = document.getElementById("groupOptions");
+      if(!wrap || wrap.dataset.lpAttached) return;
+      wrap.dataset.lpAttached = "1";
+      let timer = null; let activeEl = null;
+      wrap.addEventListener("pointerdown", (e)=>{
+          const el = e.target.closest(".group-option");
+          if(!el) return;
+          activeEl = el;
           timer = setTimeout(()=>{
-            const key = el.dataset.group;
-            if(!t.groups || !t.groups.length) t.groups = clone(state.groups);
-            const g = t.groups.find(x=>x.key===key);
-            if(!g) return;
-            const name = prompt("Rinomina gruppo (solo questa degustazione)", g.label);
-            if(name===null) return;
-            const v = name.trim();
-            if(!v){ toast("Nome non valido"); return; }
-            g.label = v;
-            saveState();
-            renderGroupOptions();
-            renderGroupFilterBtns();
-            renderGrid();
-            updateDetail();
-            toast("Gruppo rinominato");
+             if(!activeEl) return;
+             const key = activeEl.dataset.group;
+             const t = getTasting();
+             if(!t) return;
+             if(!t.groups || !t.groups.length) t.groups = clone(state.groups);
+             const g = t.groups.find(x=>x.key===key);
+             if(!g) return;
+             try{ activeEl.releasePointerCapture(e.pointerId); }catch{}
+             const name = prompt("Rinomina gruppo (questa degustazione)", g.label);
+             activeEl = null; 
+             if(name===null) return;
+             const v = name.trim(); if(!v) return;
+             g.label = v; saveState();
+             renderGroupOptions(); renderGroupFilterBtns(); renderGrid(); updateDetail(); toast("Gruppo rinominato");
           }, 650);
-        });
-        ["pointerup","pointercancel","pointerleave"].forEach(ev=> el.addEventListener(ev, ()=>{ if(timer){ clearTimeout(timer); timer=null; } }));
       });
+      const clear = ()=>{ if(timer){ clearTimeout(timer); timer=null; } activeEl = null; };
+      wrap.addEventListener("pointerup", clear); wrap.addEventListener("pointercancel", clear); wrap.addEventListener("pointerleave", clear); wrap.addEventListener("scroll", clear);
     }
 
     function renderDescriptorPickers(){
@@ -1703,104 +1747,99 @@
       if(state.ui.zen) setZenUI(true);
     }
 
+    function assignBlindProduct(pid){
+      if(isArchived()) return;
+      const t = getTasting();
+      if(!t || t.mode!=="cieca") return;
+      if(!selectedSampleId){ toast("Seleziona prima un campione"); return; }
+      const sid = String(selectedSampleId);
+      if(t.blindMap && t.blindMap[sid] === String(pid)){ toast("Già assegnato a questo campione"); return; }
+      const usedBy = Object.entries(t.blindMap||{}).find(([k,v])=> String(v)===String(pid) && String(k)!==sid);
+      if(usedBy){ toast("Prodotto già assegnato al campione " + usedBy[0]); return; }
+      if(!t.blindMap) t.blindMap = {};
+      t.blindMap[sid] = String(pid);
+      saveState();
+      renderProductsStrip(); renderGrid(); updateDetail(); toast("Prodotto associato");
+    }
     function renderProductsStrip(){
       const strip = document.getElementById("productsStrip");
       const t = getTasting();
       if(!strip) return;
-
-      if(!strip.dataset.dndAttached){
-        strip.dataset.dndAttached = "1";
-        strip.addEventListener("dragstart", (e)=>{
-          const ch = e.target.closest(".pchip");
-          if(!ch || ch.classList.contains("assigned")) return;
-          const pid = String(ch.dataset.productid || "");
-          if(!pid) return;
-          e.dataTransfer.effectAllowed = "move";
-          e.dataTransfer.setData("text/plain", pid);
-          e.dataTransfer.setData("text", pid);
-        });
-      }
-
       if(!t || t.mode!=="cieca" || isArchived()){
-        strip.classList.remove("active");
-        strip.innerHTML = "";
-        return;
+        strip.classList.remove("active"); strip.innerHTML = ""; return;
       }
-
       strip.classList.add("active");
       const assigned = new Set(Object.values(t.blindMap || {}).map(x=>String(x)));
-
       strip.innerHTML = (t.products || []).map(p=>{
+        const isAss = assigned.has(String(p.id));
+        if(isAss) return ""; 
         const c = cols4(p.cols);
         const main = c[0] + (c[1] ? " "+c[1] : "");
-        const isAss = assigned.has(String(p.id));
-        return `<span class="pchip ${isAss?"assigned":""}" draggable="${isAss?"false":"true"}" data-productid="${esc(p.id)}">${esc(main)}</span>`;
+        return `<span class="pchip" style="cursor:pointer" onclick="assignBlindProduct('${esc(p.id)}')">${esc(main)}</span>`;
       }).join("");
     }
 
+    function unassignBlindFromSample(sampleId){
+      if(isArchived()) return;
+      const tid = state.ui.currentTastingId;
+      if(!tid) return;
+      const t = state.tastings.find(x=>x.id===tid);
+      if(!t || t.mode!=="cieca") return;
+
+      const sid = String(sampleId);
+      if(!t.blindMap || !t.blindMap[sid]) return;
+
+      delete t.blindMap[sid];
+
+      // Force persistence immediately
+      localStorage.setItem("DEGUSTAPP_STATE", JSON.stringify(state));
+
+      renderProductsStrip();
+      renderGrid();
+      updateDetail();
+      toast("Associazione rimossa");
+    }
     function renderGrid(){
       const grid = document.getElementById("samplesGrid");
       const t = getTasting();
       if(!grid) return;
       if(!t){ grid.innerHTML=""; return; }
-
       const tId = currentTasterId();
       const filterProfile = state.ui.filterProfile || "tutti";
       const filterGroup = state.ui.filterGroup || "tutti";
-
       let list = t.samples.slice();
-
       if(state.ui.sort === 'custom') {
          if(tId) {
             const ord = getSampleOrder(t, tId);
             if(ord && Array.isArray(ord)) {
-               const map = {};
-               ord.forEach((id,i) => map[String(id)] = i);
+               const map = {}; ord.forEach((id,i) => map[String(id)] = i);
                list.sort((a,b) => (map[String(a.id)]??9999) - (map[String(b.id)]??9999));
             }
          }
       } else if(state.ui.sort === "group"){
-        const ord={};
-        groupsForTasting(t).forEach((g,i)=>ord[g.key]=i+1);
+        const ord={}; groupsForTasting(t).forEach((g,i)=>ord[g.key]=i+1);
         list.sort((a,b)=> (ord[a.groupKey]??9999) - (ord[b.groupKey]??9999) || cmpSampleId(a.id,b.id));
       } else if(state.ui.sort === "profile" && tId){
-        const ord={};
-        state.profiles.forEach((p,i)=>ord[p.key]=i+1);
-        list.sort((a,b)=>{
-          const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id);
-          return (ord[ea.profileKey]??9999) - (ord[eb.profileKey]??9999) || cmpSampleId(a.id,b.id);
-        });
+        const ord={}; profilesForTasting(t).forEach((p,i)=>ord[p.key]=i+1);
+        list.sort((a,b)=>{ const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id); return (ord[ea.profileKey]??9999) - (ord[eb.profileKey]??9999) || cmpSampleId(a.id,b.id); });
       } else if(state.ui.sort === "evolution" && tId){
-        list.sort((a,b)=>{
-          const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id);
-          return (eb.evolution||0)-(ea.evolution||0) || cmpSampleId(a.id,b.id);
-        });
+        list.sort((a,b)=>{ const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id); return (eb.evolution||0)-(ea.evolution||0) || cmpSampleId(a.id,b.id); });
       } else if(state.ui.sort === "reset"){
         list.sort((a,b)=>cmpSampleId(a.id,b.id));
       }
-
       if(filterGroup!=="tutti") list = list.filter(s=>String(s.groupKey)===String(filterGroup));
       if(filterProfile!=="tutti" && tId) list = list.filter(s=> String(getEval(t,tId,s.id).profileKey)===String(filterProfile));
-
       const blind = t.mode==="cieca";
       const dragOk = !isArchived() && eligibleForReorder();
-
       grid.innerHTML = list.map(s=>{
         const ev = tId ? getEval(t,tId,s.id) : blankEval();
-        ev.progress = calcProgress(ev);
-        ev.overall = calcOverall(ev);
-
+        ev.progress = calcProgress(ev); ev.overall = calcOverall(ev);
         const c = cols4(s.cols);
         const group = groupDef(t, s.groupKey);
         const groupBg = group ? hexToRgba(group.color, 0.14) : "#fff";
         const groupChip = group ? `<span class="chip group" style="background:#${esc(group.color)}">${esc(group.label)}</span>` : "";
-
         let profileChip = "";
-        if(ev.profileKey){
-          const p = profileDef(ev.profileKey);
-          if(p) profileChip = `<span class="chip profile" style="background:${hexToRgba(p.color,0.22)}">${esc(p.label)}</span>`;
-        }
-
+        if(ev.profileKey){ const p = profileDef(t, ev.profileKey); if(p) profileChip = `<span class="chip profile" style="background:${hexToRgba(p.color,0.22)}">${esc(p.label)}</span>`; }
         let assignedHtml = "";
         if(blind){
           const pid = (t.blindMap||{})[String(s.id)];
@@ -1808,19 +1847,16 @@
             const p = productById(t,pid);
             const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
             const pm = pc[0] + (pc[1] ? " "+pc[1] : "");
-            assignedHtml = `<div class="assigned-tag" style="cursor:pointer" data-sample="${esc(s.id)}" title="Tap per disassociare">${esc(pm)}</div>`;
+            assignedHtml = `<div class="assigned-tag" style="cursor:pointer" onclick="unassignBlindFromSample(this.dataset.sid); event.stopPropagation();" data-sid="${esc(s.id)}" title="Clicca per rimuovere">${esc(pm)} <span style="margin-left:4px;font-weight:bold;color:#a00;">×</span></div>`;
           }
         }
-
         const evo = ev.evolution || 0;
         const dots = Array.from({length:5},(_,i)=>`<span class="dot ${i+1<=evo?"on":""}" data-dot-evo="${i+1}" data-dot-sample="${esc(s.id)}"></span>`).join("");
         const favOn = !!ev.favourite;
-
         const l1 = blind ? "Campione" : (c[0]||"");
         const l2 = blind ? "Alla cieca" : (c[1]||"");
         const l3 = blind ? "" : (c[2]||"");
         const l4 = blind ? "" : (c[3]||"");
-
         return `
           <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg}">
             <div class="sample-top">
@@ -1841,49 +1877,19 @@
           </div>
         `;
       }).join("");
-
+      // Listeners
       grid.querySelectorAll(".sample-card").forEach(card=>{
-        card.addEventListener("click", ()=>{
-          const sid = String(card.dataset.sampleid);
-          if(sid) selectSample(sid);
-        });
+        card.addEventListener("click", ()=>{ const sid = String(card.dataset.sampleid); if(sid) selectSample(sid); });
       });
       grid.querySelectorAll(".fav-heart").forEach(h=>{
          if(isArchived() || !currentTasterId()) { h.classList.add("disabled"); return; }
-         h.addEventListener("click", e=>{
-            e.stopPropagation();
-            const sid = h.dataset.favSample;
-            if(!sid) return;
-            if(selectedSampleId!==sid){ toast("Seleziona prima il campione"); return; }
-            toggleFavourite(sid);
-         });
+         h.addEventListener("click", e=>{ e.stopPropagation(); const sid = h.dataset.favSample; if(!sid) return; toggleFavourite(sid); });
       });
       grid.querySelectorAll(".dot[data-dot-evo]").forEach(dot=>{
          if(isArchived() || !currentTasterId()) { dot.classList.add("disabled"); return; }
-         dot.addEventListener("click", e=>{
-            e.stopPropagation();
-            const sid = dot.dataset.dotSample;
-            const val = parseIntSafe(dot.dataset.dotEvo,0);
-            setEvolutionForSample(sid, val);
-         });
+         dot.addEventListener("click", e=>{ e.stopPropagation(); const sid = dot.dataset.dotSample; const val = parseIntSafe(dot.dataset.dotEvo,0); setEvolutionForSample(sid, val); });
       });
-      grid.querySelectorAll(".assigned-tag").forEach(el=>{
-         el.addEventListener("click", e=>{
-            e.stopPropagation();
-            const sid = el.dataset.sample;
-            if(sid && t.blindMap && t.blindMap[sid]){
-               delete t.blindMap[sid];
-               saveState();
-               renderProductsStrip();
-               renderGrid();
-               updateDetail();
-               toast("Prodotto disassociato");
-            }
-         });
-      });
-
       if(!isArchived() && eligibleForReorder()) attachReorderDnD();
-      if(!isArchived() && t.mode==="cieca") attachBlindDrop();
     }
 
     
@@ -2599,7 +2605,7 @@ function renderAnagrafiche(){
             <div style="cursor:grab;color:#ccc;padding:0 4px">☰</div>
             <div style="width:16px;height:16px;background:#${p.color};border-radius:4px;flex:0 0 auto;"></div>
             <input class="input" style="padding:4px 8px;font-size:12px;width:140px" value="${esc(p.label)}" onchange="editProfileLabel('${esc(p.key)}',this.value)">
-            <input class="input" style="padding:4px 8px;font-size:12px;width:70px;font-family:monospace" value="${esc(p.color)}" onchange="editProfileColor('${esc(p.key)}',this.value)">
+            <input type="color" value="#${esc(p.color)}" style="width:50px;height:28px;padding:0;border:1px solid #ddd;cursor:pointer;" onchange="editProfileColor('${esc(p.key)}',this.value.substring(1))" />
             <div style="flex:1"></div>
             <button class="btn" style="padding:4px 8px;font-size:11px;color:#c00" onclick="removeProfile('${esc(p.key)}')">✕</button>
           </div>
@@ -2613,7 +2619,7 @@ function renderAnagrafiche(){
              <div style="cursor:grab;color:#ccc;padding:0 4px">☰</div>
             <div style="width:16px;height:16px;background:#${g.color};border-radius:4px;flex:0 0 auto;"></div>
             <input class="input" style="padding:4px 8px;font-size:12px;width:140px" value="${esc(g.label)}" onchange="editGroupLabel('${esc(g.key)}',this.value)">
-            <input class="input" style="padding:4px 8px;font-size:12px;width:70px;font-family:monospace" value="${esc(g.color)}" onchange="editGroupColor('${esc(g.key)}',this.value)">
+            <input type="color" value="#${esc(g.color)}" style="width:50px;height:28px;padding:0;border:1px solid #ddd;cursor:pointer;" onchange="editGroupColor('${esc(g.key)}',this.value.substring(1))" />
             <div style="flex:1"></div>
             <button class="btn" style="padding:4px 8px;font-size:11px;color:#c00" onclick="removeGroup('${esc(g.key)}')">✕</button>
           </div>
