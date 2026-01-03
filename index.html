@@ -1366,34 +1366,24 @@ function forceEnableClear(){
       };
     }
 
-    let state = null;
+    let state = defaultState();
 
     function loadState(){
-      try{
-        const s = localStorage.getItem("DEGUSTAPPSTATE") || localStorage.getItem("DEGUSTAPP_STATE");
-        if(s){
-           const parsed = JSON.parse(s);
-           Object.assign(state, parsed);
-           if(parsed.descriptors) state.descriptors = parsed.descriptors;
-           if(!state.tastings) state.tastings=[];
-           if(!state.groups) state.groups=[];
-           if(!state.profiles) state.profiles=[];
-           if(!state.ui) state.ui = {};
-        }
-      }catch(e){console.error(e);}
+      // Cloud-only: lo stato viene mantenuto da Firestore (listener realtime).
+      // Nessun salvataggio locale: ritorna null.
+      return null;
     }
 
+
     function saveState(opts){
+  // Cloud-only: nessun salvataggio locale.
   // opts: { skipCloud: true } per evitare sync forzato
   const skipCloud = !!(opts && opts.skipCloud);
 
-  try{
-    localStorage.setItem("DEGUSTAPPSTATE", JSON.stringify(state));
-  }catch(e){ /* ignore quota/private mode */ }
-
-  if(window.cloudApplying || skipCloud) return;
+  if(window.__cloudApplying || skipCloud) return;
   if(typeof window.cloudRequestSync === "function") window.cloudRequestSync();
 }
+
 
 
     function cols4(cols){
@@ -2745,6 +2735,7 @@ function renderProductsStrip(){
       state.tastings = state.tastings.filter(t=>t.id!==id);
       if(state.currentTastingId===id) state.currentTastingId=null;
       saveState();
+      if(typeof window.__deleteTastingCloud === "function") window.__deleteTastingCloud(id);
       renderPreparation();
     }
 
@@ -3032,6 +3023,50 @@ function renderAnagrafiche(){
       }, 50);
     }
     
+function buildArchiveHaystack(t){
+      const parts = [];
+      parts.push(t.title||"");
+      parts.push(t.mode||"");
+      parts.push(t.status||"");
+      parts.push(t.finishedAt||"");
+
+      // Campioni e prodotti (Col1..Col4 + id)
+      (t.samples||[]).forEach(s=>{
+        parts.push(String(s.id||""));
+        (cols4(s.cols)||[]).forEach(x=>parts.push(String(x||"")));
+        const g = groupDef(t, s.groupKey);
+        if(g) parts.push(g.label||"");
+      });
+      (t.products||[]).forEach(p=>{
+        parts.push(String(p.id||""));
+        (cols4(p.cols)||[]).forEach(x=>parts.push(String(x||"")));
+      });
+
+      // Degustatori coinvolti
+      (t.tasterIds||[]).forEach(tid=>{
+        const tas = state.tasters.find(x=>String(x.id)===String(tid));
+        if(tas){ parts.push(tas.name||""); parts.push(tas.email||""); }
+      });
+
+      // Valutazioni: profili, evoluzione, descrittori selezionati
+      const evals = t.evaluations || {};
+      Object.keys(evals).forEach(tasterId=>{
+        const per = evals[tasterId] || {};
+        Object.keys(per).forEach(sampleId=>{
+          const ev = per[sampleId] || {};
+          parts.push(String(ev.profileKey||""));
+          parts.push(String(ev.evolution||""));
+          const d = ev.data || {};
+          ['vista','olfatto','gusto'].forEach(k=>{
+            const sec = d[k] || {};
+            (sec.desc||[]).forEach(x=>parts.push(String(x||"")));
+          });
+        });
+      });
+
+      return parts.join(' ').toLowerCase();
+    }
+
 function renderArchive(){
       const list = document.getElementById("archiveList");
       if(!list) return;
@@ -3823,19 +3858,23 @@ function forceEnableClear(){
   const led = document.getElementById('syncLed');
   const setLed = (cls) => {
     if(!led) return;
+    const infl = window.__syncInflight || 0;
+    if(infl>0 && cls==='connected') return;
     led.classList.remove('connected','offline','syncing');
     led.classList.add(cls);
   };
 
-  // Default
-  setLed(navigator.onLine ? 'offline' : 'offline');
+  if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
 
   // Sync indicator (in-flight writes)
   let inflight = 0;
-  const beginWrite = () => { inflight++; setLed('syncing'); };
+  window.__syncInflight = 0;
+
+  const beginWrite = () => { inflight++; window.__syncInflight = inflight; setLed('syncing'); };
   const endWrite = () => {
     inflight = Math.max(0, inflight-1);
-    if(inflight===0) setLed(navigator.onLine ? 'connected' : 'offline');
+    window.__syncInflight = inflight;
+    if(inflight===0) if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
   };
 
   window.addEventListener('online', ()=>{ if(inflight===0) setLed('connected'); });
@@ -3852,7 +3891,7 @@ function forceEnableClear(){
   }
 
   // ====== DIFF-BASED CLOUD SYNC ======
-  // Salva SEMPRE sul cloud; niente localStorage.
+  // Salva SEMPRE sul cloud; niente salvataggio locale.
 
   const stableStringify = (obj) => {
     const seen = new WeakSet();
@@ -3877,8 +3916,27 @@ function forceEnableClear(){
   // Prevent echo loops
   window.__cloudApplying = false;
 
+  // Gate: evita di riscrivere sul cloud prima del primo sync iniziale
+  window.__cloudReady = false;
+  let _anaReady = false;
+  let _tastingsReady = false;
+
   // Cloud write helpers
-  const pushAnagrafiche = async () => {
+    // Expose delete for UI without name collisions
+  window.__deleteTastingCloud = async (id) => {
+    if(!db || !id) return;
+    beginWrite();
+    try{
+      await deleteDoc(doc(db,'tastings', String(id)));
+    }catch(e){
+      console.error('delete tasting cloud error', e);
+      setLed('offline');
+    } finally {
+      endWrite();
+    }
+  };
+
+const pushAnagrafiche = async () => {
     if(!db) return;
     const payload = {
       tasters: state.tasters || [],
@@ -3902,7 +3960,7 @@ function forceEnableClear(){
     finally{ endWrite(); }
   };
 
-  const deleteTasting = async (id) => {
+  const deleteTastingDoc = async (id) => {
     if(!db || !id) return;
     beginWrite();
     try{ await deleteDoc(doc(db,'tastings', String(id))); }
@@ -3925,12 +3983,14 @@ function forceEnableClear(){
   let syncTimer = null;
   window.cloudRequestSync = function(){
     if(window.__cloudApplying) return;
+    if(!window.__cloudReady) return;
     if(syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(runSync, 350);
   };
 
   async function runSync(){
     if(!db) return;
+    if(!window.__cloudReady) return;
 
     // 1) Anagrafiche
     const anaObj = {
@@ -3950,7 +4010,7 @@ function forceEnableClear(){
     for(const [tid] of list(lastTastingHash)){
       if(!currentIds.has(tid)){
         // deleted locally -> delete in cloud
-        await deleteTasting(tid);
+        await deleteTastingDoc(tid);
         lastTastingHash.delete(tid);
       }
     }
@@ -4016,6 +4076,23 @@ function forceEnableClear(){
         list.sort((a,b)=>(String(b.createdAt||'')).localeCompare(String(a.createdAt||'')));
         state.tastings = list;
 
+        // Baseline hashes (tastings)
+        try{
+          const present = new Set();
+          for(const t of (state.tastings||[])){
+            const meta = JSON.parse(JSON.stringify(t));
+            delete meta.evaluations;
+            lastTastingHash.set(String(t.id), stableStringify(meta));
+            present.add(String(t.id));
+          }
+          for(const [tid] of list(lastTastingHash)){
+            if(!present.has(String(tid))) lastTastingHash.delete(String(tid));
+          }
+        }catch(e){}
+
+        _tastingsReady = true;
+        window.__cloudReady = (_tastingsReady && _anaReady);
+
         // Keep currentTastingId valid
         if(state.currentTastingId && !state.tastings.some(t=>String(t.id)===String(state.currentTastingId))){
           state.currentTastingId = state.tastings[0]?.id || null;
@@ -4026,9 +4103,14 @@ function forceEnableClear(){
         if(typeof renderArchive==='function') renderArchive();
         if(typeof renderResultsSelect==='function') renderResultsSelect();
 
-        setLed(navigator.onLine ? 'connected' : 'offline');
+        if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
       } finally {
         window.__cloudApplying = false;
+
+  // Gate: evita di riscrivere sul cloud prima del primo sync iniziale
+  window.__cloudReady = false;
+  let _anaReady = false;
+  let _tastingsReady = false;
       }
     }, (err)=>{
       console.error('tastings snapshot error', err);
@@ -4039,9 +4121,12 @@ function forceEnableClear(){
     onSnapshot(doc(db,'global','anagrafiche'), (snap)=>{
       window.__cloudApplying = true;
       try{
-        if(!snap.exists()){
-          // bootstrap: create once using current in-memory defaults
+        if(!snap.exists()) {
+          // bootstrap: crea una volta usando i default in memoria
           pushAnagrafiche();
+          _anaReady = true;
+          window.__cloudReady = (_tastingsReady && _anaReady);
+          if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
           return;
         }
         const d = snap.data() || {};
@@ -4050,13 +4135,26 @@ function forceEnableClear(){
         state.groups = Array.isArray(d.groups) ? d.groups : state.groups;
         state.descriptors = Array.isArray(d.descriptors) ? d.descriptors : state.descriptors;
 
+        try{
+          const anaObj = { tasters: state.tasters||[], profiles: state.profiles||[], groups: state.groups||[], descriptors: state.descriptors||[] };
+          lastAnaHash = stableStringify(anaObj);
+        }catch(e){}
+
+        _anaReady = true;
+        window.__cloudReady = (_tastingsReady && _anaReady);
+
         if(typeof renderAnagrafiche==='function') renderAnagrafiche();
         if(typeof renderPreparation==='function') renderPreparation();
         if(typeof renderResultsTable==='function') renderResultsTable();
 
-        setLed(navigator.onLine ? 'connected' : 'offline');
+        if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
       } finally {
         window.__cloudApplying = false;
+
+  // Gate: evita di riscrivere sul cloud prima del primo sync iniziale
+  window.__cloudReady = false;
+  let _anaReady = false;
+  let _tastingsReady = false;
       }
     }, (err)=>{
       console.error('anagrafiche snapshot error', err);
@@ -4081,17 +4179,65 @@ function forceEnableClear(){
             const sa = String(ev.sampleId);
             if(!t.evaluations[ta]) t.evaluations[ta] = {};
             t.evaluations[ta][sa] = ev;
+            try{ lastEvalHash.set(`${String(tid)}|${ta}|${sa}`, stableStringify(ev)); }catch(e){}
           });
           if(typeof renderResultsTable==='function') renderResultsTable();
-          setLed(navigator.onLine ? 'connected' : 'offline');
+          if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
         } finally {
           window.__cloudApplying = false;
+
+  // Gate: evita di riscrivere sul cloud prima del primo sync iniziale
+  window.__cloudReady = false;
+  let _anaReady = false;
+  let _tastingsReady = false;
         }
       }, (err)=>{
         console.error('evaluations snapshot error', err);
         setLed('offline');
       });
     }
+
+    // Evaluations subscription for "Degustazione" (realtime)
+    let unsubEvalDeg = null;
+    function ensureEvalSubDeg(tid){
+      if(unsubEvalDeg){ unsubEvalDeg(); unsubEvalDeg=null; }
+      if(!tid) return;
+      unsubEvalDeg = onSnapshot(collection(db,'tastings', String(tid), 'evaluations'), (snap)=>{
+        window.__cloudApplying = true;
+        try{
+          const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+          if(!t) return;
+          const next = {};
+          snap.forEach(ds=>{
+            const ev = ds.data() || {};
+            if(!ev.tasterId || !ev.sampleId) return;
+            const ta = String(ev.tasterId);
+            const sa = String(ev.sampleId);
+            if(!next[ta]) next[ta] = {};
+            next[ta][sa] = ev;
+            try{ lastEvalHash.set(`${String(tid)}|${ta}|${sa}`, stableStringify(ev)); }catch(e){}
+          });
+          t.evaluations = next;
+          if(typeof renderGrid==='function') renderGrid();
+          if(typeof updateDetail==='function') updateDetail();
+          if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
+        } finally { window.__cloudApplying = false; }
+      }, (err)=>{
+        console.error('evaluations snapshot error (degustazione)', err);
+        setLed('offline');
+      });
+    }
+
+    // Mantieni allineata la subscription quando cambia degustazione
+    const origRenderTastingPage = window.renderTastingPage;
+    if(typeof origRenderTastingPage === 'function'){
+      window.renderTastingPage = function(){
+        const r = origRenderTastingPage.apply(this, arguments);
+        try{ ensureEvalSubDeg(state.currentTastingId); }catch(e){}
+        return r;
+      };
+    }
+
 
     // Hook comparison render to keep subscription aligned
     const origRenderResultsTable = window.renderResultsTable;
