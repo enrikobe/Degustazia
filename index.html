@@ -888,6 +888,11 @@ function forceEnableClear(){
 
           <label style="font-size:12px;font-weight:950;">Cerca</label>
           <input class="input" style="padding:8px 10px;" placeholder="testo libero..." oninput="onResultsSearch(this.value)" />
+          <label style="font-size:12px;font-weight:950;">Ordina</label>
+          <select class="select" style="padding:8px 10px;" onchange="onResultsSort(this.value)">
+            <option value="id">ID</option>
+            <option value="group">Gruppo</option>
+          </select>
         </div>
 
         <div class="content-scroll">
@@ -1129,6 +1134,7 @@ function forceEnableClear(){
        </div>
        <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
+          <button class="btn" style="background:var(--rosso); border-color:var(--rosso); color:#fff;" onclick="deleteEditEntity()">Elimina</button>
           <button class="btn primary" onclick="saveEditEntity()">Salva</button>
        </div>
     </div>
@@ -1343,7 +1349,7 @@ function forceEnableClear(){
 
     function loadState(){
       try{
-        const s = localStorage.getItem("DEGUSTAPP_STATE");
+        const s = localStorage.getItem("DEGUSTAPPSTATE") || localStorage.getItem("DEGUSTAPP_STATE");
         if(s){
            const parsed = JSON.parse(s);
            Object.assign(state, parsed);
@@ -1351,9 +1357,11 @@ function forceEnableClear(){
            if(!state.tastings) state.tastings=[];
            if(!state.groups) state.groups=[];
            if(!state.profiles) state.profiles=[];
+           if(!state.ui) state.ui = {};
         }
       }catch(e){console.error(e);}
     }
+
     function saveState(opts){
   // opts: { skipCloud: true } per evitare sync forzato
   const skipCloud = !!(opts && opts.skipCloud);
@@ -1471,6 +1479,18 @@ function forceEnableClear(){
         ((ev.data.vista.desc.length || ev.data.olfatto.desc.length || ev.data.gusto.desc.length) ? 0.2 : 0);
       return Math.round(clamp(avg + bonus, 0, 5) * 10) / 10;
     }
+function cardDescriptorsHtml(ev){
+      if(!ev || !ev.data) return '';
+      const a = [];
+      const pushAll = (arr)=>{ (arr||[]).forEach(x=>{ if(x && !a.includes(x)) a.push(x); }); };
+      pushAll(ev.data.vista?.desc);
+      pushAll(ev.data.olfatto?.desc);
+      pushAll(ev.data.gusto?.desc);
+      if(!a.length) return '';
+      const shown = a.slice(0,6);
+      return `<div class="card-desc-row">` + shown.map(x=>`<span class="card-desc">${esc(x)}</span>`).join('') + `</div>`;
+    }
+
     function recalc(){
       if(isArchived()) return;
       const t = getTasting();
@@ -1913,8 +1933,6 @@ function forceEnableClear(){
       if(!pid || !sid) return;
       window.assignProductToSample(pid, sid);
     };
-
-/* ====== BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA (NON MODIFICARE) ====== */
 function renderProductsStrip(){
       const strip = document.getElementById("productsStrip");
       const t = getTasting();
@@ -1968,8 +1986,6 @@ function renderProductsStrip(){
         }
       });
     }
-/* ====== FINE BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA ====== */
-
 
     function unassignBlindFromSample(sampleId){
       if(isArchived()) return;
@@ -1984,7 +2000,7 @@ function renderProductsStrip(){
       delete t.blindMap[sid];
 
       // Force persistence immediately
-      localStorage.setItem("DEGUSTAPP_STATE", JSON.stringify(state));
+      saveState();
 
       renderProductsStrip();
       renderGrid();
@@ -2065,7 +2081,7 @@ function renderProductsStrip(){
             </div>
             <div class="chips-row">${profileChip}${groupChip}${assignedHtml}</div>
             <div class="evo-row"><span class="evo-label">Evol.</span><span class="dots">${dots}</span></div>
-            <div class="progress"><div style="width:${ev.progress||0}%"></div></div>
+            ${cardDescriptorsHtml(ev)}
           </div>
         `;
       }).join("");
@@ -2252,6 +2268,7 @@ function renderProductsStrip(){
       const parent = canvas.parentElement;
       const rect = parent.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
+      canvasDpr = dpr;
 
       canvas.width = Math.max(1, Math.floor(rect.width * dpr));
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
@@ -2268,6 +2285,7 @@ function renderProductsStrip(){
 
       if(!canvas.dataset.bound){
         canvas.dataset.bound = "1";
+        canvas.style.touchAction = 'none';
         canvas.addEventListener("pointerdown", onCanvasDown);
         canvas.addEventListener("pointermove", onCanvasMove);
         canvas.addEventListener("pointerup", onCanvasUp);
@@ -2275,6 +2293,7 @@ function renderProductsStrip(){
         canvas.addEventListener("pointerleave", onCanvasUp);
       }
     }
+
 
     function canvasPoint(e){
       const r = canvas.getBoundingClientRect();
@@ -2285,101 +2304,117 @@ function renderProductsStrip(){
 
     function onCanvasDown(e){
       if(isArchived() || !currentTasterId()) return;
-      const cvs = document.getElementById("noteCanvas");
-      const rect = cvs.getBoundingClientRect();
-      const x = (e.clientX||e.touches[0].clientX) - rect.left;
-      const y = (e.clientY||e.touches[0].clientY) - rect.top;
-      const ctx = cvs.getContext("2d");
+      if(!canvas || !ctx) initCanvas();
+      if(!canvas || !ctx) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
       ctx.beginPath();
       ctx.moveTo(x, y);
       state.ui.isDrawing = true;
+
       if(state.ui.canvasTool === 'eraser'){
           ctx.globalCompositeOperation = "destination-out";
           ctx.lineWidth = 15;
       } else {
           ctx.globalCompositeOperation = "source-over";
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = "#000";
+          ctx.lineWidth = 2.2;
+          ctx.strokeStyle = "#111";
       }
+
+      try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
     }
+
 
     function onCanvasMove(e){
       if(!state.ui.isDrawing) return;
+      if(!canvas || !ctx) return;
       e.preventDefault();
-      const cvs = document.getElementById("noteCanvas");
-      const rect = cvs.getBoundingClientRect();
-      const x = (e.clientX||e.touches[0].clientX) - rect.left;
-      const y = (e.clientY||e.touches[0].clientY) - rect.top;
-      const ctx = cvs.getContext("2d");
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
       ctx.lineTo(x, y);
       ctx.stroke();
     }
 
+
     function onCanvasUp(e){
       if(!state.ui.isDrawing) return;
       state.ui.isDrawing = false;
-      const cvs = document.getElementById("noteCanvas");
-      const ctx = cvs.getContext("2d");
+      if(!canvas || !ctx) return;
+
       ctx.closePath();
       ctx.globalCompositeOperation = "source-over";
+
       const t = getTasting();
       const tid = currentTasterId();
       const sid = selectedSampleId;
       if(t && tid && sid){
          const ev = getEval(t, tid, sid);
-         ev.canvas = cvs.toDataURL();
+         if(!ev.data) ev.data = {};
+         if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
+         try{ ev.data.vista.canvas = canvas.toDataURL('image/png'); }catch(err){ ev.data.vista.canvas = null; }
          saveState();
       }
     }
 
+
     function clearCanvas(){
-      const cvs = document.getElementById("noteCanvas");
-      if(!cvs) return;
-      const ctx = cvs.getContext("2d");
-      ctx.clearRect(0,0,cvs.width,cvs.height);
-      const tid = state.ui.currentTastingId;
-      if(!tid) return;
-      const t = state.tastings.find(x=>x.id===tid);
-      const uId = currentTasterId();
+      if(isArchived()) return;
+      if(!canvas || !ctx) initCanvas();
+      if(!canvas || !ctx) return;
+
+      clearCanvasVisualOnly();
+
+      const t = getTasting();
+      const tid = currentTasterId();
       const sid = selectedSampleId;
-      if(t && uId && sid){
-         if(!t.evaluations) t.evaluations={};
-         if(!t.evaluations[uId]) t.evaluations[uId]={};
-         if(!t.evaluations[uId][sid]) t.evaluations[uId][sid]=blankEval();
-         const ev = t.evaluations[uId][sid];
-         ev.canvas = null;
-         ev.notes = "";
-         const txt = document.getElementById("noteText");
-         if(txt) txt.value = "";
-         localStorage.setItem("DEGUSTAPP_STATE", JSON.stringify(state));
-         if(window.cloudRequestSync) window.cloudRequestSync();
+      if(t && tid && sid){
+         const ev = getEval(t, tid, sid);
+         if(!ev.data) ev.data = {};
+         if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
+         ev.data.vista.canvas = null;
+         saveState();
          toast("Appunti cancellati");
-         if(typeof setTool === 'function') setTool('pen');
+         setTool('pen');
       }
     }
+
     function clearCanvasVisualOnly(){
       if(!ctx || !canvas) return;
-      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.clearRect(0,0, canvas.width/(canvasDpr||1), canvas.height/(canvasDpr||1));
     }
-    function setTool(t){
+
+    function setTool(t, btnEl){
       state.ui.canvasTool = t;
-      document.querySelectorAll(".tool-btn").forEach(b=>{
-         if(b.dataset.tool===t) b.classList.add("active");
-         else b.classList.remove("active");
-      });
+      document.querySelectorAll('.canvas-tools .tool-btn').forEach(b=>b.classList.remove('active'));
+      if(btnEl && btnEl.classList) btnEl.classList.add('active');
     }
+
     function loadCanvasFromEval(){
+      if(!canvas || !ctx) initCanvas();
+      if(!canvas || !ctx) return;
+
       clearCanvasVisualOnly();
       const t = getTasting();
       const tId = currentTasterId();
       if(!t || !tId || !selectedSampleId) return;
+
       const ev = getEval(t,tId,selectedSampleId);
-      if(ev.data.vista.canvas){
-        const img = new Image();
-        img.onload = ()=> ctx.drawImage(img,0,0, canvas.width/window.devicePixelRatio, canvas.height/window.devicePixelRatio);
-        img.src = ev.data.vista.canvas;
-      }
+      const dataUrl = ev?.data?.vista?.canvas || null;
+      if(!dataUrl) return;
+
+      const img = new Image();
+      img.onload = ()=>{
+        ctx.drawImage(img, 0, 0, canvas.width/(canvasDpr||1), canvas.height/(canvasDpr||1));
+      };
+      img.src = dataUrl;
     }
+
 
     function selectSample(sampleId){
       const t = getTasting();
@@ -2590,17 +2625,11 @@ function renderProductsStrip(){
       renderGrid();
     }
 
-    
-/* ====== BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA (NON MODIFICARE) ====== */
-function openBlindInfo(){
+    function openBlindInfo(){
       renderBlindInfo();
       openModal("modalInfoBlind");
     }
-/* ====== FINE BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA ====== */
-
-    
-/* ====== BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA (NON MODIFICARE) ====== */
-function renderBlindInfo(){
+    function renderBlindInfo(){
       const t = getTasting();
       const wrap = document.getElementById("blindInfoList");
       if(!wrap) return;
@@ -2628,8 +2657,6 @@ function renderBlindInfo(){
         `;
       }).join("");
     }
-/* ====== FINE BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA ====== */
-
 
     function renderPreparation(){
       const divAtt = document.getElementById("prep-attive");
@@ -2987,10 +3014,10 @@ function renderAnagrafiche(){
 function renderArchive(){
       const list = document.getElementById("archiveList");
       if(!list) return;
-      const q = state.ui.archiveSearch.toLowerCase();
+      const q = (state.ui.archiveSearch||"").toLowerCase().trim();
 
       const arch = state.tastings.filter(t=>t.status==="archiviata");
-      const filtered = arch.filter(t=>t.title.toLowerCase().includes(q));
+      const filtered = !q ? arch : arch.filter(t=>(t.title||'').toLowerCase().includes(q));
 
       list.innerHTML = filtered.length ? filtered.map(t=>`
         <div class="list-card">
@@ -3012,10 +3039,11 @@ function renderArchive(){
     }
 
     function onArchiveSearch(val){
-      state.ui.archiveSearch = val;
+      state.ui.archiveSearch = String(val||"");
       saveState();
       renderArchive();
     }
+
 
     function exportJson(){
       const data = JSON.stringify(state, null, 2);
@@ -3057,7 +3085,9 @@ function renderArchive(){
       reader.readAsText(f);
     });
 
-    function renderResultsSelect(){
+    function onResultsSort(v){ state.ui.resultsSort = String(v||'id'); saveState({skipCloud:true}); renderResultsTable(); }
+
+function renderResultsSelect(){
       const sel = document.getElementById("resultsDegSelect");
       if(!sel) return;
       // Filter only ARCHIVED
@@ -3071,42 +3101,11 @@ function renderArchive(){
       });
       sel.innerHTML = `<option value="">Seleziona...</option>` + opts.join("");
     }
-    
-/* ====== BLOCCO VINCOLATO: RICERCA-CONFRONTO (NON MODIFICARE) ====== */
-function onResultsSearch(val){
-      const wrap = document.getElementById("resultsTableWrap");
-      if(!wrap) return;
-      const table = wrap.querySelector("table");
-      if(!table) return;
-      const tbody = table.querySelector("tbody");
-      if(!tbody) return;
-
-      const q = String(val||"").toLowerCase().trim();
-      const rows = Array.from(tbody.querySelectorAll("tr"));
-
-      if(!q){
-        rows.forEach(r=>{ r.style.display=""; });
-        return;
-      }
-
-      // 1) Hide/show taster rows based on data-search
-      rows.forEach(r=>{
-        const type = r.dataset.rowtype || "";
-        if(type === "taster"){
-          const hay = String(r.dataset.search||"").toLowerCase();
-          r.style.display = hay.includes(q) ? "" : "none";
-        }
-      });
-
-      // 2) Hide/show sample header rows depending on visible taster rows of same sample
-      const headers = Array.from(tbody.querySelectorAll('tr[data-rowtype="sample"]'));
-      headers.forEach(h=>{
-        const sid = h.dataset.sampleid;
-        const anyVisible = Array.from(tbody.querySelectorAll('tr[data-rowtype="taster"][data-sampleid="'+sid+'"]')).some(r=>r.style.display!=="none");
-        h.style.display = anyVisible ? "" : "none";
-      });
+    function onResultsSearch(val){
+      state.ui.resultsSearch = String(val||"");
+      saveState({skipCloud:true});
+      renderResultsTable();
     }
-/* ====== FINE BLOCCO VINCOLATO: RICERCA-CONFRONTO ====== */
 
     
     function getSampleName(t, s){
@@ -3122,9 +3121,7 @@ function onResultsSearch(val){
       const c = cols4(p.cols);
       return (c[0] + (c[1]?" "+c[1]:"")).trim();
     }
-    
-/* ====== BLOCCO VINCOLATO: RICERCA-CONFRONTO (NON MODIFICARE) ====== */
-function renderResultsTable(){
+    function renderResultsTable(){
       const wrap = document.getElementById("resultsTableWrap");
       const sel = document.getElementById("resultsDegSelect");
       if(!wrap || !sel) return;
@@ -3152,7 +3149,9 @@ function renderResultsTable(){
           return;
       }
 
-      const q = (state.ui.resultsSearch||"").toLowerCase();
+      const q = (state.ui.resultsSearch||"").toLowerCase().trim();
+
+      const resultsSort = state.ui.resultsSort || 'id';
 
       const cols = [
         "Degustatore", "Profilo", "Evoluzione", "Preferito", 
@@ -3169,7 +3168,16 @@ function renderResultsTable(){
 
       let anyRowShown = false;
 
-      t.samples.forEach(s=>{
+      const samplesList = t.samples.slice();
+      if(resultsSort==='group'){
+        const gs = groupsForTasting(t);
+        const gOrd = {}; gs.forEach((g,i)=> gOrd[String(g.key)] = i);
+        samplesList.sort((a,b)=> (gOrd[String(a.groupKey)]??9999) - (gOrd[String(b.groupKey)]??9999) || cmpSampleId(a.id,b.id));
+      } else {
+        samplesList.sort((a,b)=>cmpSampleId(a.id,b.id));
+      }
+
+      samplesList.forEach(s=>{
         const name = getSampleName(t, s);
         const sampleText = (name + " " + s.id).toLowerCase();
 
@@ -3260,8 +3268,6 @@ function renderResultsTable(){
       if(!anyRowShown) html = `<div class="muted">Nessun risultato per la ricerca.</div>`;
       wrap.innerHTML = html;
     }
-/* ====== FINE BLOCCO VINCOLATO: RICERCA-CONFRONTO ====== */
-
 
 
     // ---------- Create / Edit Tasting Logic ----------
@@ -3270,14 +3276,14 @@ function renderResultsTable(){
     function openCreateModal(){
       draft = { id:null, items:[] };
       // Init 20 rows
-      for(let i=0;i<20;i++) addDraftRow(false);
+      for(let i=0;i<12;i++) addDraftRow(false);
 
       document.getElementById("tastingModalTitle").textContent = "Nuova degustazione";
       document.getElementById("degTitle").value = "";
       document.getElementById("degStatus").value = "attiva";
       document.getElementById("degMode").value = "scoperta";
 
-      renderDraftTasters([]);
+      renderDraftTasters(state.tasters.map(t=>t.id));
       renderDraftTable();
       openModal("modalTasting");
       onModeChanged();
@@ -3644,25 +3650,80 @@ function openProfileEditModal(key){
 function closeEditEntityModal(){ document.getElementById("editEntityModal").style.display = "none"; currentEditEntity = null; }
 function saveEditEntity(){
     if(!currentEditEntity) return;
+
+    // Copia prima di chiudere: closeEditEntityModal() azzera currentEditEntity
+    const entity = clone(currentEditEntity);
+
     const t = getTasting();
     const name = document.getElementById("editEntityName").value.trim();
     const col = document.getElementById("editEntityColor").value.substring(1);
 
     closeEditEntityModal();
 
-    if(!name) return;
-    if(currentEditEntity.type === 'group'){
-        if(!t.groups || !t.groups.length) t.groups = clone(state.groups);
-        const g = t.groups.find(x=>x.key===currentEditEntity.key);
+    if(!t || !name) return;
+
+    if(entity.type === 'group'){
+        if(!t.groups || !t.groups.length) t.groups = clone(groupsForTasting(t));
+        const g = t.groups.find(x=>x.key===entity.key);
         if(g){ g.label = name; g.color = col; toast("Gruppo aggiornato"); }
     } else {
-        if(!t.profiles || !t.profiles.length) t.profiles = clone(state.profiles);
-        const p = t.profiles.find(x=>x.key===currentEditEntity.key);
+        if(!t.profiles || !t.profiles.length) t.profiles = clone(profilesForTasting(t));
+        const p = t.profiles.find(x=>x.key===entity.key);
         if(p){ p.label = name; p.color = col; toast("Profilo aggiornato"); }
     }
+
     saveState();
-    renderGroupOptions(); renderProfileOptions(); renderGroupFilterBtns(); renderGrid(); updateDetail();
+    renderGroupOptions();
+    renderProfileOptions();
+    renderGroupFilterBtns();
+    renderProfileFilterBtns();
+    renderGrid();
+    updateDetail();
 }
+function deleteEditEntity(){
+    if(!currentEditEntity) return;
+
+    const entity = clone(currentEditEntity);
+    const t = getTasting();
+    if(!t) return;
+
+    const label = entity.type === 'group' ? 'gruppo' : 'profilo';
+    if(!confirm(`Eliminare questo ${label} dalla degustazione attuale?`)) return;
+
+    if(entity.type === 'group'){
+      // forza lista locale per la degustazione
+      t.groups = clone(groupsForTasting(t)).filter(g=>g.key!==entity.key);
+      // rimuovi assegnazione ai campioni
+      (t.samples||[]).forEach(s=>{ if(String(s.groupKey)===String(entity.key)) s.groupKey = null; });
+      if(String(state.ui.filterGroup||'tutti')===String(entity.key)) state.ui.filterGroup = 'tutti';
+      toast('Gruppo eliminato');
+    } else {
+      t.profiles = clone(profilesForTasting(t)).filter(p=>p.key!==entity.key);
+      // rimuovi assegnazione profilo da tutte le valutazioni
+      if(t.evaluations){
+        Object.keys(t.evaluations).forEach(tasterId=>{
+          const evs = t.evaluations[tasterId] || {};
+          Object.keys(evs).forEach(sampleId=>{
+            const ev = evs[sampleId];
+            if(ev && String(ev.profileKey)===String(entity.key)) ev.profileKey = null;
+          });
+        });
+      }
+      if(String(state.ui.filterProfile||'tutti')===String(entity.key)) state.ui.filterProfile = 'tutti';
+      toast('Profilo eliminato');
+    }
+
+    closeEditEntityModal();
+    saveState();
+    renderGroupOptions();
+    renderProfileOptions();
+    renderGroupFilterBtns();
+    renderProfileFilterBtns();
+    renderGrid();
+    updateDetail();
+}
+
+
 function addNewLocalGroup(){
     const t = getTasting();
     if(!t.groups || !t.groups.length) t.groups = clone(state.groups);
@@ -4106,6 +4167,7 @@ function forceEnableClear(){
        </div>
        <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
+          <button class="btn" style="background:var(--rosso); border-color:var(--rosso); color:#fff;" onclick="deleteEditEntity()">Elimina</button>
           <button class="btn primary" onclick="saveEditEntity()">Salva</button>
        </div>
     </div>
