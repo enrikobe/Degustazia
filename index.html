@@ -1150,8 +1150,8 @@ function forceEnableClear(){
        <input id="editEntityName" class="input" style="text-align:center" />
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-          <input id="editEntityColor" type="color" style="opacity:0;width:0;height:0;position:absolute;" onchange="document.getElementById('colorPreview').style.background = this.value" />
-          <div id="colorPreview" onclick="document.getElementById('editEntityColor').click()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
+          <input id="editEntityColor" type="color" style="width:64px;height:44px;cursor:pointer;border:none;background:transparent;" oninput="document.getElementById('colorPreview').style.background = this.value" onchange="document.getElementById('colorPreview').style.background = this.value" />
+          <div id="colorPreview" onclick="openColorPicker()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
        </div>
        <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
@@ -1370,16 +1370,13 @@ function forceEnableClear(){
 
     function loadState(){
       // Cloud-only: lo stato viene mantenuto da Firestore (listener realtime).
-      // Nessun salvataggio locale: ritorna null.
       return null;
     }
 
 
     function saveState(opts){
   // Cloud-only: nessun salvataggio locale.
-  // opts: { skipCloud: true } per evitare sync forzato
   const skipCloud = !!(opts && opts.skipCloud);
-
   if(window.__cloudApplying || skipCloud) return;
   if(typeof window.cloudRequestSync === "function") window.cloudRequestSync();
 }
@@ -2699,13 +2696,14 @@ function renderProductsStrip(){
 
     function showPrepTab(tab, btn){
       state.ui.prepTab = tab;
-      saveState();
+      // UI-only: non salvare sul cloud
       document.querySelectorAll(".prep-tab").forEach(d=>d.style.display="none");
       document.getElementById("prep-"+tab).style.display="block";
       document.querySelectorAll("#page-preparazione .tab").forEach(b=>b.classList.remove("active"));
       if(btn) btn.classList.add("active");
       else document.querySelector(`#page-preparazione .tab[onclick*='${tab}']`)?.classList.add("active");
     }
+
 
     function openTasting(id){
       state.currentTastingId = id;
@@ -3009,7 +3007,10 @@ function renderAnagrafiche(){
       state.tastings.unshift(newT);
       saveState();
       renderArchive();
-      toast("Degustazione duplicata");
+      toast("Degustazione duplicata (Bozza)");
+      // Porta l'utente alle Bozze per vederla subito
+      try{ go('preparazione', document.getElementById('btnMenuPrep')); }catch(e){}
+      try{ showPrepTab('bozze'); }catch(e){}
     }
     function openComparison(id){
       go("risultati", document.getElementById("btnMenuRes"));
@@ -3030,7 +3031,6 @@ function buildArchiveHaystack(t){
       parts.push(t.status||"");
       parts.push(t.finishedAt||"");
 
-      // Campioni e prodotti (Col1..Col4 + id)
       (t.samples||[]).forEach(s=>{
         parts.push(String(s.id||""));
         (cols4(s.cols)||[]).forEach(x=>parts.push(String(x||"")));
@@ -3042,13 +3042,12 @@ function buildArchiveHaystack(t){
         (cols4(p.cols)||[]).forEach(x=>parts.push(String(x||"")));
       });
 
-      // Degustatori coinvolti
       (t.tasterIds||[]).forEach(tid=>{
         const tas = state.tasters.find(x=>String(x.id)===String(tid));
         if(tas){ parts.push(tas.name||""); parts.push(tas.email||""); }
       });
 
-      // Valutazioni: profili, evoluzione, descrittori selezionati
+      // Valutazioni: profilo/evoluzione/descrittori selezionati
       const evals = t.evaluations || {};
       Object.keys(evals).forEach(tasterId=>{
         const per = evals[tasterId] || {};
@@ -3073,7 +3072,7 @@ function renderArchive(){
       const q = (state.ui.archiveSearch||"").toLowerCase().trim();
 
       const arch = state.tastings.filter(t=>t.status==="archiviata");
-      const filtered = !q ? arch : arch.filter(t=>(t.title||'').toLowerCase().includes(q));
+      const filtered = !q ? arch : arch.filter(t=>buildArchiveHaystack(t).includes(q));
 
       list.innerHTML = filtered.length ? filtered.map(t=>`
         <div class="list-card">
@@ -3096,9 +3095,10 @@ function renderArchive(){
 
     function onArchiveSearch(val){
       state.ui.archiveSearch = String(val||"");
-      saveState();
+      // UI-only: non salvare sul cloud
       renderArchive();
     }
+
 
 
     function exportJson(){
@@ -3703,6 +3703,13 @@ function openProfileEditModal(key){
     document.getElementById("editEntityModal").style.display = "flex";
     setTimeout(()=>inp.select(), 50);
 }
+function openColorPicker(){
+  const el = document.getElementById('editEntityColor');
+  if(!el) return;
+  try{ if(typeof el.showPicker === 'function') { el.showPicker(); return; } }catch(e){}
+  try{ el.click(); }catch(e){}
+}
+
 function closeEditEntityModal(){ document.getElementById("editEntityModal").style.display = "none"; currentEditEntity = null; }
 function saveEditEntity(){
     if(!currentEditEntity) return;
@@ -3869,7 +3876,6 @@ function forceEnableClear(){
   // Sync indicator (in-flight writes)
   let inflight = 0;
   window.__syncInflight = 0;
-
   const beginWrite = () => { inflight++; window.__syncInflight = inflight; setLed('syncing'); };
   const endWrite = () => {
     inflight = Math.max(0, inflight-1);
@@ -3926,14 +3932,9 @@ function forceEnableClear(){
   window.__deleteTastingCloud = async (id) => {
     if(!db || !id) return;
     beginWrite();
-    try{
-      await deleteDoc(doc(db,'tastings', String(id)));
-    }catch(e){
-      console.error('delete tasting cloud error', e);
-      setLed('offline');
-    } finally {
-      endWrite();
-    }
+    try{ await deleteDoc(doc(db,'tastings', String(id))); }
+    catch(e){ console.error('delete tasting cloud error', e); setLed('offline'); }
+    finally{ endWrite(); }
   };
 
 const pushAnagrafiche = async () => {
@@ -3985,7 +3986,7 @@ const pushAnagrafiche = async () => {
     if(window.__cloudApplying) return;
     if(!window.__cloudReady) return;
     if(syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(runSync, 350);
+    syncTimer = setTimeout(runSync, 120);
   };
 
   async function runSync(){
@@ -4103,6 +4104,12 @@ const pushAnagrafiche = async () => {
         if(typeof renderArchive==='function') renderArchive();
         if(typeof renderResultsSelect==='function') renderResultsSelect();
 
+        // Se la pagina degustazione è aperta, aggiorna la UI con i dati appena arrivati (sync istantaneo)
+        try{
+          const page = document.querySelector('.page.active')?.id || '';
+          if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage();
+        }catch(e){}
+
         if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
       } finally {
         window.__cloudApplying = false;
@@ -4143,6 +4150,12 @@ const pushAnagrafiche = async () => {
         _anaReady = true;
         window.__cloudReady = (_tastingsReady && _anaReady);
 
+        // Se una degustazione è aperta, aggiorna subito le opzioni (sync istantaneo)
+        try{
+          const page = document.querySelector('.page.active')?.id || '';
+          if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage();
+        }catch(e){}
+
         if(typeof renderAnagrafiche==='function') renderAnagrafiche();
         if(typeof renderPreparation==='function') renderPreparation();
         if(typeof renderResultsTable==='function') renderResultsTable();
@@ -4179,7 +4192,6 @@ const pushAnagrafiche = async () => {
             const sa = String(ev.sampleId);
             if(!t.evaluations[ta]) t.evaluations[ta] = {};
             t.evaluations[ta][sa] = ev;
-            try{ lastEvalHash.set(`${String(tid)}|${ta}|${sa}`, stableStringify(ev)); }catch(e){}
           });
           if(typeof renderResultsTable==='function') renderResultsTable();
           if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
@@ -4329,8 +4341,8 @@ function forceEnableClear(){
        <input id="editEntityName" class="input" style="text-align:center" />
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-          <input id="editEntityColor" type="color" style="opacity:0;width:0;height:0;position:absolute;" onchange="document.getElementById('colorPreview').style.background = this.value" />
-          <div id="colorPreview" onclick="document.getElementById('editEntityColor').click()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
+          <input id="editEntityColor" type="color" style="width:64px;height:44px;cursor:pointer;border:none;background:transparent;" oninput="document.getElementById('colorPreview').style.background = this.value" onchange="document.getElementById('colorPreview').style.background = this.value" />
+          <div id="colorPreview" onclick="openColorPicker()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
        </div>
        <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
