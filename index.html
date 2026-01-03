@@ -1913,6 +1913,8 @@ function forceEnableClear(){
       if(!pid || !sid) return;
       window.assignProductToSample(pid, sid);
     };
+
+/* ====== BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA (NON MODIFICARE) ====== */
 function renderProductsStrip(){
       const strip = document.getElementById("productsStrip");
       const t = getTasting();
@@ -1966,6 +1968,8 @@ function renderProductsStrip(){
         }
       });
     }
+/* ====== FINE BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA ====== */
+
 
     function unassignBlindFromSample(sampleId){
       if(isArchived()) return;
@@ -2586,11 +2590,17 @@ function renderProductsStrip(){
       renderGrid();
     }
 
-    function openBlindInfo(){
+    
+/* ====== BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA (NON MODIFICARE) ====== */
+function openBlindInfo(){
       renderBlindInfo();
       openModal("modalInfoBlind");
     }
-    function renderBlindInfo(){
+/* ====== FINE BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA ====== */
+
+    
+/* ====== BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA (NON MODIFICARE) ====== */
+function renderBlindInfo(){
       const t = getTasting();
       const wrap = document.getElementById("blindInfoList");
       if(!wrap) return;
@@ -2618,6 +2628,8 @@ function renderProductsStrip(){
         `;
       }).join("");
     }
+/* ====== FINE BLOCCO VINCOLATO: ASSOCIAZIONE-TAG-CARD-CIECA ====== */
+
 
     function renderPreparation(){
       const divAtt = document.getElementById("prep-attive");
@@ -3059,7 +3071,9 @@ function renderArchive(){
       });
       sel.innerHTML = `<option value="">Seleziona...</option>` + opts.join("");
     }
-    function onResultsSearch(val){
+    
+/* ====== BLOCCO VINCOLATO: RICERCA-CONFRONTO (NON MODIFICARE) ====== */
+function onResultsSearch(val){
       const wrap = document.getElementById("resultsTableWrap");
       if(!wrap) return;
       const table = wrap.querySelector("table");
@@ -3092,6 +3106,8 @@ function renderArchive(){
         h.style.display = anyVisible ? "" : "none";
       });
     }
+/* ====== FINE BLOCCO VINCOLATO: RICERCA-CONFRONTO ====== */
+
     
     function getSampleName(t, s){
       if(t.mode!=="cieca"){
@@ -3106,7 +3122,9 @@ function renderArchive(){
       const c = cols4(p.cols);
       return (c[0] + (c[1]?" "+c[1]:"")).trim();
     }
-    function renderResultsTable(){
+    
+/* ====== BLOCCO VINCOLATO: RICERCA-CONFRONTO (NON MODIFICARE) ====== */
+function renderResultsTable(){
       const wrap = document.getElementById("resultsTableWrap");
       const sel = document.getElementById("resultsDegSelect");
       if(!wrap || !sel) return;
@@ -3242,6 +3260,8 @@ function renderArchive(){
       if(!anyRowShown) html = `<div class="muted">Nessun risultato per la ricerca.</div>`;
       wrap.innerHTML = html;
     }
+/* ====== FINE BLOCCO VINCOLATO: RICERCA-CONFRONTO ====== */
+
 
 
     // ---------- Create / Edit Tasting Logic ----------
