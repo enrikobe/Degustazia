@@ -3847,7 +3847,7 @@ function forceEnableClear(){
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import {
-    getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp
+    getFirestore, getDocs, getDoc, doc, setDoc, deleteDoc, onSnapshot, collection, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
   // ====== CONFIGURAZIONE FIREBASE (COMPILA) ======
@@ -3882,14 +3882,165 @@ function forceEnableClear(){
     if(inflight===0) if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
   };
 
+  // ---------- V22: dirty + activity guards (no rollback during polling) ----------
+  window.__lastUserInputTs = Date.now();
+  function __markUserActive(){ window.__lastUserInputTs = Date.now(); }
+  ['pointerdown','keydown','input','wheel','touchstart'].forEach(ev=>{
+    window.addEventListener(ev, __markUserActive, {capture:true, passive:true});
+  });
+  function isUserActive(thresholdMs=900){
+    return (Date.now() - (window.__lastUserInputTs||0)) < thresholdMs;
+  }
+  function getActivePageId(){ return document.querySelector('.page.active')?.id || ''; }
+
+  window.__dirtyLocal = false;
+  window.__dirtySince = 0;
+  window.__dirtyEvals = new Set(); // tid|tasterId|sampleId (opzionale)
+
+  window.__markDirty = function(tid, tasterId, sampleId){
+    window.__dirtyLocal = true;
+    window.__dirtySince = Date.now();
+    try{
+      if(tid && tasterId && sampleId){
+        window.__dirtyEvals.add(String(tid)+'|'+String(tasterId)+'|'+String(sampleId));
+      }
+    }catch(e){}
+  };
+  window.__clearDirty = function(){
+    window.__dirtyLocal = false;
+    window.__dirtySince = 0;
+    try{ window.__dirtyEvals && window.__dirtyEvals.clear(); }catch(e){}
+  };
+  window.__cloudMayApply = function(graceMs=9000){
+    return !(window.__dirtyLocal && (Date.now()-(window.__dirtySince||0)) < graceMs);
+  };
+
+
   window.addEventListener('online', ()=>{ if(inflight===0) setLed('connected'); });
   window.addEventListener('offline', ()=>{ setLed('offline'); });
 
-  // ====== INIT FIREBASE (NON BLOCCANTE) ======
+  
+
+  // ---------- Cloud polling mode (V22) ----------
+  // Polling ogni 3s + applicazione solo quando non ci sono modifiche locali recenti (evita reset UI).
+  const __poll = { core:null, evalDeg:null, evalRes:null };
+  const POLL_MS = 3000;
+
+  function stopPoll(key){
+    try{ if(__poll[key]) clearInterval(__poll[key]); }catch(e){}
+    __poll[key] = null;
+  }
+
+  async function pollTastingsOnce(){
+    if(!db) return;
+    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
+    try{
+      window.__cloudApplying = true;
+      const evalMap = new Map();
+      (state.tastings||[]).forEach(t=> evalMap.set(String(t.id), t.evaluations));
+
+      const snap = await getDocs(collection(db,'tastings'));
+      const list = [];
+      snap.forEach(ds=>{
+        const d = ds.data() || {};
+        const id = ds.id;
+        list.push({ ...d, id, evaluations: evalMap.get(String(id)) });
+      });
+      list.sort((a,b)=> String(b.createdAt||'').localeCompare(String(a.createdAt||'')) );
+      state.tastings = list;
+
+      if(state.currentTastingId && !state.tastings.some(t=>String(t.id)===String(state.currentTastingId))){
+        state.currentTastingId = state.tastings[0]?.id || null;
+      }
+
+      // Render solo se idle
+      if(!isUserActive(700)){
+        try{ window.scheduleRendersFromCloud && window.scheduleRendersFromCloud(); }catch(e){}
+      }
+
+      if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
+    } catch(e){
+      console.error('pollTastingsOnce error', e);
+      setLed('offline');
+    } finally {
+      window.__cloudApplying = false;
+    }
+  }
+
+  async function pollAnagraficheOnce(){
+    if(!db) return;
+    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
+    try{
+      window.__cloudApplying = true;
+      const snap = await getDoc(doc(db,'global','anagrafiche'));
+      if(!snap.exists()){
+        pushAnagrafiche();
+        return;
+      }
+      const d = snap.data() || {};
+      state.tasters = Array.isArray(d.tasters) ? d.tasters : state.tasters;
+      state.profiles = Array.isArray(d.profiles) ? d.profiles : state.profiles;
+      state.groups = Array.isArray(d.groups) ? d.groups : state.groups;
+      state.descriptors = Array.isArray(d.descriptors) ? d.descriptors : state.descriptors;
+
+      if(!isUserActive(700)){
+        try{ window.scheduleRendersFromCloud && window.scheduleRendersFromCloud(); }catch(e){}
+      }
+
+      if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
+    } catch(e){
+      console.error('pollAnagraficheOnce error', e);
+      setLed('offline');
+    } finally {
+      window.__cloudApplying = false;
+    }
+  }
+
+  async function fetchEvaluationsMap(tid){
+    const next = {};
+    if(!db || !tid) return next;
+    const snap = await getDocs(collection(db,'tastings', String(tid), 'evaluations'));
+    snap.forEach(ds=>{
+      const ev = ds.data() || {};
+      if(!ev.tasterId || !ev.sampleId) return;
+      const ta = String(ev.tasterId);
+      const sa = String(ev.sampleId);
+      if(!next[ta]) next[ta] = {};
+      next[ta][sa] = ev;
+    });
+    return next;
+  }
+
+  function mergeEvalsLocalWins(remote, local){
+    remote = remote || {};
+    local = local || {};
+    Object.keys(local).forEach(ta=>{
+      if(!remote[ta]) remote[ta] = {};
+      Object.keys(local[ta]||{}).forEach(sa=>{
+        remote[ta][sa] = local[ta][sa];
+      });
+    });
+    return remote;
+  }
+
+  function startCloudPolling(){
+    stopPoll('core');
+    const tick = ()=>{
+      if(isUserActive(900)) return;
+      if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
+      pollAnagraficheOnce();
+      pollTastingsOnce();
+    };
+    tick();
+    __poll.core = setInterval(tick, POLL_MS);
+  }
+// ====== INIT FIREBASE (NON BLOCCANTE) ======
   let db = null;
   try{
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
+    // V22: start polling after init
+    try{ setTimeout(()=>{ try{ startCloudPolling(); }catch(e){} }, 800); }catch(e){}
   }catch(e){
     console.error('Firebase init error:', e);
     setLed('offline');
@@ -3979,10 +4130,15 @@ const pushAnagrafiche = async () => {
   window.cloudRequestSync = function(){
     if(window.__cloudApplying) return;
     if(syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(runSync, 120);
+    syncTimer = setTimeout(runSync, 3500);
   };
 
   async function runSync(){
+      // Non sincronizzare mentre l'utente sta interagendo (priorità alla fluidità).
+      if(typeof isUserActive==='function' && isUserActive(900)){
+        try{ syncTimer = setTimeout(runSync, 2500); }catch(e){}
+        return;
+      }
     if(!db) return;
 
     // 1) Anagrafiche
@@ -4054,7 +4210,7 @@ const pushAnagrafiche = async () => {
   // ====== REALTIME LISTENERS (SOURCE OF TRUTH) ======
   if(db){
     // TASTINGS
-    onSnapshot(collection(db,'tastings'), (snap)=>{
+    0 && onSnapshot(collection(db,'tastings'), (snap)=>{
       window.__cloudApplying = true;
       try{
         const evalMap = new Map();
@@ -4094,7 +4250,7 @@ const pushAnagrafiche = async () => {
     });
 
     // ANAGRAFICHE
-    onSnapshot(doc(db,'global','anagrafiche'), (snap)=>{
+    0 && onSnapshot(doc(db,'global','anagrafiche'), (snap)=>{
       window.__cloudApplying = true;
       try{
         if(!snap.exists()){
@@ -4129,66 +4285,66 @@ const pushAnagrafiche = async () => {
     // Evaluations subscription for "Confronto"
     let unsubEval = null;
     function ensureEvalSub(tid){
-      if(unsubEval){ unsubEval(); unsubEval=null; }
+
+      // V22 polling (no realtime) - Confronto
+      stopPoll('evalRes');
       if(!tid) return;
-      unsubEval = onSnapshot(collection(db,'tastings', String(tid), 'evaluations'), (snap)=>{
-        window.__cloudApplying = true;
+      const run = async ()=>{
+        if(!db) return;
+        if(isUserActive(900)) return;
+        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
         try{
+          window.__cloudApplying = true;
           const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
           if(!t) return;
-          t.evaluations = t.evaluations || {};
-          snap.forEach(ds=>{
-            const ev = ds.data() || {};
-            if(!ev.tasterId || !ev.sampleId) return;
-            const ta = String(ev.tasterId);
-            const sa = String(ev.sampleId);
-            if(!t.evaluations[ta]) t.evaluations[ta] = {};
-            t.evaluations[ta][sa] = ev;
-          });
-          if(typeof renderResultsTable==='function') renderResultsTable();
-
-        try{
-          const page = document.querySelector('.page.active')?.id || '';
-          if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage();
-        }catch(e){}
-          if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
+          const remote = await fetchEvaluationsMap(tid);
+          const local = t.evaluations || {};
+          t.evaluations = mergeEvalsLocalWins(remote, local);
+          if(!isUserActive(700)){
+            try{ if(typeof renderResultsTable==='function') renderResultsTable(); }catch(e){}
+          }
+        } catch(e){
+          console.error('poll evaluations risultati error', e);
         } finally {
           window.__cloudApplying = false;
         }
-      }, (err)=>{
-        console.error('evaluations snapshot error', err);
-        setLed('offline');
-      });
+      };
+      run();
+      __poll.evalRes = setInterval(run, POLL_MS);
+
     }
 
     // Evaluations subscription for "Degustazione" (realtime)
     let unsubEvalDeg = null;
     function ensureEvalSubDeg(tid){
-      if(unsubEvalDeg){ unsubEvalDeg(); unsubEvalDeg=null; }
+
+      // V22 polling (no realtime) - Degustazione
+      stopPoll('evalDeg');
       if(!tid) return;
-      unsubEvalDeg = onSnapshot(collection(db,'tastings', String(tid), 'evaluations'), (snap)=>{
-        window.__cloudApplying = true;
+      const run = async ()=>{
+        if(!db) return;
+        if(isUserActive(900)) return;
+        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
         try{
+          window.__cloudApplying = true;
           const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
           if(!t) return;
-          const next = {};
-          snap.forEach(ds=>{
-            const ev = ds.data() || {};
-            if(!ev.tasterId || !ev.sampleId) return;
-            const ta = String(ev.tasterId);
-            const sa = String(ev.sampleId);
-            if(!next[ta]) next[ta] = {};
-            next[ta][sa] = ev;
-          });
-          t.evaluations = next;
-          if(typeof renderGrid==='function') renderGrid();
-          if(typeof updateDetail==='function') updateDetail();
-          if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
-        } finally { window.__cloudApplying = false; }
-      }, (err)=>{
-        console.error('evaluations snapshot error (degustazione)', err);
-        setLed('offline');
-      });
+          const remote = await fetchEvaluationsMap(tid);
+          const local = t.evaluations || {};
+          t.evaluations = mergeEvalsLocalWins(remote, local);
+          if(!isUserActive(700)){
+            try{ if(getActivePageId && getActivePageId()==='page-degustazione'){ if(typeof renderGrid==='function') renderGrid(); if(typeof updateDetail==='function') updateDetail(); } }catch(e){}
+          }
+        } catch(e){
+          console.error('poll evaluations degustazione error', e);
+          setLed('offline');
+        } finally {
+          window.__cloudApplying = false;
+        }
+      };
+      run();
+      __poll.evalDeg = setInterval(run, POLL_MS);
+
     }
 
     // Mantieni allineata la subscription quando cambia degustazione
