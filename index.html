@@ -666,12 +666,7 @@ function forceEnableClear(){
                 <h2 id="detailName">Seleziona un campione</h2>
                 <p id="detailSub">-</p>
               </div>
-        <div style="margin-top:10px">
-          <div style="font-size:12px;font-weight:950;color:var(--bordeaux);margin-bottom:6px">Evoluzione</div>
-          <div id="detailEvoPick" class="evo-pick-big"></div>
-          <div class="muted" style="margin-top:6px">Tocca un pallino per impostare 1-5.</div>
-        </div>
-
+<!-- Evoluzione (big picker) rimossa: evoluzione gestita solo dalle card campioni -->
             </div>
             <div class="nav-buttons">
               <button class="btn" onclick="navSample(-1)">◀</button>
@@ -1412,7 +1407,8 @@ function forceEnableClear(){
       s.profiles = Array.isArray(s.profiles) ? s.profiles : defaultProfiles();
       s.groups = Array.isArray(s.groups) ? s.groups : defaultGroups();
       s.descriptors = s.descriptors || defaultDescriptors();
-      s.tastings = Array.isArray(s.tastings) && s.tastings.length ? s.tastings : [demoTasting()];
+      s.tastings = Array.isArray(s.tastings) ? s.tastings : [];
+      // Cloud-only: non creare demo automaticamente (evita overwrite multi-istanza)
       s.tastings.forEach(t=>{
         t.columns = cols4(t.columns);
         t.groups = Array.isArray(t.groups) && t.groups.length ? t.groups : clone(s.groups);
@@ -3849,55 +3845,20 @@ function forceEnableClear(){
 <script>
 
   // --- Firebase Compat loader (works also on file://) ---
-  // Uses v8-style compat SDK and exposes a minimal v9-like surface used by the app.
-  // NOTE: keep these as function declarations / var to ensure global availability across scripts.
-
+  // Exposes a minimal v9-like surface used by the app.
   function initializeApp(config){
     try{ return firebase.initializeApp(config); }
     catch(e){ try{ return firebase.app(); }catch(_){ return firebase.initializeApp(config); } }
   }
-
-  function getFirestore(app){
-    return firebase.firestore();
-  }
-
-  function doc(db, ...parts){
-    return db.doc(parts.join('/'));
-  }
-
-  function collection(db, ...parts){
-    return db.collection(parts.join('/'));
-  }
-
-  function setDoc(docRef, data, opts){
-    return docRef.set(data, opts || {});
-  }
-
-  function deleteDoc(docRef){
-    return docRef.delete();
-  }
-
-  async function getDoc(docRef){
-    const s = await docRef.get();
-    // compat snapshots have `exists` boolean; code expects exists() method.
-    if(typeof s.exists !== 'function'){
-      const ex = !!s.exists;
-      try{ s.exists = function(){ return ex; }; }catch(e){}
-    }
-    return s;
-  }
-
-  function getDocs(colRef){
-    return colRef.get();
-  }
-
-  function onSnapshot(ref, next, err){
-    return ref.onSnapshot(next, err);
-  }
-
-  function serverTimestamp(){
-    return firebase.firestore.FieldValue.serverTimestamp();
-  }
+  function getFirestore(app){ return firebase.firestore(); }
+  function doc(db, ...parts){ return db.doc(parts.join('/')); }
+  function collection(db, ...parts){ return db.collection(parts.join('/')); }
+  function setDoc(docRef, data, opts){ return docRef.set(data, opts || {}); }
+  function deleteDoc(docRef){ return docRef.delete(); }
+  function getDoc(docRef){ return docRef.get(); }
+  function getDocs(colRef){ return colRef.get(); }
+  function onSnapshot(ref, next, err){ return ref.onSnapshot(next, err); }
+  function serverTimestamp(){ return firebase.firestore.FieldValue.serverTimestamp(); }
 
 </script>
 <script>
@@ -3936,7 +3897,17 @@ function forceEnableClear(){
   window.addEventListener('online', ()=>{ if(inflight===0) setLed('connected'); });
   window.addEventListener('offline', ()=>{ setLed('offline'); });
 
-  // ====== INIT FIREBASE (NON BLOCCANTE) ======
+  
+  // ====== CLOUD READY GATE (prevenzione overwrite su avvio/refresh) ======
+  window.__cloudReady = false;
+  let __cloudTastingsReady = false;
+  let __cloudAnaReady = false;
+  function __markCloudReady(which){
+    if(which==='tastings') __cloudTastingsReady = true;
+    if(which==='anagrafiche') __cloudAnaReady = true;
+    if(__cloudTastingsReady && __cloudAnaReady) window.__cloudReady = true;
+  }
+// ====== INIT FIREBASE (NON BLOCCANTE) ======
   let db = null;
   try{
     const app = initializeApp(firebaseConfig);
@@ -4028,6 +3999,7 @@ const pushAnagrafiche = async () => {
   // Debounced sync scheduler (triggered by saveState())
   let syncTimer = null;
   window.cloudRequestSync = function(){
+    if(!window.__cloudReady) return;
     if(window.__cloudApplying) return;
     if(syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(runSync, 120);
@@ -4106,6 +4078,7 @@ const pushAnagrafiche = async () => {
   if(db){
     // TASTINGS
     onSnapshot(collection(db,'tastings'), (snap)=>{
+      __markCloudReady('tastings');
       window.__cloudApplying = true;
       try{
         const evalMap = new Map();
@@ -4146,11 +4119,13 @@ const pushAnagrafiche = async () => {
 
     // ANAGRAFICHE
     onSnapshot(doc(db,'global','anagrafiche'), (snap)=>{
+      __markCloudReady('anagrafiche');
       window.__cloudApplying = true;
       try{
         if(!snap.exists()){
           // bootstrap: create once using current in-memory defaults
           pushAnagrafiche();
+          __markCloudReady('anagrafiche');
           return;
         }
         const d = snap.data() || {};
