@@ -1237,6 +1237,28 @@ function forceEnableClear(){
       t.classList.add("show");
       setTimeout(()=>t.classList.remove("show"), 1600);
     }
+
+    // V23: bridge render scheduler for polling (exposed to module script)
+    window.scheduleRendersFromCloud = function(){
+      try{
+        const pid = document.querySelector('.page.active')?.id || '';
+        const active = (window.__lastUserInputTs && (Date.now()-window.__lastUserInputTs)<700);
+        if(active) return;
+
+        if(pid==='page-preparazione' && typeof renderPreparation==='function') renderPreparation();
+        if(pid==='page-archivio' && typeof renderArchive==='function') renderArchive();
+        if(pid==='page-anagrafiche' && typeof renderAnagrafiche==='function') renderAnagrafiche();
+        if(pid==='page-risultati'){
+          if(typeof renderResultsSelect==='function') renderResultsSelect();
+          if(typeof renderResultsTable==='function') renderResultsTable();
+        }
+        if(pid==='page-degustazione'){
+          if(typeof renderGrid==='function') renderGrid();
+          if(typeof updateDetail==='function') updateDetail();
+        }
+      }catch(e){}
+    };
+
     function parseIntSafe(v, def=0){
       const n = parseInt(String(v ?? "").trim(), 10);
       return Number.isFinite(n) ? n : def;
@@ -1377,6 +1399,18 @@ function forceEnableClear(){
     function saveState(opts){
   // Cloud-only: nessun salvataggio locale.
   const skipCloud = !!(opts && opts.skipCloud);
+
+      // V23: mark dirty so polling won't rollback local edits before upload completes
+      if(!skipCloud && !window.cloudApplying){
+        try{
+          const tid = state.currentTastingId;
+          const tId = (typeof currentTasterId==='function') ? currentTasterId() : null;
+          const sid = (typeof selectedSampleId!=='undefined') ? selectedSampleId : null;
+          if(window.__markDirty) window.__markDirty(tid, tId, sid);
+          const pid = document.querySelector('.page.active')?.id || '';
+          if(pid==='page-anagrafiche' && window.__markDirtyAnagrafiche) window.__markDirtyAnagrafiche();
+        }catch(e){}
+      }
   if(window.__cloudApplying || skipCloud) return;
   if(typeof window.cloudRequestSync === "function") window.cloudRequestSync();
 }
@@ -3882,7 +3916,7 @@ function forceEnableClear(){
     if(inflight===0) if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
   };
 
-  // ---------- V22: dirty + activity guards (no rollback during polling) ----------
+  // ---------- V23: dirty + activity guards (no rollback during polling) ----------
   window.__lastUserInputTs = Date.now();
   function __markUserActive(){ window.__lastUserInputTs = Date.now(); }
   ['pointerdown','keydown','input','wheel','touchstart'].forEach(ev=>{
@@ -3895,23 +3929,37 @@ function forceEnableClear(){
 
   window.__dirtyLocal = false;
   window.__dirtySince = 0;
-  window.__dirtyEvals = new Set(); // tid|tasterId|sampleId (opzionale)
+  window.__dirtyEvals = new Set();       // tid|tasterId|sampleId
+  window.__dirtyTastingIds = new Set();  // tid
+  window.__dirtyAnagrafiche = false;
 
   window.__markDirty = function(tid, tasterId, sampleId){
     window.__dirtyLocal = true;
     window.__dirtySince = Date.now();
+    try{ if(tid) window.__dirtyTastingIds.add(String(tid)); }catch(e){}
     try{
       if(tid && tasterId && sampleId){
         window.__dirtyEvals.add(String(tid)+'|'+String(tasterId)+'|'+String(sampleId));
       }
     }catch(e){}
   };
+
+  window.__markDirtyAnagrafiche = function(){
+    window.__dirtyLocal = true;
+    window.__dirtySince = Date.now();
+    window.__dirtyAnagrafiche = true;
+  };
+
   window.__clearDirty = function(){
     window.__dirtyLocal = false;
     window.__dirtySince = 0;
     try{ window.__dirtyEvals && window.__dirtyEvals.clear(); }catch(e){}
+    try{ window.__dirtyTastingIds && window.__dirtyTastingIds.clear(); }catch(e){}
+    window.__dirtyAnagrafiche = false;
   };
-  window.__cloudMayApply = function(graceMs=9000){
+
+  window.__cloudMayApply = function(graceMs=12000){
+    // Durante una finestra di grace dopo modifiche locali, il polling non deve sovrascrivere.
     return !(window.__dirtyLocal && (Date.now()-(window.__dirtySince||0)) < graceMs);
   };
 
@@ -3921,8 +3969,8 @@ function forceEnableClear(){
 
   
 
-  // ---------- Cloud polling mode (V22) ----------
-  // Polling ogni 3s + applicazione solo quando non ci sono modifiche locali recenti (evita reset UI).
+  // ---------- Cloud polling mode (V23) ----------
+  // Polling ogni 3s + merge (local wins) su evaluations, metadata tastings e anagrafiche.
   const __poll = { core:null, evalDeg:null, evalRes:null };
   const POLL_MS = 3000;
 
@@ -3931,21 +3979,102 @@ function forceEnableClear(){
     __poll[key] = null;
   }
 
+  function uniq(arr){
+    const a = Array.isArray(arr) ? arr : [];
+    return Array.from(new Set(a.map(x=>String(x)))).filter(Boolean);
+  }
+
+  function mergeArrayByKey(remoteArr, localArr, keyField){
+    remoteArr = Array.isArray(remoteArr) ? remoteArr : [];
+    localArr = Array.isArray(localArr) ? localArr : [];
+    const map = new Map();
+    remoteArr.forEach(x=>{ if(x && x[keyField]!=null) map.set(String(x[keyField]), x); });
+    localArr.forEach(x=>{ if(x && x[keyField]!=null) map.set(String(x[keyField]), x); }); // local wins
+    // Mantieni ordine remote, poi aggiungi eventuali local extra
+    const out = [];
+    const seen = new Set();
+    remoteArr.forEach(x=>{
+      const k = x && x[keyField]!=null ? String(x[keyField]) : null;
+      if(!k || seen.has(k)) return;
+      out.push(map.get(k));
+      seen.add(k);
+    });
+    localArr.forEach(x=>{
+      const k = x && x[keyField]!=null ? String(x[keyField]) : null;
+      if(!k || seen.has(k)) return;
+      out.push(map.get(k));
+      seen.add(k);
+    });
+    return out;
+  }
+
+  function mergeDescriptorsLocalWins(remote, local){
+    // struttura prevista: {vista:{white:[],red:[]}, olfatto:{...}, gusto:{...}}
+    remote = (remote && typeof remote==='object') ? remote : {};
+    local = (local && typeof local==='object') ? local : {};
+    const secs = ['vista','olfatto','gusto'];
+    const out = {};
+    secs.forEach(sec=>{
+      const r = remote[sec] || {};
+      const l = local[sec] || {};
+      out[sec] = {
+        white: uniq([...(r.white||[]), ...(l.white||[])]),
+        red: uniq([...(r.red||[]), ...(l.red||[])]),
+      };
+    });
+    return out;
+  }
+
+  function mergeEvalsLocalWins(remote, local){
+    remote = remote || {};
+    local = local || {};
+    Object.keys(local).forEach(ta=>{
+      if(!remote[ta]) remote[ta] = {};
+      Object.keys(local[ta]||{}).forEach(sa=>{
+        remote[ta][sa] = local[ta][sa];
+      });
+    });
+    return remote;
+  }
+
+  function mergeTastingMeta(remote, local, forceLocal){
+    // Forza local wins per il tasting se è dirty o siamo in grace window.
+    if(!local) return remote;
+    if(forceLocal) return { ...remote, ...local, id: remote.id };
+    return { ...remote, id: remote.id };
+  }
+
   async function pollTastingsOnce(){
     if(!db) return;
-    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
+    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(12000)){
+      // mentre siamo in grace window, non sovrascrivere metadata: lascia che l'upload faccia il suo
+      return;
+    }
     try{
       window.__cloudApplying = true;
-      const evalMap = new Map();
-      (state.tastings||[]).forEach(t=> evalMap.set(String(t.id), t.evaluations));
+
+      // preserva evaluations già in RAM
+      const localById = new Map((state.tastings||[]).map(t=>[String(t.id), t]));
 
       const snap = await getDocs(collection(db,'tastings'));
       const list = [];
       snap.forEach(ds=>{
         const d = ds.data() || {};
         const id = ds.id;
-        list.push({ ...d, id, evaluations: evalMap.get(String(id)) });
+        const local = localById.get(String(id));
+        const forceLocal = !!(window.__dirtyTastingIds && window.__dirtyTastingIds.has(String(id)));
+        const mergedMeta = mergeTastingMeta({ ...d, id, evaluations: local?.evaluations }, local, forceLocal);
+        // evaluations local sempre preservate
+        mergedMeta.evaluations = local?.evaluations || mergedMeta.evaluations;
+        list.push(mergedMeta);
       });
+
+      // Mantieni eventuali degustazioni locali non ancora presenti in remoto (create offline)
+      (state.tastings||[]).forEach(t=>{
+        const id = String(t.id);
+        if(!list.some(x=>String(x.id)===id)) list.push(t);
+      });
+
       list.sort((a,b)=> String(b.createdAt||'').localeCompare(String(a.createdAt||'')) );
       state.tastings = list;
 
@@ -3953,7 +4082,6 @@ function forceEnableClear(){
         state.currentTastingId = state.tastings[0]?.id || null;
       }
 
-      // Render solo se idle
       if(!isUserActive(700)){
         try{ window.scheduleRendersFromCloud && window.scheduleRendersFromCloud(); }catch(e){}
       }
@@ -3969,7 +4097,7 @@ function forceEnableClear(){
 
   async function pollAnagraficheOnce(){
     if(!db) return;
-    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
+    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(12000)) return;
     try{
       window.__cloudApplying = true;
       const snap = await getDoc(doc(db,'global','anagrafiche'));
@@ -3978,10 +4106,23 @@ function forceEnableClear(){
         return;
       }
       const d = snap.data() || {};
-      state.tasters = Array.isArray(d.tasters) ? d.tasters : state.tasters;
-      state.profiles = Array.isArray(d.profiles) ? d.profiles : state.profiles;
-      state.groups = Array.isArray(d.groups) ? d.groups : state.groups;
-      state.descriptors = Array.isArray(d.descriptors) ? d.descriptors : state.descriptors;
+
+      const remoteTasters = Array.isArray(d.tasters) ? d.tasters : [];
+      const remoteProfiles = Array.isArray(d.profiles) ? d.profiles : [];
+      const remoteGroups = Array.isArray(d.groups) ? d.groups : [];
+      const remoteDescriptors = (d.descriptors && typeof d.descriptors==='object') ? d.descriptors : null;
+
+      const localTasters = state.tasters;
+      const localProfiles = state.profiles;
+      const localGroups = state.groups;
+      const localDescriptors = state.descriptors;
+
+      const forceLocal = !!window.__dirtyAnagrafiche;
+
+      state.tasters = forceLocal ? mergeArrayByKey(remoteTasters, localTasters, 'id') : remoteTasters;
+      state.profiles = forceLocal ? mergeArrayByKey(remoteProfiles, localProfiles, 'key') : remoteProfiles;
+      state.groups = forceLocal ? mergeArrayByKey(remoteGroups, localGroups, 'key') : remoteGroups;
+      state.descriptors = forceLocal ? mergeDescriptorsLocalWins(remoteDescriptors, localDescriptors) : (remoteDescriptors || state.descriptors);
 
       if(!isUserActive(700)){
         try{ window.scheduleRendersFromCloud && window.scheduleRendersFromCloud(); }catch(e){}
@@ -4011,23 +4152,10 @@ function forceEnableClear(){
     return next;
   }
 
-  function mergeEvalsLocalWins(remote, local){
-    remote = remote || {};
-    local = local || {};
-    Object.keys(local).forEach(ta=>{
-      if(!remote[ta]) remote[ta] = {};
-      Object.keys(local[ta]||{}).forEach(sa=>{
-        remote[ta][sa] = local[ta][sa];
-      });
-    });
-    return remote;
-  }
-
   function startCloudPolling(){
     stopPoll('core');
     const tick = ()=>{
       if(isUserActive(900)) return;
-      if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
       pollAnagraficheOnce();
       pollTastingsOnce();
     };
@@ -4039,7 +4167,7 @@ function forceEnableClear(){
   try{
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
-    // V22: start polling after init
+    // V23: start polling after init
     try{ setTimeout(()=>{ try{ startCloudPolling(); }catch(e){} }, 800); }catch(e){}
   }catch(e){
     console.error('Firebase init error:', e);
@@ -4286,13 +4414,13 @@ const pushAnagrafiche = async () => {
     let unsubEval = null;
     function ensureEvalSub(tid){
 
-      // V22 polling (no realtime) - Confronto
+      // V23 polling (no realtime) - Confronto
       stopPoll('evalRes');
       if(!tid) return;
       const run = async ()=>{
         if(!db) return;
         if(isUserActive(900)) return;
-        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
+        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(12000)) return;
         try{
           window.__cloudApplying = true;
           const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
@@ -4318,13 +4446,13 @@ const pushAnagrafiche = async () => {
     let unsubEvalDeg = null;
     function ensureEvalSubDeg(tid){
 
-      // V22 polling (no realtime) - Degustazione
+      // V23 polling (no realtime) - Degustazione
       stopPoll('evalDeg');
       if(!tid) return;
       const run = async ()=>{
         if(!db) return;
         if(isUserActive(900)) return;
-        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
+        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(12000)) return;
         try{
           window.__cloudApplying = true;
           const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
@@ -4333,7 +4461,7 @@ const pushAnagrafiche = async () => {
           const local = t.evaluations || {};
           t.evaluations = mergeEvalsLocalWins(remote, local);
           if(!isUserActive(700)){
-            try{ if(getActivePageId && getActivePageId()==='page-degustazione'){ if(typeof renderGrid==='function') renderGrid(); if(typeof updateDetail==='function') updateDetail(); } }catch(e){}
+            try{ if(getActivePageId()==='page-degustazione'){ if(typeof renderGrid==='function') renderGrid(); if(typeof updateDetail==='function') updateDetail(); } }catch(e){}
           }
         } catch(e){
           console.error('poll evaluations degustazione error', e);
