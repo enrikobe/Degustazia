@@ -1496,8 +1496,9 @@ function cardDescriptorsHtml(ev){
       pushAll(ev.data.gusto?.desc);
       if(!a.length) return '';
       const shown = a.slice(0,6);
-      return `<div class="card-desc-row">` + shown.map(x=>`<span class="card-desc">${esc(x)}</span>`).join('') + `</div>`;
+      return `<div class="card-desc-row">` + shown.map((x,i)=>`<span class="card-desc">${esc(x)}</span>${i<shown.length-1?', ':''}`).join('') + `</div>`;
     }
+
 
     function recalc(){
       if(isArchived()) return;
@@ -3008,7 +3009,6 @@ function renderAnagrafiche(){
       saveState();
       renderArchive();
       toast("Degustazione duplicata (Bozza)");
-      // Porta l'utente alle Bozze per vederla subito
       try{ go('preparazione', document.getElementById('btnMenuPrep')); }catch(e){}
       try{ showPrepTab('bozze'); }catch(e){}
     }
@@ -3047,7 +3047,6 @@ function buildArchiveHaystack(t){
         if(tas){ parts.push(tas.name||""); parts.push(tas.email||""); }
       });
 
-      // Valutazioni: profilo/evoluzione/descrittori selezionati
       const evals = t.evaluations || {};
       Object.keys(evals).forEach(tasterId=>{
         const per = evals[tasterId] || {};
@@ -3922,11 +3921,6 @@ function forceEnableClear(){
   // Prevent echo loops
   window.__cloudApplying = false;
 
-  // Gate: evita di riscrivere sul cloud prima del primo sync iniziale
-  window.__cloudReady = false;
-  let _anaReady = false;
-  let _tastingsReady = false;
-
   // Cloud write helpers
     // Expose delete for UI without name collisions
   window.__deleteTastingCloud = async (id) => {
@@ -3984,14 +3978,12 @@ const pushAnagrafiche = async () => {
   let syncTimer = null;
   window.cloudRequestSync = function(){
     if(window.__cloudApplying) return;
-    if(!window.__cloudReady) return;
     if(syncTimer) clearTimeout(syncTimer);
     syncTimer = setTimeout(runSync, 120);
   };
 
   async function runSync(){
     if(!db) return;
-    if(!window.__cloudReady) return;
 
     // 1) Anagrafiche
     const anaObj = {
@@ -4077,23 +4069,6 @@ const pushAnagrafiche = async () => {
         list.sort((a,b)=>(String(b.createdAt||'')).localeCompare(String(a.createdAt||'')));
         state.tastings = list;
 
-        // Baseline hashes (tastings)
-        try{
-          const present = new Set();
-          for(const t of (state.tastings||[])){
-            const meta = JSON.parse(JSON.stringify(t));
-            delete meta.evaluations;
-            lastTastingHash.set(String(t.id), stableStringify(meta));
-            present.add(String(t.id));
-          }
-          for(const [tid] of list(lastTastingHash)){
-            if(!present.has(String(tid))) lastTastingHash.delete(String(tid));
-          }
-        }catch(e){}
-
-        _tastingsReady = true;
-        window.__cloudReady = (_tastingsReady && _anaReady);
-
         // Keep currentTastingId valid
         if(state.currentTastingId && !state.tastings.some(t=>String(t.id)===String(state.currentTastingId))){
           state.currentTastingId = state.tastings[0]?.id || null;
@@ -4104,7 +4079,6 @@ const pushAnagrafiche = async () => {
         if(typeof renderArchive==='function') renderArchive();
         if(typeof renderResultsSelect==='function') renderResultsSelect();
 
-        // Se la pagina degustazione è aperta, aggiorna la UI con i dati appena arrivati (sync istantaneo)
         try{
           const page = document.querySelector('.page.active')?.id || '';
           if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage();
@@ -4113,11 +4087,6 @@ const pushAnagrafiche = async () => {
         if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
       } finally {
         window.__cloudApplying = false;
-
-  // Gate: evita di riscrivere sul cloud prima del primo sync iniziale
-  window.__cloudReady = false;
-  let _anaReady = false;
-  let _tastingsReady = false;
       }
     }, (err)=>{
       console.error('tastings snapshot error', err);
@@ -4128,12 +4097,9 @@ const pushAnagrafiche = async () => {
     onSnapshot(doc(db,'global','anagrafiche'), (snap)=>{
       window.__cloudApplying = true;
       try{
-        if(!snap.exists()) {
-          // bootstrap: crea una volta usando i default in memoria
+        if(!snap.exists()){
+          // bootstrap: create once using current in-memory defaults
           pushAnagrafiche();
-          _anaReady = true;
-          window.__cloudReady = (_tastingsReady && _anaReady);
-          if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
           return;
         }
         const d = snap.data() || {};
@@ -4142,32 +4108,18 @@ const pushAnagrafiche = async () => {
         state.groups = Array.isArray(d.groups) ? d.groups : state.groups;
         state.descriptors = Array.isArray(d.descriptors) ? d.descriptors : state.descriptors;
 
-        try{
-          const anaObj = { tasters: state.tasters||[], profiles: state.profiles||[], groups: state.groups||[], descriptors: state.descriptors||[] };
-          lastAnaHash = stableStringify(anaObj);
-        }catch(e){}
+        if(typeof renderAnagrafiche==='function') renderAnagrafiche();
+        if(typeof renderPreparation==='function') renderPreparation();
+        if(typeof renderResultsTable==='function') renderResultsTable();
 
-        _anaReady = true;
-        window.__cloudReady = (_tastingsReady && _anaReady);
-
-        // Se una degustazione è aperta, aggiorna subito le opzioni (sync istantaneo)
         try{
           const page = document.querySelector('.page.active')?.id || '';
           if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage();
         }catch(e){}
 
-        if(typeof renderAnagrafiche==='function') renderAnagrafiche();
-        if(typeof renderPreparation==='function') renderPreparation();
-        if(typeof renderResultsTable==='function') renderResultsTable();
-
         if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
       } finally {
         window.__cloudApplying = false;
-
-  // Gate: evita di riscrivere sul cloud prima del primo sync iniziale
-  window.__cloudReady = false;
-  let _anaReady = false;
-  let _tastingsReady = false;
       }
     }, (err)=>{
       console.error('anagrafiche snapshot error', err);
@@ -4194,14 +4146,14 @@ const pushAnagrafiche = async () => {
             t.evaluations[ta][sa] = ev;
           });
           if(typeof renderResultsTable==='function') renderResultsTable();
+
+        try{
+          const page = document.querySelector('.page.active')?.id || '';
+          if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage();
+        }catch(e){}
           if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
         } finally {
           window.__cloudApplying = false;
-
-  // Gate: evita di riscrivere sul cloud prima del primo sync iniziale
-  window.__cloudReady = false;
-  let _anaReady = false;
-  let _tastingsReady = false;
         }
       }, (err)=>{
         console.error('evaluations snapshot error', err);
@@ -4227,7 +4179,6 @@ const pushAnagrafiche = async () => {
             const sa = String(ev.sampleId);
             if(!next[ta]) next[ta] = {};
             next[ta][sa] = ev;
-            try{ lastEvalHash.set(`${String(tid)}|${ta}|${sa}`, stableStringify(ev)); }catch(e){}
           });
           t.evaluations = next;
           if(typeof renderGrid==='function') renderGrid();
