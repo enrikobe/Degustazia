@@ -1149,9 +1149,8 @@ function forceEnableClear(){
        <input id="editEntityName" class="input" style="text-align:center" />
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-  <input id="editEntityColor" type="color"
-    style="width:56px;height:56px;cursor:pointer;border:none;background:transparent;padding:0;border-radius:50%;overflow:hidden;" />
-</div>
+          <input id="editEntityColor" type="color" style="width:64px;height:64px;cursor:pointer;border:none;background:transparent;padding:0;border-radius:50%;overflow:hidden;" oninput="document.getElementById('colorPreview').style.background = this.value" onchange="document.getElementById('colorPreview').style.background = this.value" />
+       </div>
 <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
           <button class="btn" style="background:var(--rosso); border-color:var(--rosso); color:#fff;" onclick="deleteEditEntity()">Elimina</button>
@@ -1452,6 +1451,14 @@ function forceEnableClear(){
       return t.products.find(p=>String(p.id)===String(pid)) || null;
     }
 
+    function getTasterUI(tasterId){
+      if(!tasterId) return { filterProfile:'tutti', filterGroup:'tutti', sort:'custom' };
+      if(!state.ui.tasters) state.ui.tasters = {};
+      const tid = String(tasterId);
+      if(!state.ui.tasters[tid]) state.ui.tasters[tid] = { filterProfile:'tutti', filterGroup:'tutti', sort:'custom' };
+      return state.ui.tasters[tid];
+    }
+
     function getEval(tasting, tasterId, sampleId){
       tasting.evaluations = tasting.evaluations || {};
       tasting.evaluations[tasterId] = tasting.evaluations[tasterId] || {};
@@ -1667,24 +1674,36 @@ function cardDescriptorsHtml(ev){
     }
 
     function eligibleForReorder(){
-      return state.ui.sort==="custom" && state.ui.filterProfile==="tutti" && state.ui.filterGroup==="tutti";
+      const tId = currentTasterId();
+      if(!tId) return false;
+      const ui = getTasterUI(tId);
+      return ui.sort==="custom" && ui.filterProfile==="tutti" && ui.filterGroup==="tutti";
     }
     function setFilterProfile(profileKey, btnEl){
-      state.ui.filterProfile = profileKey;
+      const tId = currentTasterId();
+      if(!tId) return;
+      const ui = getTasterUI(tId);
+      ui.filterProfile = profileKey;
       saveState();
       document.querySelectorAll("#profileFilterBtns .filter-btn").forEach(b=>b.classList.remove("active"));
       btnEl?.classList.add("active");
       renderGrid(); updateDetail();
     }
     function setFilterGroup(groupKey, btnEl){
-      state.ui.filterGroup = groupKey;
+      const tId = currentTasterId();
+      if(!tId) return;
+      const ui = getTasterUI(tId);
+      ui.filterGroup = groupKey;
       saveState();
       document.querySelectorAll("#groupFilterBtns .filter-btn").forEach(b=>b.classList.remove("active"));
       btnEl?.classList.add("active");
       renderGrid(); updateDetail();
     }
     function setSort(kind, btnEl){
-      state.ui.sort = kind;
+      const tId = currentTasterId();
+      if(!tId) return;
+      const ui = getTasterUI(tId);
+      ui.sort = kind;
       saveState();
       document.querySelectorAll("#sortBtnsWrap .sort-btn").forEach(b=>b.classList.remove("active"));
       btnEl?.classList.add("active");
@@ -1693,14 +1712,18 @@ function cardDescriptorsHtml(ev){
     function renderSortButtons(){
       const wrap = document.getElementById("sortBtnsWrap");
       if(!wrap) return;
-      const current = state.ui.sort || "custom";
+      const tId = currentTasterId();
+      const ui = tId ? getTasterUI(tId) : { sort: 'custom' };
+      const current = ui.sort || "custom";
       const btn=(key,label)=>`<button class="sort-btn ${current===key?"active":""}" onclick="setSort('${esc(key)}', this)">${esc(label)}</button>`;
       wrap.innerHTML = btn("custom","Ordine") + btn("group","Gruppo") + btn("profile","Profilo") + btn("evolution","Evoluzione") + btn("reset","Reset");
     }
     function renderProfileFilterBtns(){
       const wrap = document.getElementById("profileFilterBtns");
       if(!wrap) return;
-      const current = state.ui.filterProfile || "tutti";
+      const tId = currentTasterId();
+      const ui = tId ? getTasterUI(tId) : { filterProfile: 'tutti' };
+      const current = ui.filterProfile || "tutti";
       const btn=(key,label)=>`<button class="filter-btn ${current===key?"active":""}" onclick="setFilterProfile('${esc(key)}', this)">${esc(label)}</button>`;
       let html = btn("tutti","Tutti");
       state.profiles.forEach(p=> html += btn(p.key, p.label));
@@ -1711,7 +1734,9 @@ function cardDescriptorsHtml(ev){
       const t = getTasting();
       if(!wrap) return;
       const groups = t ? groupsForTasting(t) : state.groups;
-      const current = state.ui.filterGroup || "tutti";
+      const tId = currentTasterId();
+      const ui = tId ? getTasterUI(tId) : { filterGroup: 'tutti' };
+      const current = ui.filterGroup || "tutti";
       const btn=(key,label)=>`<button class="filter-btn ${current===key?"active":""}" onclick="setFilterGroup('${esc(key)}', this)">${esc(label)}</button>`;
       let html = btn("tutti","Tutti");
       groups.forEach(g=> html += btn(g.key, g.label));
@@ -2027,10 +2052,11 @@ function renderProductsStrip(){
       if(!grid) return;
       if(!t){ grid.innerHTML=""; return; }
       const tId = currentTasterId();
-      const filterProfile = state.ui.filterProfile || "tutti";
-      const filterGroup = state.ui.filterGroup || "tutti";
+      const ui = tId ? getTasterUI(tId) : { filterProfile:'tutti', filterGroup:'tutti', sort:'custom' };
+      const filterProfile = ui.filterProfile || "tutti";
+      const filterGroup = ui.filterGroup || "tutti";
       let list = t.samples.slice();
-      if(state.ui.sort === 'custom') {
+      if(ui.sort === 'custom') {
          if(tId) {
             const ord = getSampleOrder(t, tId);
             if(ord && Array.isArray(ord)) {
@@ -2038,15 +2064,15 @@ function renderProductsStrip(){
                list.sort((a,b) => (map[String(a.id)]??9999) - (map[String(b.id)]??9999));
             }
          }
-      } else if(state.ui.sort === "group"){
+      } else if(ui.sort === "group"){
         const ord={}; groupsForTasting(t).forEach((g,i)=>ord[g.key]=i+1);
         list.sort((a,b)=> (ord[a.groupKey]??9999) - (ord[b.groupKey]??9999) || cmpSampleId(a.id,b.id));
-      } else if(state.ui.sort === "profile" && tId){
+      } else if(ui.sort === "profile" && tId){
         const ord={}; profilesForTasting(t).forEach((p,i)=>ord[p.key]=i+1);
         list.sort((a,b)=>{ const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id); return (ord[ea.profileKey]??9999) - (ord[eb.profileKey]??9999) || cmpSampleId(a.id,b.id); });
-      } else if(state.ui.sort === "evolution" && tId){
+      } else if(ui.sort === "evolution" && tId){
         list.sort((a,b)=>{ const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id); return (eb.evolution||0)-(ea.evolution||0) || cmpSampleId(a.id,b.id); });
-      } else if(state.ui.sort === "reset"){
+      } else if(ui.sort === "reset"){
         list.sort((a,b)=>cmpSampleId(a.id,b.id));
       }
       if(filterGroup!=="tutti") list = list.filter(s=>String(s.groupKey)===String(filterGroup));
@@ -2764,12 +2790,13 @@ function renderProductsStrip(){
       go("archivio", document.getElementById("btnMenuArc"));
     }
 
-    function resetDemo(){
+    async function resetDemo(){
       const d = demoTasting();
       d.id = uid();
       d.title += " (Copia)";
       state.tastings.unshift(d);
       saveState();
+      try{ if(typeof pushTastingMeta === 'function') await pushTastingMeta(d); }catch(e){ console.error('push demo error', e); }
       renderPreparation();
       toast("Nuova demo aggiunta!");
     }
@@ -2857,14 +2884,16 @@ function renderAnagrafiche(){
                   <div class="desc-col-title">Bianchi</div>
                   <div class="desc-list">${(state.descriptors[sec].white||[]).map(x=>`<div class="desc-pill" onclick="removeDesc('${sec}','white','${esc(x)}')">${esc(x)} ✕</div>`).join("")}</div>
                   <div style="margin-top:6px;display:flex;gap:6px;">
-                    <input class="input" style="padding:4px 8px;font-size:12px;" placeholder="Nuovo..." onkeydown="if(event.key==='Enter') addDesc('${sec}','white',this.value,this)" />
+                    <input id="desc_${sec}_white" class="input" style="padding:4px 8px;font-size:12px;flex:1;" placeholder="Nuovo..." onkeydown="if(event.key==='Enter') addDesc('${sec}','white',this.value,this)" />
+                    <button class="btn" style="padding:4px 8px;font-size:11px;" onclick="addDesc('${sec}','white',document.getElementById('desc_${sec}_white').value); document.getElementById('desc_${sec}_white').value='';">Aggiungi</button>
                   </div>
                 </div>
                 <div>
                   <div class="desc-col-title">Rossi</div>
                   <div class="desc-list">${(state.descriptors[sec].red||[]).map(x=>`<div class="desc-pill" onclick="removeDesc('${sec}','red','${esc(x)}')">${esc(x)} ✕</div>`).join("")}</div>
                   <div style="margin-top:6px;display:flex;gap:6px;">
-                    <input class="input" style="padding:4px 8px;font-size:12px;" placeholder="Nuovo..." onkeydown="if(event.key==='Enter') addDesc('${sec}','red',this.value,this)" />
+                    <input id="desc_${sec}_red" class="input" style="padding:4px 8px;font-size:12px;flex:1;" placeholder="Nuovo..." onkeydown="if(event.key==='Enter') addDesc('${sec}','red',this.value,this)" />
+                    <button class="btn" style="padding:4px 8px;font-size:11px;" onclick="addDesc('${sec}','red',document.getElementById('desc_${sec}_red').value); document.getElementById('desc_${sec}_red').value='';">Aggiungi</button>
                   </div>
                 </div>
               </div>
@@ -2922,9 +2951,10 @@ function renderAnagrafiche(){
       btn.classList.add("active");
     }
 
-    function addDesc(sec, col, val){
+    function addDesc(sec, col, val, inputEl){
     if(!val) return;
     val = val.trim();
+    if(!val) return;
     if(!state.descriptors) state.descriptors = { vista:{white:[],red:[]}, olfatto:{white:[],red:[]}, gusto:{white:[],red:[]} };
     if(!state.descriptors[sec]) state.descriptors[sec] = {white:[],red:[]};
     if(!state.descriptors[sec][col]) state.descriptors[sec][col] = [];
@@ -2933,9 +2963,11 @@ function renderAnagrafiche(){
     if(!list.includes(val)){
         list.push(val);
         saveState();
-        renderDescriptors();
+        renderAnagrafiche();
+        renderDescriptorPickers();
         toast("Descrittore aggiunto");
     }
+    if(inputEl) inputEl.value = '';
 }
     function removeDesc(sec, type, val){
       if(!confirm("Eliminare descrittore?")) return;
@@ -3009,7 +3041,7 @@ function renderAnagrafiche(){
       go("preparazione", document.getElementById("btnMenuPrep")); renderPreparation();
       setTimeout(()=>openEditModal(id), 100);
     }
-    function copyTasting(id){
+    async function copyTasting(id){
       const t = state.tastings.find(x=>x.id===id);
       if(!t) return;
       if(!confirm("Duplicare questa degustazione?")) return;
@@ -3022,6 +3054,7 @@ function renderAnagrafiche(){
       newT.blindMap = clone(t.blindMap || {});
       state.tastings.unshift(newT);
       saveState();
+      try{ if(typeof pushTastingMeta === 'function') await pushTastingMeta(newT); }catch(e){ console.error('push copia error', e); }
       renderArchive();
       toast("Degustazione duplicata (Bozza)");
       try{ go('preparazione', document.getElementById('btnMenuPrep')); }catch(e){}
@@ -3700,7 +3733,6 @@ function openGroupEditModal(key){
     const inp = document.getElementById("editEntityName");
     inp.value = g.label;
     document.getElementById("editEntityColor").value = "#" + g.color;
-    document.getElementById("colorPreview").style.background = "#" + g.color;
     document.getElementById("editEntityModal").style.display = "flex";
     setTimeout(()=>inp.select(), 50);
 }
@@ -3713,15 +3745,8 @@ function openProfileEditModal(key){
     const inp = document.getElementById("editEntityName");
     inp.value = p.label;
     document.getElementById("editEntityColor").value = "#" + p.color;
-    document.getElementById("colorPreview").style.background = "#" + p.color;
     document.getElementById("editEntityModal").style.display = "flex";
     setTimeout(()=>inp.select(), 50);
-}
-function openColorPicker(){
-  const el = document.getElementById('editEntityColor');
-  if(!el) return;
-  try{ if(typeof el.showPicker === 'function') { el.showPicker(); return; } }catch(e){}
-  try{ el.click(); }catch(e){}
 }
 
 function closeEditEntityModal(){ document.getElementById("editEntityModal").style.display = "none"; currentEditEntity = null; }
@@ -4580,8 +4605,7 @@ window.toggleBlindProduct = async function(pid){
        <input id="editEntityName" class="input" style="text-align:center" />
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-          <input id="editEntityColor" type="color" style="width:64px;height:44px;cursor:pointer;border:none;background:transparent;" oninput="document.getElementById('colorPreview').style.background = this.value" onchange="document.getElementById('colorPreview').style.background = this.value" />
-          <div id="colorPreview" onclick="openColorPicker()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
+          <input id="editEntityColor" type="color" style="width:80px;height:80px;cursor:pointer;border:2px solid #ddd;border-radius:50%;overflow:hidden;" />
        </div>
        <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
