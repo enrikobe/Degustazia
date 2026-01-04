@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
+  <link rel="icon" href="data:,">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
@@ -666,7 +667,7 @@ function forceEnableClear(){
                 <h2 id="detailName">Seleziona un campione</h2>
                 <p id="detailSub">-</p>
               </div>
-<!-- Evoluzione (big picker) rimossa: evoluzione gestita solo dalle card campioni -->
+<!-- Evoluzione big picker rimossa: evoluzione gestita solo nelle card -->
             </div>
             <div class="nav-buttons">
               <button class="btn" onclick="navSample(-1)">◀</button>
@@ -1080,7 +1081,8 @@ function forceEnableClear(){
       const win = window.open('','_blank');
       if(!win) { toast("Popup bloccato"); return; }
 
-      let h = `<html><head><title>Stampa Degustazione</title>
+      let h = `<html><head>
+  <link rel="icon" href="data:,"><title>Stampa Degustazione</title>
       <style>
         @page{size:A4; margin:12mm;}
         body{font-family:sans-serif; padding:20px; font-size:12px;}
@@ -3971,6 +3973,8 @@ const pushAnagrafiche = async () => {
     if(!db || !t || !t.id) return;
     const payload = JSON.parse(JSON.stringify(t));
     delete payload.evaluations;
+    // blindMap viene sincronizzato su canale separato
+    try{ delete payload.blindMap; }catch(e){}
     payload.updatedAt = new Date().toISOString();
     beginWrite();
     try{ await setDoc(doc(db,'tastings', String(t.id)), payload, {merge:true}); }
@@ -3987,6 +3991,8 @@ const pushAnagrafiche = async () => {
   const pushEvalDoc = async (tid, tasterId, sampleId, ev) => {
     if(!db || !tid || !tasterId || !sampleId) return;
     const payload = JSON.parse(JSON.stringify(ev || {}));
+    // Non sincronizzare il canvas dentro le evaluation (troppo pesante e causa refresh UI continui)
+    try{ if(payload && payload.data && payload.data.vista) delete payload.data.vista.canvas; }catch(e){}
     payload.tastingId = String(tid);
     payload.tasterId = Number(tasterId);
     payload.sampleId = String(sampleId);
@@ -3996,7 +4002,133 @@ const pushAnagrafiche = async () => {
     finally{ endWrite(); }
   };
 
-  // Debounced sync scheduler (triggered by saveState())
+  
+
+  // ====== ISOLATED CANVAS SYNC (non realtime UI refresh) ======
+  let __canvasSyncTimer = null;
+  let __canvasDirtyUntil = 0;
+
+  const queueCanvasSync = (tid, tasterId, sampleId, dataUrl) => {
+    if(!db || !tid || !tasterId || !sampleId) return;
+    __canvasDirtyUntil = Date.now() + 1500;
+    if(__canvasSyncTimer) clearTimeout(__canvasSyncTimer);
+    __canvasSyncTimer = setTimeout(async ()=>{
+      const payload = {
+        tastingId: String(tid),
+        tasterId: Number(tasterId),
+        sampleId: String(sampleId),
+        dataUrl: dataUrl || null,
+        updatedAt: new Date().toISOString()
+      };
+      beginWrite();
+      try{
+        await setDoc(doc(db,'tastings', String(tid), 'canvases', String(tasterId) + '_' + String(sampleId)), payload, {merge:true});
+      } finally { endWrite(); }
+    }, 700);
+  };
+  window.queueCanvasSync = queueCanvasSync;
+
+  let unsubCanvasDeg = null;
+  function ensureCanvasSubDeg(tid){
+    if(unsubCanvasDeg){ unsubCanvasDeg(); unsubCanvasDeg=null; }
+    if(!db || !tid) return;
+    unsubCanvasDeg = onSnapshot(collection(db,'tastings', String(tid), 'canvases'), (snap)=>{
+      const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+      if(!t) return;
+      snap.forEach(ds=>{
+        const d = ds.data() || {};
+        const key = ds.id;
+        const parts = String(key).split('_');
+        const ta = parts[0];
+        const sa = parts.slice(1).join('_');
+        if(!ta || !sa) return;
+
+        try{
+          if(Date.now() < __canvasDirtyUntil && String(ta)===String(currentTasterId()) && String(sa)===String(selectedSampleId)) return;
+        }catch(e){}
+
+        if(!t.evaluations) t.evaluations = {};
+        if(!t.evaluations[String(ta)]) t.evaluations[String(ta)] = {};
+        if(!t.evaluations[String(ta)][String(sa)]) t.evaluations[String(ta)][String(sa)] = blankEval();
+        const ev = t.evaluations[String(ta)][String(sa)];
+        if(!ev.data) ev.data = blankEval().data;
+        if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
+        ev.data.vista.canvas = d.dataUrl || null;
+
+        try{
+          if(String(ta)===String(currentTasterId()) && String(sa)===String(selectedSampleId)){
+            loadCanvasFromEval();
+          }
+        }catch(e){}
+      });
+    }, (err)=>{ console.error('canvases snapshot error (degustazione)', err); });
+  }
+
+  // ====== ISOLATED BLIND TAG SYNC ======
+  const queueBlindSync = async (tid, sampleId, productIdOrNull) => {
+    if(!db || !tid || !sampleId) return;
+    const payload = {
+      tastingId: String(tid),
+      sampleId: String(sampleId),
+      productId: productIdOrNull ? String(productIdOrNull) : null,
+      updatedAt: new Date().toISOString()
+    };
+    beginWrite();
+    try{ await setDoc(doc(db,'tastings', String(tid), 'blind', String(sampleId)), payload, {merge:true}); }
+    finally{ endWrite(); }
+  };
+  window.queueBlindSync = queueBlindSync;
+
+  const updateBlindCardTag = (sampleId) => {
+    const sid = String(sampleId||'');
+    // usa apici singoli nell'attributo CSS per evitare escape in JS
+    const selector = ".sample-card[data-sampleid='" + safeCssEscape(sid) + "']";
+    const card = document.querySelector(selector);
+    if(!card) return;
+    const t = getTasting();
+    if(!t || t.mode!=='cieca') return;
+    const row = card.querySelector('.chips-row');
+    if(!row) return;
+    row.querySelectorAll('.blind-assigned').forEach(n=>n.remove());
+    const pid = t.blindMap ? t.blindMap[sid] : null;
+    if(!pid) return;
+    const p = productById(t, pid);
+    const pc = p ? cols4(p.cols) : ['Prodotto?','','',''];
+    const pm = (pc[0] && pc[1]) ? pc[1] : pc[0];
+    const tag = document.createElement('span');
+    tag.className = 'pchip blind-assigned';
+    tag.dataset.sid = sid;
+    tag.textContent = pm;
+    tag.style.cssText = 'font-size:10px;padding:2px 6px;margin:2px 0;margin-right:auto;display:inline-block;width:auto;background:#444;color:#fff;border:1px solid #333;box-shadow:0 1px 2px rgba(0,0,0,0.2);cursor:pointer;';
+    row.appendChild(tag);
+    tag.addEventListener('click', (e)=>{ e.stopPropagation(); try{ window.dissociateBlindSample(sid); }catch(_){} });
+  };
+
+  let unsubBlindDeg = null;
+  function ensureBlindSubDeg(tid){
+    if(unsubBlindDeg){ unsubBlindDeg(); unsubBlindDeg=null; }
+    if(!db || !tid) return;
+    unsubBlindDeg = onSnapshot(collection(db,'tastings', String(tid), 'blind'), (snap)=>{
+      const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+      if(!t) return;
+      const next = {};
+      snap.forEach(ds=>{
+        const d = ds.data() || {};
+        const sid = String(d.sampleId || ds.id);
+        if(!sid) return;
+        if(d.productId) next[sid] = String(d.productId);
+      });
+      t.blindMap = next;
+      try{ renderProductsStrip(); }catch(e){}
+      Object.keys(next).forEach(sid=>{ try{ updateBlindCardTag(sid); }catch(e){} });
+      document.querySelectorAll('.sample-card .blind-assigned').forEach(tag=>{
+        const sid = tag.dataset.sid;
+        if(sid && !next[sid]) tag.remove();
+      });
+    }, (err)=>{ console.error('blind snapshot error (degustazione)', err); });
+  }
+
+// Debounced sync scheduler (triggered by saveState())
   let syncTimer = null;
   window.cloudRequestSync = function(){
     if(!window.__cloudReady) return;
@@ -4087,6 +4219,8 @@ const pushAnagrafiche = async () => {
         const list = [];
         snap.forEach(ds=>{
           const d = ds.data() || {};
+          // blindMap viene gestito da canale separato
+          try{ delete d.blindMap; }catch(e){}
           const id = ds.id;
           list.push({ ...d, id, evaluations: evalMap.get(String(id)) || {} });
         });
@@ -4165,6 +4299,8 @@ const pushAnagrafiche = async () => {
           t.evaluations = t.evaluations || {};
           snap.forEach(ds=>{
             const ev = ds.data() || {};
+            // Ignora canvas legacy su evaluation; il canvas viaggia su canale separato
+            try{ if(ev && ev.data && ev.data.vista) delete ev.data.vista.canvas; }catch(e){}
             if(!ev.tasterId || !ev.sampleId) return;
             const ta = String(ev.tasterId);
             const sa = String(ev.sampleId);
@@ -4223,6 +4359,8 @@ const pushAnagrafiche = async () => {
       window.renderTastingPage = function(){
         const r = origRenderTastingPage.apply(this, arguments);
         try{ ensureEvalSubDeg(state.currentTastingId); }catch(e){}
+        try{ ensureCanvasSubDeg(state.currentTastingId); }catch(e){}
+        try{ ensureBlindSubDeg(state.currentTastingId); }catch(e){}
         return r;
       };
     }
@@ -4291,10 +4429,12 @@ window.toggleBlindProduct = function(pid){
        } else {
            if(!selectedSampleId){ toast("Seleziona un campione"); return; }
            t.blindMap[String(selectedSampleId)] = sPid;
-           toast("Assegnato");
+       toast(\"Assegnato\");
        }
-       saveState();
-       renderProductsStrip(); renderGrid(); updateDetail();
+       saveState({skipCloud:true});
+       try{ window.queueBlindSync && window.queueBlindSync(t.id, String(selectedSampleId), sPid); }catch(e){}
+       try{ updateBlindCardTag(String(selectedSampleId)); }catch(e){}
+       renderProductsStrip(); updateDetail();
     };
 function forceEnableClear(){
     const clrBtns = document.querySelectorAll("button");
