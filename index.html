@@ -1149,9 +1149,9 @@ function forceEnableClear(){
        <input id="editEntityName" class="input" style="text-align:center" />
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-          <input id="editEntityColor" type="color" style="width:64px;height:64px;cursor:pointer;border:none;background:transparent;padding:0;border-radius:50%;overflow:hidden;" oninput="document.getElementById('colorPreview').style.background = this.value" onchange="document.getElementById('colorPreview').style.background = this.value" />
+          <input id="editEntityColor" type="color" style="width:50px;height:50px;cursor:pointer;border:2px solid #ddd;border-radius:50%;overflow:hidden;" />
        </div>
-<div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
+       <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
           <button class="btn" style="background:var(--rosso); border-color:var(--rosso); color:#fff;" onclick="deleteEditEntity()">Elimina</button>
           <button class="btn primary" onclick="saveEditEntity()">Salva</button>
@@ -1674,36 +1674,24 @@ function cardDescriptorsHtml(ev){
     }
 
     function eligibleForReorder(){
-      const tId = currentTasterId();
-      if(!tId) return false;
-      const ui = getTasterUI(tId);
-      return ui.sort==="custom" && ui.filterProfile==="tutti" && ui.filterGroup==="tutti";
+      const tId = currentTasterId(); if(!tId) return false; const ui = getTasterUI(tId); return ui.sort==="custom" && ui.filterProfile==="tutti" && ui.filterGroup==="tutti";
     }
     function setFilterProfile(profileKey, btnEl){
-      const tId = currentTasterId();
-      if(!tId) return;
-      const ui = getTasterUI(tId);
-      ui.filterProfile = profileKey;
+      const tId = currentTasterId(); if(!tId) return; const ui = getTasterUI(tId); ui.filterProfile = profileKey;
       saveState();
       document.querySelectorAll("#profileFilterBtns .filter-btn").forEach(b=>b.classList.remove("active"));
       btnEl?.classList.add("active");
       renderGrid(); updateDetail();
     }
     function setFilterGroup(groupKey, btnEl){
-      const tId = currentTasterId();
-      if(!tId) return;
-      const ui = getTasterUI(tId);
-      ui.filterGroup = groupKey;
+      const tId = currentTasterId(); if(!tId) return; const ui = getTasterUI(tId); ui.filterGroup = groupKey;
       saveState();
       document.querySelectorAll("#groupFilterBtns .filter-btn").forEach(b=>b.classList.remove("active"));
       btnEl?.classList.add("active");
       renderGrid(); updateDetail();
     }
     function setSort(kind, btnEl){
-      const tId = currentTasterId();
-      if(!tId) return;
-      const ui = getTasterUI(tId);
-      ui.sort = kind;
+      const tId = currentTasterId(); if(!tId) return; const ui = getTasterUI(tId); ui.sort = kind;
       saveState();
       document.querySelectorAll("#sortBtnsWrap .sort-btn").forEach(b=>b.classList.remove("active"));
       btnEl?.classList.add("active");
@@ -1712,18 +1700,14 @@ function cardDescriptorsHtml(ev){
     function renderSortButtons(){
       const wrap = document.getElementById("sortBtnsWrap");
       if(!wrap) return;
-      const tId = currentTasterId();
-      const ui = tId ? getTasterUI(tId) : { sort: 'custom' };
-      const current = ui.sort || "custom";
+      const tId = currentTasterId(); const ui = tId ? getTasterUI(tId) : { sort: 'custom' }; const current = ui.sort || "custom";
       const btn=(key,label)=>`<button class="sort-btn ${current===key?"active":""}" onclick="setSort('${esc(key)}', this)">${esc(label)}</button>`;
       wrap.innerHTML = btn("custom","Ordine") + btn("group","Gruppo") + btn("profile","Profilo") + btn("evolution","Evoluzione") + btn("reset","Reset");
     }
     function renderProfileFilterBtns(){
       const wrap = document.getElementById("profileFilterBtns");
       if(!wrap) return;
-      const tId = currentTasterId();
-      const ui = tId ? getTasterUI(tId) : { filterProfile: 'tutti' };
-      const current = ui.filterProfile || "tutti";
+      const tId = currentTasterId(); const ui = tId ? getTasterUI(tId) : { filterProfile: 'tutti' }; const current = ui.filterProfile || "tutti";
       const btn=(key,label)=>`<button class="filter-btn ${current===key?"active":""}" onclick="setFilterProfile('${esc(key)}', this)">${esc(label)}</button>`;
       let html = btn("tutti","Tutti");
       state.profiles.forEach(p=> html += btn(p.key, p.label));
@@ -1734,9 +1718,7 @@ function cardDescriptorsHtml(ev){
       const t = getTasting();
       if(!wrap) return;
       const groups = t ? groupsForTasting(t) : state.groups;
-      const tId = currentTasterId();
-      const ui = tId ? getTasterUI(tId) : { filterGroup: 'tutti' };
-      const current = ui.filterGroup || "tutti";
+      const tId = currentTasterId(); const ui = tId ? getTasterUI(tId) : { filterGroup: 'tutti' }; const current = ui.filterGroup || "tutti";
       const btn=(key,label)=>`<button class="filter-btn ${current===key?"active":""}" onclick="setFilterGroup('${esc(key)}', this)">${esc(label)}</button>`;
       let html = btn("tutti","Tutti");
       groups.forEach(g=> html += btn(g.key, g.label));
@@ -1747,21 +1729,36 @@ function cardDescriptorsHtml(ev){
       const wrap = document.getElementById("profileOptions");
       if(!wrap || wrap.dataset.lpAttached) return;
       wrap.dataset.lpAttached = "1";
-      let timer = null; let activeEl = null;
-      wrap.addEventListener("pointerdown", (e)=>{
-          const el = e.target.closest(".profile-option");
-          if(!el || el.innerText.includes("Nuovo")) return;
-          activeEl = el;
-          timer = setTimeout(()=>{
-             if(!activeEl) return;
-             const key = activeEl.dataset.profile;
-             try{ activeEl.releasePointerCapture(e.pointerId); }catch(e){}
-             activeEl = null;
+
+      let timer = null;
+      const start = (el) => {
+         if(!el || el.innerText.includes("Nuovo")) return;
+         timer = setTimeout(() => {
+             timer = null;
+             const key = el.dataset.profile;
              openProfileEditModal(key);
-          }, 650);
+         }, 800);
+      };
+      const clear = () => { if(timer) { clearTimeout(timer); timer = null; } };
+
+      wrap.addEventListener("mousedown", (e) => start(e.target.closest(".profile-option")));
+      wrap.addEventListener("mouseup", clear);
+      wrap.addEventListener("mouseleave", clear);
+
+      wrap.addEventListener("touchstart", (e) => {
+         start(e.target.closest(".profile-option"));
+      }, {passive:true});
+      wrap.addEventListener("touchend", clear);
+      wrap.addEventListener("touchmove", clear);
+
+      wrap.addEventListener("contextmenu", (e) => {
+         const el = e.target.closest(".profile-option");
+         if(el && !el.innerText.includes("Nuovo")){
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+         }
       });
-      const clear = ()=>{ if(timer){ clearTimeout(timer); timer=null; } activeEl = null; };
-      wrap.addEventListener("pointerup", clear); wrap.addEventListener("pointercancel", clear); wrap.addEventListener("pointerleave", clear); wrap.addEventListener("scroll", clear);
     }
     function renderProfileOptions(){
       const wrap = document.getElementById("profileOptions");
@@ -1796,21 +1793,36 @@ function cardDescriptorsHtml(ev){
       const wrap = document.getElementById("groupOptions");
       if(!wrap || wrap.dataset.lpAttached) return;
       wrap.dataset.lpAttached = "1";
-      let timer = null; let activeEl = null;
-      wrap.addEventListener("pointerdown", (e)=>{
-          const el = e.target.closest(".group-option");
-          if(!el || el.innerText.includes("Nuovo")) return;
-          activeEl = el;
-          timer = setTimeout(()=>{
-             if(!activeEl) return;
-             const key = activeEl.dataset.group;
-             try{ activeEl.releasePointerCapture(e.pointerId); }catch(e){}
-             activeEl = null; 
+
+      let timer = null;
+      const start = (el) => {
+         if(!el || el.innerText.includes("Nuovo")) return;
+         timer = setTimeout(() => {
+             timer = null;
+             const key = el.dataset.group;
              openGroupEditModal(key);
-          }, 650);
+         }, 800);
+      };
+      const clear = () => { if(timer) { clearTimeout(timer); timer = null; } };
+
+      wrap.addEventListener("mousedown", (e) => start(e.target.closest(".group-option")));
+      wrap.addEventListener("mouseup", clear);
+      wrap.addEventListener("mouseleave", clear);
+
+      wrap.addEventListener("touchstart", (e) => {
+         start(e.target.closest(".group-option"));
+      }, {passive:true});
+      wrap.addEventListener("touchend", clear);
+      wrap.addEventListener("touchmove", clear);
+
+      wrap.addEventListener("contextmenu", (e) => {
+         const el = e.target.closest(".group-option");
+         if(el && !el.innerText.includes("Nuovo")){
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+         }
       });
-      const clear = ()=>{ if(timer){ clearTimeout(timer); timer=null; } activeEl = null; };
-      wrap.addEventListener("pointerup", clear); wrap.addEventListener("pointercancel", clear); wrap.addEventListener("pointerleave", clear); wrap.addEventListener("scroll", clear);
     }
 
     function renderDescriptorPickers(){
@@ -1938,7 +1950,7 @@ function cardDescriptorsHtml(ev){
       if(!t.blindMap[sSid]) return;
       delete t.blindMap[sSid];
       saveState({skipCloud:true});
-      try{ window.queueBlindSync && window.queueBlindSync(t.id, sSid, sPid); }catch(e){}
+      try{ window.queueBlindSync && window.queueBlindSync(t.id, sSid, null); }catch(e){}
       try{ updateBlindCardTag(sSid); }catch(e){}
       renderProductsStrip();
       updateDetail();
@@ -2052,8 +2064,7 @@ function renderProductsStrip(){
       if(!grid) return;
       if(!t){ grid.innerHTML=""; return; }
       const tId = currentTasterId();
-      const ui = tId ? getTasterUI(tId) : { filterProfile:'tutti', filterGroup:'tutti', sort:'custom' };
-      const filterProfile = ui.filterProfile || "tutti";
+      const ui = currentTasterId() ? getTasterUI(currentTasterId()) : { filterProfile:'tutti', filterGroup:'tutti', sort:'custom' }; const filterProfile = ui.filterProfile || "tutti";
       const filterGroup = ui.filterGroup || "tutti";
       let list = t.samples.slice();
       if(ui.sort === 'custom') {
@@ -3203,8 +3214,22 @@ function renderResultsSelect(){
           return `<option value="${esc(t.id)}">${esc(t.title)} ${date?"("+date+")":""}</option>`;
       });
       sel.innerHTML = `<option value="">Seleziona...</option>` + opts.join("");
+      sel.onchange = (e) => onResultsDegChange(e.target.value);
     }
-    function onResultsSearch(val){
+    
+    async function onResultsDegChange(tid){
+       if(!tid){ renderResultsTable(); return; }
+
+       const wrap = document.getElementById("resultsTableWrap");
+       if(wrap) wrap.innerHTML = '<div class="muted">Caricamento dati in corso...</div>';
+
+       if(typeof fetchArchivedEvaluations === 'function'){
+           await fetchArchivedEvaluations(tid);
+       }
+       renderResultsTable();
+    }
+
+function onResultsSearch(val){
       state.ui.resultsSearch = String(val||"");
       saveState({skipCloud:true});
       renderResultsTable();
@@ -3733,6 +3758,7 @@ function openGroupEditModal(key){
     const inp = document.getElementById("editEntityName");
     inp.value = g.label;
     document.getElementById("editEntityColor").value = "#" + g.color;
+    
     document.getElementById("editEntityModal").style.display = "flex";
     setTimeout(()=>inp.select(), 50);
 }
@@ -3745,9 +3771,11 @@ function openProfileEditModal(key){
     const inp = document.getElementById("editEntityName");
     inp.value = p.label;
     document.getElementById("editEntityColor").value = "#" + p.color;
+    
     document.getElementById("editEntityModal").style.display = "flex";
     setTimeout(()=>inp.select(), 50);
 }
+
 
 function closeEditEntityModal(){ document.getElementById("editEntityModal").style.display = "none"; currentEditEntity = null; }
 function saveEditEntity(){
@@ -4333,7 +4361,28 @@ const pushAnagrafiche = async () => {
     try{ const page = document.querySelector('.page.active')?.id || ''; if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage(); }catch(e){}
   }
 
-  async function pollEvaluations(tid){
+  
+  window.fetchArchivedEvaluations = async (tid) => {
+     if(!db || !tid) return;
+     const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+     if(!t) return;
+     try{
+       const snap = await getDocs(collection(db,'tastings', String(tid), 'evaluations'));
+       t.evaluations = t.evaluations || {};
+       snap.forEach(ds=>{
+          const ev = ds.data() || {};
+          if(!ev.tasterId || !ev.sampleId) return;
+          const ta = String(ev.tasterId);
+          const sa = String(ev.sampleId);
+          if(!t.evaluations[ta]) t.evaluations[ta] = {};
+          t.evaluations[ta][sa] = ev; 
+       });
+     }catch(e){
+       console.error("Errore fetch archivio", e);
+     }
+  };
+
+async function pollEvaluations(tid){
     if(!db || !tid) return;
     const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
     if(!t) return;
@@ -4605,7 +4654,8 @@ window.toggleBlindProduct = async function(pid){
        <input id="editEntityName" class="input" style="text-align:center" />
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-          <input id="editEntityColor" type="color" style="width:80px;height:80px;cursor:pointer;border:2px solid #ddd;border-radius:50%;overflow:hidden;" />
+          <input id="editEntityColor" type="color" style="width:64px;height:44px;cursor:pointer;border:none;background:transparent;" oninput="document.getElementById('colorPreview').style.background = this.value" onchange="document.getElementById('colorPreview').style.background = this.value" />
+          <div id="colorPreview" onclick="openColorPicker()" style="display:none !important;width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
        </div>
        <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
