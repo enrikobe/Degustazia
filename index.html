@@ -1902,7 +1902,7 @@ function cardDescriptorsHtml(ev){
       try{ updateBlindCardTag(sSid); }catch(e){}
       renderProductsStrip();
       updateDetail();
-      toast("✓ Assegnato");
+      toast("Assegnato");
     };
 
     window.dissociateBlindSample = function(sid){
@@ -1913,11 +1913,11 @@ function cardDescriptorsHtml(ev){
       if(!t.blindMap[sSid]) return;
       delete t.blindMap[sSid];
       saveState({skipCloud:true});
-      try{ window.queueBlindSync && window.queueBlindSync(t.id, sSid, sPid); }catch(e){}
+      try{ window.queueBlindSync && window.queueBlindSync(t.id, sSid, null); }catch(e){}
       try{ updateBlindCardTag(sSid); }catch(e){}
       renderProductsStrip();
       updateDetail();
-      toast("✓ Dissociato");
+      toast("Dissociato");
     };
 
     window.handleProductDragStart = function(e){
@@ -2393,7 +2393,7 @@ function renderProductsStrip(){
          ev.data.vista.canvas = null;
          saveState({skipCloud:true});
       try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tid, sid, null); }catch(e){}
-      toast(\"Appunti cancellati\");
+      toast("Appunti cancellati");
          setTool('pen');
       }
     }
