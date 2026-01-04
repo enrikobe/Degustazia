@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <link rel="icon" type="image/gif" sizes="1x1" href="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
-<meta charset="UTF-8" />
+  <link rel="icon" href="data:,">
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
   <style>
@@ -1081,7 +1081,8 @@ function forceEnableClear(){
       const win = window.open('','_blank');
       if(!win) { toast("Popup bloccato"); return; }
 
-      let h = `<html><head><title>Stampa Degustazione</title>
+      let h = `<html><head>
+  <link rel="icon" href="data:,"><title>Stampa Degustazione</title>
       <style>
         @page{size:A4; margin:12mm;}
         body{font-family:sans-serif; padding:20px; font-size:12px;}
@@ -1146,9 +1147,11 @@ function forceEnableClear(){
        <input id="editEntityName" class="input" style="text-align:center" />
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-          <input id="editEntityColor" type="color" style="width:64px;height:44px;cursor:pointer;border:none;background:transparent;" oninput="document.getElementById('colorPreview').style.background = this.value" onchange="document.getElementById('colorPreview').style.background = this.value" />
-          <div id="colorPreview" onclick="openColorPicker()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
-       </div>
+  <input id="editEntityColor" type="color" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;"
+         oninput="document.getElementById('colorPreview').style.background = this.value"
+         onchange="document.getElementById('colorPreview').style.background = this.value" />
+  <div id="colorPreview" onclick="openColorPicker()" style="width:56px;height:56px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
+</div>
        <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
           <button class="btn" style="background:var(--rosso); border-color:var(--rosso); color:#fff;" onclick="deleteEditEntity()">Elimina</button>
@@ -1371,8 +1374,9 @@ function forceEnableClear(){
 
 
     function saveState(opts){
-  // Cloud-only: nessun salvataggio locale.
-  const skipCloud = !!(opts && opts.skipCloud);
+    // Cloud-only: nessun salvataggio locale.
+    const skipCloud = !!(opts && opts.skipCloud);
+    try{ window.markUiBusy && window.markUiBusy(1100); }catch(e){}
   if(window.__cloudApplying || skipCloud) return;
   if(typeof window.cloudRequestSync === "function") window.cloudRequestSync();
 }
@@ -1893,9 +1897,10 @@ function cardDescriptorsHtml(ev){
       }
 
       t.blindMap[sSid] = sPid;
-      saveState({skipCloud:false});
+      saveState({skipCloud:true});
+      try{ window.queueBlindSync && window.queueBlindSync(t.id, sSid, sPid); }catch(e){}
+      try{ updateBlindCardTag(sSid); }catch(e){}
       renderProductsStrip();
-      renderGrid();
       updateDetail();
       toast("✓ Assegnato");
     };
@@ -1907,9 +1912,10 @@ function cardDescriptorsHtml(ev){
       const sSid = String(sid);
       if(!t.blindMap[sSid]) return;
       delete t.blindMap[sSid];
-      saveState({skipCloud:false});
+      saveState({skipCloud:true});
+      try{ window.queueBlindSync && window.queueBlindSync(t.id, sSid, sPid); }catch(e){}
+      try{ updateBlindCardTag(sSid); }catch(e){}
       renderProductsStrip();
-      renderGrid();
       updateDetail();
       toast("✓ Dissociato");
     };
@@ -2364,7 +2370,8 @@ function renderProductsStrip(){
          if(!ev.data) ev.data = {};
          if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
          try{ ev.data.vista.canvas = canvas.toDataURL('image/png'); }catch(err){ ev.data.vista.canvas = null; }
-         saveState();
+         saveState({skipCloud:true});
+         try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tid, sid, ev.data.vista.canvas); }catch(e){}
       }
     }
 
@@ -2384,8 +2391,9 @@ function renderProductsStrip(){
          if(!ev.data) ev.data = {};
          if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
          ev.data.vista.canvas = null;
-         saveState();
-         toast("Appunti cancellati");
+         saveState({skipCloud:true});
+      try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tid, sid, null); }catch(e){}
+      toast(\"Appunti cancellati\");
          setTool('pen');
       }
     }
@@ -4205,178 +4213,228 @@ const pushAnagrafiche = async () => {
   // helper for iterating maps
   function list(m){ return Array.from(m.entries()); }
 
-  // ====== REALTIME LISTENERS (SOURCE OF TRUTH) ======
-  if(db){
-    // TASTINGS
-    onSnapshot(collection(db,'tastings'), (snap)=>{
-      __markCloudReady('tastings');
-      window.__cloudApplying = true;
-      try{
-        const evalMap = new Map();
-        (state.tastings||[]).forEach(t=> evalMap.set(String(t.id), t.evaluations||{}));
+  // ====== POLLING SYNC (SOURCE OF TRUTH, 1s) ======
+  // Nota: con Firebase compat, DocumentSnapshot.exists è una proprietà booleana.
+  let __pollBusy = false;
+  let __pollTimer = null;
+  let __uiBusyUntil = 0;
+  window.markUiBusy = (ms=1100)=>{ __uiBusyUntil = Date.now() + (ms||1100); };
 
-        const list = [];
-        snap.forEach(ds=>{
-          const d = ds.data() || {};
-          // blindMap viene gestito da canale separato
-          try{ delete d.blindMap; }catch(e){}
-          const id = ds.id;
-          list.push({ ...d, id, evaluations: evalMap.get(String(id)) || {} });
-        });
-        list.sort((a,b)=>(String(b.createdAt||'')).localeCompare(String(a.createdAt||'')));
-        state.tastings = list;
+  let __lastTastingsHash = '';
+  let __lastBlindHash = '';
+  let __lastCanvasHash = '';
 
-        // Keep currentTastingId valid
-        if(state.currentTastingId && !state.tastings.some(t=>String(t.id)===String(state.currentTastingId))){
-          state.currentTastingId = state.tastings[0]?.id || null;
-        }
+  async function pollTastings(){
+    if(!db) return;
+    const snap = await getDocs(collection(db,'tastings'));
+    const evalMap = new Map();
+    (state.tastings||[]).forEach(t=> evalMap.set(String(t.id), t.evaluations||{}));
+    const blindMapLocal = new Map();
+    (state.tastings||[]).forEach(t=> blindMapLocal.set(String(t.id), t.blindMap||{}));
 
-        // UI refresh
-        if(typeof renderPreparation==='function') renderPreparation();
-        if(typeof renderArchive==='function') renderArchive();
-        if(typeof renderResultsSelect==='function') renderResultsSelect();
-
-        try{
-          const page = document.querySelector('.page.active')?.id || '';
-          if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage();
-        }catch(e){}
-
-        if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
-      } finally {
-        window.__cloudApplying = false;
-      }
-    }, (err)=>{
-      console.error('tastings snapshot error', err);
-      setLed('offline');
+    const list = [];
+    snap.forEach(ds=>{
+      const d = ds.data() || {};
+      try{ delete d.blindMap; }catch(e){}
+      const id = ds.id;
+      list.push({ ...d, id, evaluations: evalMap.get(String(id)) || {}, blindMap: blindMapLocal.get(String(id)) || {} });
     });
+    list.sort((a,b)=>(String(b.createdAt||'')).localeCompare(String(a.createdAt||'')));
 
-    // ANAGRAFICHE
-    onSnapshot(doc(db,'global','anagrafiche'), (snap)=>{
+    const meta = list.map(t=>({id:t.id, updatedAt:t.updatedAt||'', status:t.status||'', title:t.title||''}));
+    const h = stableStringify(meta);
+    if(h === __lastTastingsHash) return;
+
+    window.__cloudApplying = true;
+    try{
+      state.tastings = list;
+      if(state.currentTastingId && !state.tastings.some(t=>String(t.id)===String(state.currentTastingId))){
+        state.currentTastingId = state.tastings[0]?.id || null;
+      }
+    } finally { window.__cloudApplying = false; }
+
+    __lastTastingsHash = h;
+    __markCloudReady('tastings');
+
+    if(Date.now() < __uiBusyUntil) return;
+    try{ if(typeof renderPreparation==='function') renderPreparation(); }catch(e){}
+    try{ if(typeof renderArchive==='function') renderArchive(); }catch(e){}
+    try{ if(typeof renderResultsSelect==='function') renderResultsSelect(); }catch(e){}
+    try{ const page = document.querySelector('.page.active')?.id || ''; if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage(); }catch(e){}
+  }
+
+  async function pollAnagrafiche(){
+    if(!db) return;
+    const snap = await getDoc(doc(db,'global','anagrafiche'));
+    if(!snap.exists){
+      await pushAnagrafiche();
       __markCloudReady('anagrafiche');
-      window.__cloudApplying = true;
-      try{
-        if(!snap.exists()){
-          // bootstrap: create once using current in-memory defaults
-          pushAnagrafiche();
-          __markCloudReady('anagrafiche');
-          return;
-        }
-        const d = snap.data() || {};
-        state.tasters = Array.isArray(d.tasters) ? d.tasters : state.tasters;
-        state.profiles = Array.isArray(d.profiles) ? d.profiles : state.profiles;
-        state.groups = Array.isArray(d.groups) ? d.groups : state.groups;
-        state.descriptors = Array.isArray(d.descriptors) ? d.descriptors : state.descriptors;
-
-        if(typeof renderAnagrafiche==='function') renderAnagrafiche();
-        if(typeof renderPreparation==='function') renderPreparation();
-        if(typeof renderResultsTable==='function') renderResultsTable();
-
-        try{
-          const page = document.querySelector('.page.active')?.id || '';
-          if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage();
-        }catch(e){}
-
-        if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
-      } finally {
-        window.__cloudApplying = false;
-      }
-    }, (err)=>{
-      console.error('anagrafiche snapshot error', err);
-      setLed('offline');
+      return;
+    }
+    const d = snap.data() || {};
+    const h = stableStringify({
+      tasters: Array.isArray(d.tasters)?d.tasters:[],
+      profiles: Array.isArray(d.profiles)?d.profiles:[],
+      groups: Array.isArray(d.groups)?d.groups:[],
+      descriptors: (d.descriptors && typeof d.descriptors==='object') ? d.descriptors : {}
     });
+    if(h === lastAnaHash) { __markCloudReady('anagrafiche'); return; }
 
-    // Evaluations subscription for "Confronto"
-    let unsubEval = null;
-    function ensureEvalSub(tid){
-      if(unsubEval){ unsubEval(); unsubEval=null; }
-      if(!tid) return;
-      unsubEval = onSnapshot(collection(db,'tastings', String(tid), 'evaluations'), (snap)=>{
-        window.__cloudApplying = true;
-        try{
-          const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
-          if(!t) return;
-          t.evaluations = t.evaluations || {};
-          snap.forEach(ds=>{
-            const ev = ds.data() || {};
-            // Ignora canvas legacy su evaluation; il canvas viaggia su canale separato
-            try{ if(ev && ev.data && ev.data.vista) delete ev.data.vista.canvas; }catch(e){}
-            if(!ev.tasterId || !ev.sampleId) return;
-            const ta = String(ev.tasterId);
-            const sa = String(ev.sampleId);
-            if(!t.evaluations[ta]) t.evaluations[ta] = {};
-            t.evaluations[ta][sa] = ev;
-          });
-          if(typeof renderResultsTable==='function') renderResultsTable();
+    window.__cloudApplying = true;
+    try{
+      state.tasters = Array.isArray(d.tasters) ? d.tasters : state.tasters;
+      state.profiles = Array.isArray(d.profiles) ? d.profiles : state.profiles;
+      state.groups = Array.isArray(d.groups) ? d.groups : state.groups;
+      state.descriptors = (d.descriptors && typeof d.descriptors==='object') ? d.descriptors : state.descriptors;
+      lastAnaHash = h;
+    } finally { window.__cloudApplying = false; }
 
-        try{
-          const page = document.querySelector('.page.active')?.id || '';
-          if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage();
-        }catch(e){}
-          if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
-        } finally {
-          window.__cloudApplying = false;
+    __markCloudReady('anagrafiche');
+
+    if(Date.now() < __uiBusyUntil) return;
+    try{ if(typeof renderAnagrafiche==='function') renderAnagrafiche(); }catch(e){}
+    try{ if(typeof renderPreparation==='function') renderPreparation(); }catch(e){}
+    try{ if(typeof renderResultsTable==='function') renderResultsTable(); }catch(e){}
+    try{ const page = document.querySelector('.page.active')?.id || ''; if(page==='page-degustazione' && typeof renderTastingPage==='function') renderTastingPage(); }catch(e){}
+  }
+
+  async function pollEvaluations(tid){
+    if(!db || !tid) return;
+    const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+    if(!t) return;
+    const snap = await getDocs(collection(db,'tastings', String(tid), 'evaluations'));
+    let changed = false;
+
+    window.__cloudApplying = true;
+    try{
+      t.evaluations = t.evaluations || {};
+      snap.forEach(ds=>{
+        const ev = ds.data() || {};
+        try{ if(ev && ev.data && ev.data.vista) delete ev.data.vista.canvas; }catch(e){}
+        if(!ev.tasterId || !ev.sampleId) return;
+        const ta = String(ev.tasterId);
+        const sa = String(ev.sampleId);
+        if(!t.evaluations[ta]) t.evaluations[ta] = {};
+        const key = `${tid}|${ta}|${sa}`;
+        const eh = stableStringify(ev);
+        if(lastEvalHash.get(key) !== eh){
+          t.evaluations[ta][sa] = ev;
+          lastEvalHash.set(key, eh);
+          changed = true;
         }
-      }, (err)=>{
-        console.error('evaluations snapshot error', err);
-        setLed('offline');
       });
-    }
+    } finally { window.__cloudApplying = false; }
 
-    // Evaluations subscription for "Degustazione" (realtime)
-    let unsubEvalDeg = null;
-    function ensureEvalSubDeg(tid){
-      if(unsubEvalDeg){ unsubEvalDeg(); unsubEvalDeg=null; }
-      if(!tid) return;
-      unsubEvalDeg = onSnapshot(collection(db,'tastings', String(tid), 'evaluations'), (snap)=>{
-        window.__cloudApplying = true;
-        try{
-          const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
-          if(!t) return;
-          const next = {};
-          snap.forEach(ds=>{
-            const ev = ds.data() || {};
-            if(!ev.tasterId || !ev.sampleId) return;
-            const ta = String(ev.tasterId);
-            const sa = String(ev.sampleId);
-            if(!next[ta]) next[ta] = {};
-            next[ta][sa] = ev;
-          });
-          t.evaluations = next;
-          if(typeof renderGrid==='function') renderGrid();
-          if(typeof updateDetail==='function') updateDetail();
-          if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
-        } finally { window.__cloudApplying = false; }
-      }, (err)=>{
-        console.error('evaluations snapshot error (degustazione)', err);
-        setLed('offline');
+    if(!changed) return;
+    if(Date.now() < __uiBusyUntil) return;
+
+    try{ if(typeof renderGrid==='function') renderGrid(); }catch(e){}
+    try{ if(typeof updateDetail==='function') updateDetail(); }catch(e){}
+    try{ if(typeof renderResultsTable==='function') renderResultsTable(); }catch(e){}
+  }
+
+  async function pollCanvases(tid){
+    if(!db || !tid) return;
+    const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+    if(!t) return;
+    const snap = await getDocs(collection(db,'tastings', String(tid), 'canvases'));
+    const list = [];
+    snap.forEach(ds=>{ list.push({id: ds.id, ...(ds.data()||{})}); });
+    const h = stableStringify(list.map(x=>({id:x.id, updatedAt:x.updatedAt||''})).sort((a,b)=>String(a.id).localeCompare(String(b.id))));
+    if(h === __lastCanvasHash) return;
+    __lastCanvasHash = h;
+
+    window.__cloudApplying = true;
+    try{
+      list.forEach(d=>{
+        const key = String(d.id||'');
+        const parts = key.split('_');
+        const ta = parts[0];
+        const sa = parts.slice(1).join('_');
+        if(!ta || !sa) return;
+        if(!t.evaluations) t.evaluations = {};
+        if(!t.evaluations[String(ta)]) t.evaluations[String(ta)] = {};
+        if(!t.evaluations[String(ta)][String(sa)]) t.evaluations[String(ta)][String(sa)] = blankEval();
+        const ev = t.evaluations[String(ta)][String(sa)];
+        if(!ev.data) ev.data = blankEval().data;
+        if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
+        ev.data.vista.canvas = d.dataUrl || null;
       });
-    }
+    } finally { window.__cloudApplying = false; }
 
-    // Mantieni allineata la subscription quando cambia degustazione
-    const origRenderTastingPage = window.renderTastingPage;
-    if(typeof origRenderTastingPage === 'function'){
-      window.renderTastingPage = function(){
-        const r = origRenderTastingPage.apply(this, arguments);
-        try{ ensureEvalSubDeg(state.currentTastingId); }catch(e){}
-        try{ ensureCanvasSubDeg(state.currentTastingId); }catch(e){}
-        try{ ensureBlindSubDeg(state.currentTastingId); }catch(e){}
-        return r;
-      };
-    }
+    if(Date.now() < __uiBusyUntil) return;
+    try{ loadCanvasFromEval(); }catch(e){}
+  }
 
+  async function pollBlind(tid){
+    if(!db || !tid) return;
+    const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+    if(!t) return;
+    const snap = await getDocs(collection(db,'tastings', String(tid), 'blind'));
+    const next = {};
+    snap.forEach(ds=>{
+      const d = ds.data() || {};
+      const sid = String(d.sampleId || ds.id);
+      if(!sid) return;
+      if(d.productId) next[sid] = String(d.productId);
+    });
+    const h = stableStringify(next);
+    if(h === __lastBlindHash) return;
+    __lastBlindHash = h;
 
-    // Hook comparison render to keep subscription aligned
-    const origRenderResultsTable = window.renderResultsTable;
-    if(typeof origRenderResultsTable === 'function'){
-      window.renderResultsTable = function(){
-        origRenderResultsTable();
-        const tid = document.getElementById('resultsDegSelect')?.value || '';
-        ensureEvalSub(tid);
-      };
+    window.__cloudApplying = true;
+    try{ t.blindMap = next; } finally { window.__cloudApplying = false; }
+
+    if(Date.now() < __uiBusyUntil) return;
+    try{ renderProductsStrip(); }catch(e){}
+    try{ updateDetail(); }catch(e){}
+    try{ Object.keys(next).forEach(sid=>{ updateBlindCardTag(sid); }); }catch(e){}
+    try{ document.querySelectorAll('.sample-card .blind-assigned').forEach(tag=>{ const sid = tag.dataset.sid; if(sid && !next[sid]) tag.remove(); }); }catch(e){}
+  }
+
+  async function __pollStep(name, fn){
+    try{ return await fn(); }
+    catch(e){
+      const msg = (e && (e.stack || e.message)) ? (e.stack || e.message) : String(e);
+      throw new Error(`[pollStep:${name}] ${msg}`);
     }
   }
 
-    // V29 helpers
+  async function pollOnce(){
+    if(!db || __pollBusy) return;
+    __pollBusy = true;
+    try{
+      await __pollStep('tastings', pollTastings);
+      await __pollStep('anagrafiche', pollAnagrafiche);
+      const tid = state.currentTastingId;
+      if(tid){
+        await __pollStep('blind', ()=>pollBlind(tid));
+        await __pollStep('canvases', ()=>pollCanvases(tid));
+        await __pollStep('evaluations', ()=>pollEvaluations(tid));
+      }
+      if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
+    }catch(e){
+      console.error('poll error', e && (e.stack || e.message || e));
+      setLed('offline');
+    }finally{
+      __pollBusy = false;
+    }
+  }
+
+  if(db){
+    pollOnce();
+    __pollTimer = setInterval(pollOnce, 1000);
+  }
+
+  // compat stubs
+  function ensureEvalSub(tid){}
+  function ensureEvalSubDeg(tid){}
+  function ensureCanvasSubDeg(tid){}
+  function ensureBlindSubDeg(tid){}
+
+  // ====== END POLLING SYNC ======
+
+  // V29 helpers
     function evoDotsHTML(evo, cls){
       const v = Math.max(0, Math.min(5, parseInt(evo||0,10)||0));
       const k = cls ? (' '+cls) : '';
@@ -4445,6 +4503,50 @@ function forceEnableClear(){
         }
     }
 }
+
+
+// Override finale: gestione robusta blind (no renderGrid, sync su canale blind)
+window.toggleBlindProduct = async function(pid){
+  if(isArchived()) return;
+  const t = getTasting();
+  if(!t || t.mode!=='cieca') return;
+  if(!selectedSampleId){ toast('Seleziona un campione'); return; }
+
+  const sPid = String(pid);
+  const currentSid = String(selectedSampleId);
+  if(!t.blindMap) t.blindMap = {};
+  const existingSid = Object.keys(t.blindMap).find(k => String(t.blindMap[k]) === sPid);
+
+  if(existingSid){
+    if(existingSid === currentSid){
+      delete t.blindMap[currentSid];
+      saveState({skipCloud:true});
+      try{ window.queueBlindSync && window.queueBlindSync(t.id, currentSid, null); }catch(e){}
+      try{ updateBlindCardTag(currentSid); }catch(e){}
+      renderProductsStrip(); updateDetail();
+      toast('Dissociato');
+      return;
+    }
+    if(!confirm(`Questo prodotto è assegnato al campione ${existingSid}. Spostarlo qui?`)) return;
+    delete t.blindMap[existingSid];
+    t.blindMap[currentSid] = sPid;
+    saveState({skipCloud:true});
+    try{ window.queueBlindSync && window.queueBlindSync(t.id, existingSid, null); }catch(e){}
+    try{ window.queueBlindSync && window.queueBlindSync(t.id, currentSid, sPid); }catch(e){}
+    try{ updateBlindCardTag(existingSid); }catch(e){}
+    try{ updateBlindCardTag(currentSid); }catch(e){}
+    renderProductsStrip(); updateDetail();
+    toast('Spostato e Assegnato');
+    return;
+  }
+
+  t.blindMap[currentSid] = sPid;
+  saveState({skipCloud:true});
+  try{ window.queueBlindSync && window.queueBlindSync(t.id, currentSid, sPid); }catch(e){}
+  try{ updateBlindCardTag(currentSid); }catch(e){}
+  renderProductsStrip(); updateDetail();
+  toast('Assegnato');
+};
 
 </script>
 <!-- FIREBASE CLOUD-ONLY END -->
