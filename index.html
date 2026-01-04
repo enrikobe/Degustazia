@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-  <link rel="icon" href="data:,">
-  <meta charset="UTF-8" />
+  <link rel="icon" type="image/gif" sizes="1x1" href="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+<meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
   <style>
@@ -1081,8 +1081,7 @@ function forceEnableClear(){
       const win = window.open('','_blank');
       if(!win) { toast("Popup bloccato"); return; }
 
-      let h = `<html><head>
-  <link rel="icon" href="data:,"><title>Stampa Degustazione</title>
+      let h = `<html><head><title>Stampa Degustazione</title>
       <style>
         @page{size:A4; margin:12mm;}
         body{font-family:sans-serif; padding:20px; font-size:12px;}
@@ -4429,7 +4428,7 @@ window.toggleBlindProduct = function(pid){
        } else {
            if(!selectedSampleId){ toast("Seleziona un campione"); return; }
            t.blindMap[String(selectedSampleId)] = sPid;
-       toast(\"Assegnato\");
+       toast("Assegnato");
        }
        saveState({skipCloud:true});
        try{ window.queueBlindSync && window.queueBlindSync(t.id, String(selectedSampleId), sPid); }catch(e){}
