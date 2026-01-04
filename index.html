@@ -1147,19 +1147,18 @@ function forceEnableClear(){
     <div class="modal-header">Modifica <span id="editEntityTitle"></span></div>
     <div class="pad" style="text-align:center; display:flex; flex-direction:column; align-items:center;">
        <div class="label" style="width:100%;text-align:center">Nome</div>
-       <input id="editEntityName" class="input" style="text-align:center" />
+       <input id="editEntityName" class="input" style="text-align:center;width:70%;margin:0 auto;">
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-          <input id="editEntityColor" type="color" style="width:64px;height:44px;cursor:pointer;border:none;background:transparent;" oninput="document.getElementById('colorPreview').style.background = this.value" onchange="document.getElementById('colorPreview').style.background = this.value" />
-          <div id="colorPreview" onclick="openColorPicker()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
-       </div>
-       <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
-          <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
-          <button class="btn" style="background:var(--rosso); border-color:var(--rosso); color:#fff;" onclick="deleteEditEntity()">Elimina</button>
-          <button class="btn primary" onclick="saveEditEntity()">Salva</button>
-       </div>
-    </div>
-  </div>
+          <input id="editEntityColor" type="color" style="width:64px;height:46px;cursor:pointer;border:2px solid #ddd;border-radius:12px;padding:0;background:transparent;">
+</div>
+       <div style="margin-top:22px;display:flex;justify-content:center;gap:14px;width:100%">
+  <button class="btn" style="background:var(--rosso);border-color:var(--rosso);color:#fff;min-width:110px" onclick="deleteEditEntity()">Elimina</button>
+  <button class="btn" style="min-width:110px" onclick="closeEditEntityModal()">Annulla</button>
+  <button class="btn primary" style="min-width:110px" onclick="saveEditEntity()">Salva</button>
+</div>
+</div>
+</div>
 </div>
 
 </body></html>`;
@@ -1238,7 +1237,7 @@ function forceEnableClear(){
       setTimeout(()=>t.classList.remove("show"), 1600);
     }
 
-    // V24: bridge render scheduler for polling (exposed to module script)
+    // V25: bridge render scheduler for polling (exposed to module script)
     window.scheduleRendersFromCloud = function(){
       try{
         const pid = document.querySelector('.page.active')?.id || '';
@@ -1399,7 +1398,7 @@ function forceEnableClear(){
     function saveState(opts){
   // Cloud-only: nessun salvataggio locale.
   const skipCloud = !!(opts && opts.skipCloud);
-      // V24: mark dirty so polling won't rollback local edits before upload completes
+      // V25: mark dirty so polling won't rollback local edits before upload completes
       if(!skipCloud && !window.cloudApplying){
         try{
           const tid = state.currentTastingId;
@@ -3718,9 +3717,7 @@ function openGroupEditModal(key){
     document.getElementById("editEntityTitle").innerText = "Gruppo";
     const inp = document.getElementById("editEntityName");
     inp.value = g.label;
-    document.getElementById("editEntityColor").value = "#" + g.color;
-    document.getElementById("colorPreview").style.background = "#" + g.color;
-    document.getElementById("editEntityModal").style.display = "flex";
+    document.getElementById("editEntityColor").value = "#" + g.color;    document.getElementById("editEntityModal").style.display = "flex";
     setTimeout(()=>inp.select(), 50);
 }
 function openProfileEditModal(key){
@@ -3731,17 +3728,10 @@ function openProfileEditModal(key){
     document.getElementById("editEntityTitle").innerText = "Profilo";
     const inp = document.getElementById("editEntityName");
     inp.value = p.label;
-    document.getElementById("editEntityColor").value = "#" + p.color;
-    document.getElementById("colorPreview").style.background = "#" + p.color;
-    document.getElementById("editEntityModal").style.display = "flex";
+    document.getElementById("editEntityColor").value = "#" + p.color;    document.getElementById("editEntityModal").style.display = "flex";
     setTimeout(()=>inp.select(), 50);
 }
-function openColorPicker(){
-  const el = document.getElementById('editEntityColor');
-  if(!el) return;
-  try{ if(typeof el.showPicker === 'function') { el.showPicker(); return; } }catch(e){}
-  try{ el.click(); }catch(e){}
-}
+
 
 function closeEditEntityModal(){ document.getElementById("editEntityModal").style.display = "none"; currentEditEntity = null; }
 function saveEditEntity(){
@@ -3916,7 +3906,7 @@ function forceEnableClear(){
     if(inflight===0) if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
   };
 
-  // ---------- V24: dirty + activity guards (no rollback, allow cross-instance sync) ----------
+  // ---------- V25: render coalescing (polling updates must eventually repaint) ----------
   window.__lastUserInputTs = Date.now();
   function __markUserActive(){ window.__lastUserInputTs = Date.now(); }
   ['pointerdown','keydown','input','wheel','touchstart'].forEach(ev=>{
@@ -3927,6 +3917,21 @@ function forceEnableClear(){
   }
   function getActivePageId(){ return document.querySelector('.page.active')?.id || ''; }
 
+  // Non cancellare all'infinito i render: se arriva polling ogni 3s, un render deve comunque avvenire.
+  window.__uiOnceJobs = window.__uiOnceJobs || Object.create(null);
+  function scheduleRenderOnce(key, fn, delay){
+    try{
+      if(window.__uiOnceJobs[key]) return;
+      window.__uiOnceJobs[key] = setTimeout(()=>{
+        window.__uiOnceJobs[key] = null;
+        try{ fn && fn(); }catch(e){}
+      }, Math.max(0, delay||0));
+    }catch(e){
+      try{ fn && fn(); }catch(_){ }
+    }
+  }
+
+  // Dirty tracking (evita rollback durante polling)
   window.__dirtyLocal = false;
   window.__dirtySince = 0;
   window.__dirtyEvals = new Set();       // tid|tasterId|sampleId
@@ -3937,19 +3942,13 @@ function forceEnableClear(){
     window.__dirtyLocal = true;
     window.__dirtySince = Date.now();
     try{ if(tid) window.__dirtyTastingIds.add(String(tid)); }catch(e){}
-    try{
-      if(tid && tasterId && sampleId){
-        window.__dirtyEvals.add(String(tid)+'|'+String(tasterId)+'|'+String(sampleId));
-      }
-    }catch(e){}
+    try{ if(tid && tasterId && sampleId) window.__dirtyEvals.add(String(tid)+'|'+String(tasterId)+'|'+String(sampleId)); }catch(e){}
   };
-
   window.__markDirtyAnagrafiche = function(){
     window.__dirtyLocal = true;
     window.__dirtySince = Date.now();
     window.__dirtyAnagrafiche = true;
   };
-
   window.__clearDirty = function(){
     window.__dirtyLocal = false;
     window.__dirtySince = 0;
@@ -3957,7 +3956,6 @@ function forceEnableClear(){
     try{ window.__dirtyTastingIds && window.__dirtyTastingIds.clear(); }catch(e){}
     window.__dirtyAnagrafiche = false;
   };
-
   window.__cloudMayApply = function(graceMs=9000){
     return !(window.__dirtyLocal && (Date.now()-(window.__dirtySince||0)) < graceMs);
   };
@@ -3968,8 +3966,8 @@ function forceEnableClear(){
 
   
 
-  // ---------- Cloud polling mode (V24) ----------
-  // Polling ogni 3s + merge smart (local wins solo se dirty o non-blank) per evitare rollback e garantire sync tra istanze.
+  // ---------- Cloud polling mode (V25) ----------
+  // Polling ogni 3s + merge smart + repaint garantito (anche senza click manuali).
   const __poll = { core:null, evalDeg:null, evalRes:null };
   const POLL_MS = 3000;
 
@@ -3988,7 +3986,7 @@ function forceEnableClear(){
     localArr = Array.isArray(localArr) ? localArr : [];
     const map = new Map();
     remoteArr.forEach(x=>{ if(x && x[keyField]!=null) map.set(String(x[keyField]), x); });
-    localArr.forEach(x=>{ if(x && x[keyField]!=null) map.set(String(x[keyField]), x); }); // local wins
+    localArr.forEach(x=>{ if(x && x[keyField]!=null) map.set(String(x[keyField]), x); });
     const out = [];
     const seen = new Set();
     remoteArr.forEach(x=>{
@@ -4043,6 +4041,7 @@ function forceEnableClear(){
   function mergeEvalsSmart(tid, remote, local){
     remote = remote || {};
     local = local || {};
+
     // porta dentro eventuali local extra (offline)
     Object.keys(local).forEach(ta=>{
       if(!remote[ta]) remote[ta] = {};
@@ -4051,7 +4050,7 @@ function forceEnableClear(){
       });
     });
 
-    // override SOLO se: record dirty oppure local non-blank e remote mancante
+    // local override: solo se dirty, oppure se remoto mancante e local non-blank
     try{
       const dirtySet = window.__dirtyEvals;
       Object.keys(local).forEach(ta=>{
@@ -4060,17 +4059,14 @@ function forceEnableClear(){
           const lEv = local[ta][sa];
           const rEv = remote?.[ta]?.[sa];
 
-          const isDirty = !!(dirtySet && dirtySet.has(key));
-          if(isDirty){
+          if(dirtySet && dirtySet.has(key)){
             if(!remote[ta]) remote[ta] = {};
             remote[ta][sa] = lEv;
             return;
           }
 
-          // se local è blank (placeholder creato da getEval), non deve sovrascrivere il remoto
           if(isBlankEval(lEv)) return;
 
-          // se remoto mancante, tieni local
           if(!rEv){
             if(!remote[ta]) remote[ta] = {};
             remote[ta][sa] = lEv;
@@ -4103,12 +4099,9 @@ function forceEnableClear(){
         const local = localById.get(String(id));
         const forceLocal = !!(window.__dirtyTastingIds && window.__dirtyTastingIds.has(String(id)));
         const merged = mergeTastingMeta({ ...d, id }, local, forceLocal);
-        // evaluations: sempre preserva local; vengono aggiornate dal polling eval dedicato
         merged.evaluations = local?.evaluations || merged.evaluations;
         list.push(merged);
       });
-
-      // mantieni eventuali tastings locali non presenti in remoto
       (state.tastings||[]).forEach(t=>{
         const id = String(t.id);
         if(!list.some(x=>String(x.id)===id)) list.push(t);
@@ -4121,9 +4114,8 @@ function forceEnableClear(){
         state.currentTastingId = state.tastings[0]?.id || null;
       }
 
-      if(!isUserActive(700)){
-        try{ window.scheduleRendersFromCloud && window.scheduleRendersFromCloud(); }catch(e){}
-      }
+      // repaint garantito (anche se l'utente continua a interagire / polling continua)
+      scheduleRenderOnce('coreRefresh', ()=>{ try{ window.scheduleRendersFromCloud && window.scheduleRendersFromCloud(); }catch(e){} }, isUserActive(650)?1600:260);
 
       if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
     } catch(e){
@@ -4152,15 +4144,12 @@ function forceEnableClear(){
       const remoteDescriptors = (d.descriptors && typeof d.descriptors==='object') ? d.descriptors : null;
 
       const forceLocal = !!window.__dirtyAnagrafiche;
-
       state.tasters = forceLocal ? mergeArrayByKey(remoteTasters, state.tasters, 'id') : remoteTasters;
       state.profiles = forceLocal ? mergeArrayByKey(remoteProfiles, state.profiles, 'key') : remoteProfiles;
       state.groups = forceLocal ? mergeArrayByKey(remoteGroups, state.groups, 'key') : remoteGroups;
       state.descriptors = forceLocal ? mergeDescriptorsLocalWins(remoteDescriptors, state.descriptors) : (remoteDescriptors || state.descriptors);
 
-      if(!isUserActive(700)){
-        try{ window.scheduleRendersFromCloud && window.scheduleRendersFromCloud(); }catch(e){}
-      }
+      scheduleRenderOnce('coreRefresh', ()=>{ try{ window.scheduleRendersFromCloud && window.scheduleRendersFromCloud(); }catch(e){} }, isUserActive(650)?1600:260);
 
       if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
     } catch(e){
@@ -4189,20 +4178,22 @@ function forceEnableClear(){
   function startCloudPolling(){
     stopPoll('core');
     const tick = ()=>{
-      if(isUserActive(700)) return;
+      if(isUserActive(650)) return;
       pollAnagraficheOnce();
       pollTastingsOnce();
     };
     tick();
     __poll.core = setInterval(tick, POLL_MS);
   }
+
+  // V25: start background polling
+  try{ setTimeout(()=>{ try{ startCloudPolling(); }catch(e){} }, 800); }catch(e){}
+
 // ====== INIT FIREBASE (NON BLOCCANTE) ======
   let db = null;
   try{
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
-    // V24: start polling after init
-    try{ setTimeout(()=>{ try{ startCloudPolling(); }catch(e){} }, 800); }catch(e){}
   }catch(e){
     console.error('Firebase init error:', e);
     setLed('offline');
@@ -4292,15 +4283,10 @@ const pushAnagrafiche = async () => {
   window.cloudRequestSync = function(){
     if(window.__cloudApplying) return;
     if(syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(runSync, 2200);
+    syncTimer = setTimeout(runSync, 120);
   };
 
   async function runSync(){
-      // Non sincronizzare mentre l'utente sta interagendo (priorità alla fluidità).
-      if(typeof isUserActive==='function' && isUserActive(700)){
-        try{ syncTimer = setTimeout(runSync, 1800); }catch(e){}
-        return;
-      }
     if(!db) return;
 
     // 1) Anagrafiche
@@ -4448,12 +4434,12 @@ const pushAnagrafiche = async () => {
     let unsubEval = null;
     function ensureEvalSub(tid){
 
-      // V24 polling (no realtime) - Confronto
+      // V25 polling (no realtime) - Confronto
       stopPoll('evalRes');
       if(!tid) return;
       const run = async ()=>{
         if(!db) return;
-        if(isUserActive(700)) return;
+        if(isUserActive(650)) return;
         if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
         try{
           window.__cloudApplying = true;
@@ -4462,9 +4448,8 @@ const pushAnagrafiche = async () => {
           const remote = await fetchEvaluationsMap(tid);
           const local = t.evaluations || {};
           t.evaluations = mergeEvalsSmart(tid, remote, local);
-          if(!isUserActive(600)){
-            try{ if(typeof renderResultsTable==='function') renderResultsTable(); }catch(e){}
-          }
+          // repaint garantito anche senza interazione manuale
+          scheduleRenderOnce('resRefresh', ()=>{ try{ if(typeof renderResultsTable==='function') renderResultsTable(); }catch(e){} }, isUserActive(650)?1600:260);
         } catch(e){
           console.error('poll evaluations risultati error', e);
         } finally {
@@ -4480,12 +4465,12 @@ const pushAnagrafiche = async () => {
     let unsubEvalDeg = null;
     function ensureEvalSubDeg(tid){
 
-      // V24 polling (no realtime) - Degustazione
+      // V25 polling (no realtime) - Degustazione
       stopPoll('evalDeg');
       if(!tid) return;
       const run = async ()=>{
         if(!db) return;
-        if(isUserActive(700)) return;
+        if(isUserActive(650)) return;
         if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
         try{
           window.__cloudApplying = true;
@@ -4494,9 +4479,15 @@ const pushAnagrafiche = async () => {
           const remote = await fetchEvaluationsMap(tid);
           const local = t.evaluations || {};
           t.evaluations = mergeEvalsSmart(tid, remote, local);
-          if(!isUserActive(600)){
-            try{ if(getActivePageId()==='page-degustazione'){ if(typeof renderGrid==='function') renderGrid(); if(typeof updateDetail==='function') updateDetail(); } }catch(e){}
-          }
+          // repaint garantito anche senza click (es. cuore)
+          scheduleRenderOnce('degRefresh', ()=>{
+            try{
+              if(getActivePageId()==='page-degustazione'){
+                if(typeof renderGrid==='function') renderGrid();
+                if(typeof updateDetail==='function') updateDetail();
+              }
+            }catch(e){}
+          }, isUserActive(650)?1600:260);
         } catch(e){
           console.error('poll evaluations degustazione error', e);
           setLed('offline');
@@ -4610,9 +4601,8 @@ function forceEnableClear(){
        <input id="editEntityName" class="input" style="text-align:center" />
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-          <input id="editEntityColor" type="color" style="width:64px;height:44px;cursor:pointer;border:none;background:transparent;" oninput="document.getElementById('colorPreview').style.background = this.value" onchange="document.getElementById('colorPreview').style.background = this.value" />
-          <div id="colorPreview" onclick="openColorPicker()" style="width:50px;height:50px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
-       </div>
+          <input id="editEntityColor" type="color" style="width:64px;height:46px;cursor:pointer;border:2px solid #ddd;border-radius:12px;padding:0;background:transparent;">
+</div>
        <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
           <button class="btn" style="background:var(--rosso); border-color:var(--rosso); color:#fff;" onclick="deleteEditEntity()">Elimina</button>
