@@ -1238,7 +1238,7 @@ function forceEnableClear(){
       setTimeout(()=>t.classList.remove("show"), 1600);
     }
 
-    // V23: bridge render scheduler for polling (exposed to module script)
+    // V24: bridge render scheduler for polling (exposed to module script)
     window.scheduleRendersFromCloud = function(){
       try{
         const pid = document.querySelector('.page.active')?.id || '';
@@ -1399,8 +1399,7 @@ function forceEnableClear(){
     function saveState(opts){
   // Cloud-only: nessun salvataggio locale.
   const skipCloud = !!(opts && opts.skipCloud);
-
-      // V23: mark dirty so polling won't rollback local edits before upload completes
+      // V24: mark dirty so polling won't rollback local edits before upload completes
       if(!skipCloud && !window.cloudApplying){
         try{
           const tid = state.currentTastingId;
@@ -1411,6 +1410,7 @@ function forceEnableClear(){
           if(pid==='page-anagrafiche' && window.__markDirtyAnagrafiche) window.__markDirtyAnagrafiche();
         }catch(e){}
       }
+
   if(window.__cloudApplying || skipCloud) return;
   if(typeof window.cloudRequestSync === "function") window.cloudRequestSync();
 }
@@ -3916,13 +3916,13 @@ function forceEnableClear(){
     if(inflight===0) if((window.__syncInflight||0)===0) setLed(navigator.onLine ? 'connected' : 'offline');
   };
 
-  // ---------- V23: dirty + activity guards (no rollback during polling) ----------
+  // ---------- V24: dirty + activity guards (no rollback, allow cross-instance sync) ----------
   window.__lastUserInputTs = Date.now();
   function __markUserActive(){ window.__lastUserInputTs = Date.now(); }
   ['pointerdown','keydown','input','wheel','touchstart'].forEach(ev=>{
     window.addEventListener(ev, __markUserActive, {capture:true, passive:true});
   });
-  function isUserActive(thresholdMs=900){
+  function isUserActive(thresholdMs=700){
     return (Date.now() - (window.__lastUserInputTs||0)) < thresholdMs;
   }
   function getActivePageId(){ return document.querySelector('.page.active')?.id || ''; }
@@ -3958,8 +3958,7 @@ function forceEnableClear(){
     window.__dirtyAnagrafiche = false;
   };
 
-  window.__cloudMayApply = function(graceMs=12000){
-    // Durante una finestra di grace dopo modifiche locali, il polling non deve sovrascrivere.
+  window.__cloudMayApply = function(graceMs=9000){
     return !(window.__dirtyLocal && (Date.now()-(window.__dirtySince||0)) < graceMs);
   };
 
@@ -3969,8 +3968,8 @@ function forceEnableClear(){
 
   
 
-  // ---------- Cloud polling mode (V23) ----------
-  // Polling ogni 3s + merge (local wins) su evaluations, metadata tastings e anagrafiche.
+  // ---------- Cloud polling mode (V24) ----------
+  // Polling ogni 3s + merge smart (local wins solo se dirty o non-blank) per evitare rollback e garantire sync tra istanze.
   const __poll = { core:null, evalDeg:null, evalRes:null };
   const POLL_MS = 3000;
 
@@ -3990,7 +3989,6 @@ function forceEnableClear(){
     const map = new Map();
     remoteArr.forEach(x=>{ if(x && x[keyField]!=null) map.set(String(x[keyField]), x); });
     localArr.forEach(x=>{ if(x && x[keyField]!=null) map.set(String(x[keyField]), x); }); // local wins
-    // Mantieni ordine remote, poi aggiungi eventuali local extra
     const out = [];
     const seen = new Set();
     remoteArr.forEach(x=>{
@@ -4009,7 +4007,6 @@ function forceEnableClear(){
   }
 
   function mergeDescriptorsLocalWins(remote, local){
-    // struttura prevista: {vista:{white:[],red:[]}, olfatto:{...}, gusto:{...}}
     remote = (remote && typeof remote==='object') ? remote : {};
     local = (local && typeof local==='object') ? local : {};
     const secs = ['vista','olfatto','gusto'];
@@ -4025,20 +4022,67 @@ function forceEnableClear(){
     return out;
   }
 
-  function mergeEvalsLocalWins(remote, local){
+  function isBlankEval(ev){
+    try{
+      if(!ev) return true;
+      if(ev.profileKey) return false;
+      if((ev.evolution||0) !== 0) return false;
+      if(!!ev.favourite) return false;
+      const d = ev.data || {};
+      const v = d.vista || {}, o = d.olfatto || {}, g = d.gusto || {};
+      const sliders = [v.intensita||0, v.limpidezza||0, o.intensita||0, o.complessita||0, g.corpo||0, g.acidita||0, g.persistenza||0];
+      if(sliders.some(x=>parseInt(x||0,10)>0)) return false;
+      if((v.desc||[]).length) return false;
+      if((o.desc||[]).length) return false;
+      if((g.desc||[]).length) return false;
+      if((v.canvas||'').length>20) return false;
+      return true;
+    }catch(e){ return false; }
+  }
+
+  function mergeEvalsSmart(tid, remote, local){
     remote = remote || {};
     local = local || {};
+    // porta dentro eventuali local extra (offline)
     Object.keys(local).forEach(ta=>{
       if(!remote[ta]) remote[ta] = {};
       Object.keys(local[ta]||{}).forEach(sa=>{
-        remote[ta][sa] = local[ta][sa];
+        if(!remote[ta][sa]) remote[ta][sa] = local[ta][sa];
       });
     });
+
+    // override SOLO se: record dirty oppure local non-blank e remote mancante
+    try{
+      const dirtySet = window.__dirtyEvals;
+      Object.keys(local).forEach(ta=>{
+        Object.keys(local[ta]||{}).forEach(sa=>{
+          const key = String(tid)+'|'+String(ta)+'|'+String(sa);
+          const lEv = local[ta][sa];
+          const rEv = remote?.[ta]?.[sa];
+
+          const isDirty = !!(dirtySet && dirtySet.has(key));
+          if(isDirty){
+            if(!remote[ta]) remote[ta] = {};
+            remote[ta][sa] = lEv;
+            return;
+          }
+
+          // se local è blank (placeholder creato da getEval), non deve sovrascrivere il remoto
+          if(isBlankEval(lEv)) return;
+
+          // se remoto mancante, tieni local
+          if(!rEv){
+            if(!remote[ta]) remote[ta] = {};
+            remote[ta][sa] = lEv;
+          }
+        });
+      });
+    }catch(e){}
+
     return remote;
   }
 
   function mergeTastingMeta(remote, local, forceLocal){
-    // Forza local wins per il tasting se è dirty o siamo in grace window.
     if(!local) return remote;
     if(forceLocal) return { ...remote, ...local, id: remote.id };
     return { ...remote, id: remote.id };
@@ -4046,14 +4090,9 @@ function forceEnableClear(){
 
   async function pollTastingsOnce(){
     if(!db) return;
-    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(12000)){
-      // mentre siamo in grace window, non sovrascrivere metadata: lascia che l'upload faccia il suo
-      return;
-    }
+    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
     try{
       window.__cloudApplying = true;
-
-      // preserva evaluations già in RAM
       const localById = new Map((state.tastings||[]).map(t=>[String(t.id), t]));
 
       const snap = await getDocs(collection(db,'tastings'));
@@ -4063,13 +4102,13 @@ function forceEnableClear(){
         const id = ds.id;
         const local = localById.get(String(id));
         const forceLocal = !!(window.__dirtyTastingIds && window.__dirtyTastingIds.has(String(id)));
-        const mergedMeta = mergeTastingMeta({ ...d, id, evaluations: local?.evaluations }, local, forceLocal);
-        // evaluations local sempre preservate
-        mergedMeta.evaluations = local?.evaluations || mergedMeta.evaluations;
-        list.push(mergedMeta);
+        const merged = mergeTastingMeta({ ...d, id }, local, forceLocal);
+        // evaluations: sempre preserva local; vengono aggiornate dal polling eval dedicato
+        merged.evaluations = local?.evaluations || merged.evaluations;
+        list.push(merged);
       });
 
-      // Mantieni eventuali degustazioni locali non ancora presenti in remoto (create offline)
+      // mantieni eventuali tastings locali non presenti in remoto
       (state.tastings||[]).forEach(t=>{
         const id = String(t.id);
         if(!list.some(x=>String(x.id)===id)) list.push(t);
@@ -4097,7 +4136,7 @@ function forceEnableClear(){
 
   async function pollAnagraficheOnce(){
     if(!db) return;
-    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(12000)) return;
+    if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
     try{
       window.__cloudApplying = true;
       const snap = await getDoc(doc(db,'global','anagrafiche'));
@@ -4112,17 +4151,12 @@ function forceEnableClear(){
       const remoteGroups = Array.isArray(d.groups) ? d.groups : [];
       const remoteDescriptors = (d.descriptors && typeof d.descriptors==='object') ? d.descriptors : null;
 
-      const localTasters = state.tasters;
-      const localProfiles = state.profiles;
-      const localGroups = state.groups;
-      const localDescriptors = state.descriptors;
-
       const forceLocal = !!window.__dirtyAnagrafiche;
 
-      state.tasters = forceLocal ? mergeArrayByKey(remoteTasters, localTasters, 'id') : remoteTasters;
-      state.profiles = forceLocal ? mergeArrayByKey(remoteProfiles, localProfiles, 'key') : remoteProfiles;
-      state.groups = forceLocal ? mergeArrayByKey(remoteGroups, localGroups, 'key') : remoteGroups;
-      state.descriptors = forceLocal ? mergeDescriptorsLocalWins(remoteDescriptors, localDescriptors) : (remoteDescriptors || state.descriptors);
+      state.tasters = forceLocal ? mergeArrayByKey(remoteTasters, state.tasters, 'id') : remoteTasters;
+      state.profiles = forceLocal ? mergeArrayByKey(remoteProfiles, state.profiles, 'key') : remoteProfiles;
+      state.groups = forceLocal ? mergeArrayByKey(remoteGroups, state.groups, 'key') : remoteGroups;
+      state.descriptors = forceLocal ? mergeDescriptorsLocalWins(remoteDescriptors, state.descriptors) : (remoteDescriptors || state.descriptors);
 
       if(!isUserActive(700)){
         try{ window.scheduleRendersFromCloud && window.scheduleRendersFromCloud(); }catch(e){}
@@ -4155,7 +4189,7 @@ function forceEnableClear(){
   function startCloudPolling(){
     stopPoll('core');
     const tick = ()=>{
-      if(isUserActive(900)) return;
+      if(isUserActive(700)) return;
       pollAnagraficheOnce();
       pollTastingsOnce();
     };
@@ -4167,7 +4201,7 @@ function forceEnableClear(){
   try{
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
-    // V23: start polling after init
+    // V24: start polling after init
     try{ setTimeout(()=>{ try{ startCloudPolling(); }catch(e){} }, 800); }catch(e){}
   }catch(e){
     console.error('Firebase init error:', e);
@@ -4258,13 +4292,13 @@ const pushAnagrafiche = async () => {
   window.cloudRequestSync = function(){
     if(window.__cloudApplying) return;
     if(syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(runSync, 3500);
+    syncTimer = setTimeout(runSync, 2200);
   };
 
   async function runSync(){
       // Non sincronizzare mentre l'utente sta interagendo (priorità alla fluidità).
-      if(typeof isUserActive==='function' && isUserActive(900)){
-        try{ syncTimer = setTimeout(runSync, 2500); }catch(e){}
+      if(typeof isUserActive==='function' && isUserActive(700)){
+        try{ syncTimer = setTimeout(runSync, 1800); }catch(e){}
         return;
       }
     if(!db) return;
@@ -4414,21 +4448,21 @@ const pushAnagrafiche = async () => {
     let unsubEval = null;
     function ensureEvalSub(tid){
 
-      // V23 polling (no realtime) - Confronto
+      // V24 polling (no realtime) - Confronto
       stopPoll('evalRes');
       if(!tid) return;
       const run = async ()=>{
         if(!db) return;
-        if(isUserActive(900)) return;
-        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(12000)) return;
+        if(isUserActive(700)) return;
+        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
         try{
           window.__cloudApplying = true;
           const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
           if(!t) return;
           const remote = await fetchEvaluationsMap(tid);
           const local = t.evaluations || {};
-          t.evaluations = mergeEvalsLocalWins(remote, local);
-          if(!isUserActive(700)){
+          t.evaluations = mergeEvalsSmart(tid, remote, local);
+          if(!isUserActive(600)){
             try{ if(typeof renderResultsTable==='function') renderResultsTable(); }catch(e){}
           }
         } catch(e){
@@ -4446,21 +4480,21 @@ const pushAnagrafiche = async () => {
     let unsubEvalDeg = null;
     function ensureEvalSubDeg(tid){
 
-      // V23 polling (no realtime) - Degustazione
+      // V24 polling (no realtime) - Degustazione
       stopPoll('evalDeg');
       if(!tid) return;
       const run = async ()=>{
         if(!db) return;
-        if(isUserActive(900)) return;
-        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(12000)) return;
+        if(isUserActive(700)) return;
+        if(typeof window.__cloudMayApply==='function' && !window.__cloudMayApply(9000)) return;
         try{
           window.__cloudApplying = true;
           const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
           if(!t) return;
           const remote = await fetchEvaluationsMap(tid);
           const local = t.evaluations || {};
-          t.evaluations = mergeEvalsLocalWins(remote, local);
-          if(!isUserActive(700)){
+          t.evaluations = mergeEvalsSmart(tid, remote, local);
+          if(!isUserActive(600)){
             try{ if(getActivePageId()==='page-degustazione'){ if(typeof renderGrid==='function') renderGrid(); if(typeof updateDetail==='function') updateDetail(); } }catch(e){}
           }
         } catch(e){
