@@ -543,6 +543,8 @@
 .modal { background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);width:90%;max-width:350px; }
 .modal-header { background:var(--bordeaux);color:#fff;padding:12px;font-weight:bold;text-align:center; }
 .pchip { font-size:11px !important; padding:2px 8px !important; }
+
+.sample-card{ overflow-y:auto; overflow-x:hidden; }
 </style>
 </head>
 
@@ -1147,12 +1149,10 @@ function forceEnableClear(){
        <input id="editEntityName" class="input" style="text-align:center" />
        <div class="label" style="margin-top:10px;width:100%;text-align:center">Colore</div>
        <div style="display:flex;justify-content:center;margin:10px 0;">
-  <input id="editEntityColor" type="color" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;"
-         oninput="document.getElementById('colorPreview').style.background = this.value"
-         onchange="document.getElementById('colorPreview').style.background = this.value" />
-  <div id="colorPreview" onclick="openColorPicker()" style="width:56px;height:56px;border-radius:50%;border:2px solid #ddd;cursor:pointer;background:#999;box-shadow:0 2px 5px rgba(0,0,0,0.2);"></div>
+  <input id="editEntityColor" type="color"
+    style="width:56px;height:56px;cursor:pointer;border:none;background:transparent;padding:0;border-radius:50%;overflow:hidden;" />
 </div>
-       <div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
+<div style="margin-top:20px;display:flex;justify-content:center;gap:10px;width:100%">
           <button class="btn" onclick="closeEditEntityModal()">Annulla</button>
           <button class="btn" style="background:var(--rosso); border-color:var(--rosso); color:#fff;" onclick="deleteEditEntity()">Elimina</button>
           <button class="btn primary" onclick="saveEditEntity()">Salva</button>
@@ -1902,7 +1902,7 @@ function cardDescriptorsHtml(ev){
       try{ updateBlindCardTag(sSid); }catch(e){}
       renderProductsStrip();
       updateDetail();
-      toast("Assegnato");
+      toast("✓ Assegnato");
     };
 
     window.dissociateBlindSample = function(sid){
@@ -1913,17 +1913,17 @@ function cardDescriptorsHtml(ev){
       if(!t.blindMap[sSid]) return;
       delete t.blindMap[sSid];
       saveState({skipCloud:true});
-      try{ window.queueBlindSync && window.queueBlindSync(t.id, sSid, null); }catch(e){}
+      try{ window.queueBlindSync && window.queueBlindSync(t.id, sSid, sPid); }catch(e){}
       try{ updateBlindCardTag(sSid); }catch(e){}
       renderProductsStrip();
       updateDetail();
-      toast("Dissociato");
+      toast("✓ Dissociato");
     };
 
     window.handleProductDragStart = function(e){
       const pid = e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.pid : null;
       if(!pid) return;
-      e.dataTransfer.setData("text/plain", pid);
+      e.dataTransfer.setData("text/plain", "PID:"+pid);
       e.dataTransfer.effectAllowed = "move";
       try{ e.currentTarget.style.opacity = "0.55"; }catch(_e){}
     };
@@ -1940,7 +1940,9 @@ function cardDescriptorsHtml(ev){
     window.handleSampleDrop = function(e){
       e.preventDefault();
       e.stopPropagation();
-      const pid = e.dataTransfer.getData("text/plain");
+      let raw = e.dataTransfer.getData("text/plain") || "";
+      if(raw.startsWith("SID:")) return;
+      const pid = raw.startsWith("PID:") ? raw.slice(4) : raw;
       const sid = e.currentTarget && e.currentTarget.dataset ? e.currentTarget.dataset.sampleid : null;
       if(!pid || !sid) return;
       window.assignProductToSample(pid, sid);
@@ -2162,7 +2164,7 @@ function renderProductsStrip(){
             if(e.target.closest('.fav-heart') || e.target.closest('.dot')) { e.preventDefault(); return; }
             dragSrcId = sid;
             e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', sid);
+            e.dataTransfer.setData('text/plain', 'SID:'+sid);
             card.style.opacity = '0.5';
          });
          card.addEventListener('dragend', () => card.style.opacity = '1');
@@ -2221,7 +2223,9 @@ function renderProductsStrip(){
         if(!card) return;
 
         e.preventDefault();
-        const pid = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text");
+        let raw = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text") || "";
+        if(raw.startsWith("SID:")) return;
+        const pid = raw.startsWith("PID:") ? raw.slice(4) : raw;
         const sid = String(card.dataset.sampleid);
 
         if(!pid || !sid) return;
@@ -2392,8 +2396,8 @@ function renderProductsStrip(){
          if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
          ev.data.vista.canvas = null;
          saveState({skipCloud:true});
-      try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tid, sid, null); }catch(e){}
-      toast("Appunti cancellati");
+         try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tid, sid, null); }catch(e){}
+         toast("Appunti cancellati");
          setTool('pen');
       }
     }
@@ -2433,12 +2437,18 @@ function renderProductsStrip(){
     function selectSample(sampleId){
       const t = getTasting();
       const tId = currentTasterId();
+      // Flush canvas del campione corrente PRIMA di cambiare selezione
       if(!isArchived() && t && tId && selectedSampleId && canvas){
         try{
-          const prev = getEval(t,tId,selectedSampleId);
-          prev.data.vista.canvas = canvas.toDataURL();
-          saveState();
-        }catch{}
+          const prevSid = String(selectedSampleId);
+          const prev = getEval(t,tId,prevSid);
+          const dataUrl = canvas.toDataURL('image/png');
+          if(!prev.data) prev.data = {};
+          if(!prev.data.vista) prev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
+          prev.data.vista.canvas = dataUrl;
+          saveState({skipCloud:true});
+          try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tId, prevSid, dataUrl); }catch(e){}
+        }catch(e){}
       }
 
       selectedSampleId = sampleId;
@@ -4310,6 +4320,9 @@ const pushAnagrafiche = async () => {
       t.evaluations = t.evaluations || {};
       snap.forEach(ds=>{
         const ev = ds.data() || {};
+        // Il canvas NON viaggia nelle evaluation: preserva quello locale già applicato da pollCanvases()
+        let keepCanvas = null;
+        try{ keepCanvas = t.evaluations?.[String(ev.tasterId)]?.[String(ev.sampleId)]?.data?.vista?.canvas || null; }catch(e){}
         try{ if(ev && ev.data && ev.data.vista) delete ev.data.vista.canvas; }catch(e){}
         if(!ev.tasterId || !ev.sampleId) return;
         const ta = String(ev.tasterId);
@@ -4319,6 +4332,13 @@ const pushAnagrafiche = async () => {
         const eh = stableStringify(ev);
         if(lastEvalHash.get(key) !== eh){
           t.evaluations[ta][sa] = ev;
+          if(keepCanvas){
+            try{
+              if(!t.evaluations[ta][sa].data) t.evaluations[ta][sa].data = {};
+              if(!t.evaluations[ta][sa].data.vista) t.evaluations[ta][sa].data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
+              t.evaluations[ta][sa].data.vista.canvas = keepCanvas;
+            }catch(e){}
+          }
           lastEvalHash.set(key, eh);
           changed = true;
         }
