@@ -3233,7 +3233,18 @@ function isCanvasEmptyDataUrl(dataUrl){
       return dataUrl.length < 2000;
     }
 
-    function openResultsCanvas(encodedUrl, encodedTitle){
+    function openResultsCanvasKey(tid, tasterId, sampleId, encodedTitle){
+      try{
+        const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+        if(!t) return;
+        const ev = (t.evaluations && t.evaluations[String(tasterId)] && t.evaluations[String(tasterId)][String(sampleId)]) || null;
+        const canvas = (ev && ev.data && ev.data.vista && ev.data.vista.canvas) ? String(ev.data.vista.canvas) : null;
+        if(isCanvasEmptyDataUrl(canvas)) return;
+        openResultsCanvas(encodeURIComponent(canvas), encodedTitle);
+      }catch(e){ console.error(e); }
+    }
+
+function openResultsCanvas(encodedUrl, encodedTitle){
       try{
         const url = decodeURIComponent(encodedUrl||'');
         const title = decodeURIComponent(encodedTitle||'');
@@ -3291,6 +3302,7 @@ function renderResultsSelect(){
 
        if(typeof fetchArchivedEvaluations === 'function'){
            await fetchArchivedEvaluations(tid);
+       try{ if(typeof pollCanvases === "function") await pollCanvases(tid); }catch(e){}
        }
        renderResultsTable();
     }
@@ -3348,7 +3360,7 @@ function onResultsSearch(val){
       const resultsSort = state.ui.resultsSort || 'id';
 
       const cols = [
-        "Degustatore", "Profilo", "Evoluzione", "Preferito", 
+        "Degustatore", "Profilo", "Gruppo", "Evoluzione", "Preferito", 
         "Vista I/L", "Vista descr.", 
         "Olfatto I/C", "Olfatto descr.", 
         "Gusto C/A/P", "Gusto descr.", 
@@ -3414,6 +3426,12 @@ function onResultsSearch(val){
                  if(p) profHtml = `<span style="display:inline-block; padding:2px 8px; border-radius:10px; background:#${p.color}40; border:1px solid #${p.color}; font-size:11px; font-weight:bold;">${esc(p.label)}</span>`;
                }
 
+
+               let groupHtml = "-";
+               const gDefRow = groupDef(t, s.groupKey);
+               if(gDefRow){
+                 groupHtml = `<span style="display:inline-block; padding:2px 8px; border-radius:10px; background:#${esc(gDefRow.color)}40; border:1px solid #${esc(gDefRow.color)}; font-size:11px; font-weight:bold;">${esc(gDefRow.label)}</span>`;
+               }
                const fav = ev.favourite ? '<span style="color:red; font-size:14px;">❤</span>' : "-";
 
                const v_int = ev.data?.vista?.intensita || 0;
@@ -3432,12 +3450,13 @@ function onResultsSearch(val){
                const noteCanvas = (ev.data && ev.data.vista && ev.data.vista.canvas) || null;
                const tasterName = (typeof tas!=='undefined' && tas && tas.name) ? String(tas.name) : '';
                const noteTitle = encodeURIComponent((name||'') + ' / ' + (tasterName||''));
-               const noteBtn = (!isCanvasEmptyDataUrl(noteCanvas)) ? ('<button class=\"btn\" style=\"padding:3px 8px;font-size:11px;\" title=\"Apri note\" onclick=\"openResultsCanvas(\'' + encodeURIComponent(noteCanvas) + '\',\'' + noteTitle + '\')\">✎</button>') : '';
+               const noteBtn = (!isCanvasEmptyDataUrl(noteCanvas)) ? ('<button class=\"btn\" style=\"padding:3px 8px;font-size:11px;\" title=\"Apri note\" onclick=\"openResultsCanvasKey(\'' + esc(tid) + '\',\'' + esc(tas.id) + '\',\'' + esc(s.id) + '\',\'' + noteTitle + '\')\">✎</button>') : '';
 const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div style="width:8px;height:8px;border-radius:50%;background:${i<=evo?'#7a2938':'#eee'};border:1px solid #999;"></div>`).join('')}</div>`;
 
                tasterRowsHtml += `<tr data-rowtype="taster" data-sampleid="${esc(s.id)}" data-search="${esc(rowText)}" style="background:#fff; border-bottom:1px solid #eee;">
                   <td style="padding:8px; color:#666;">${esc(tas.name)}</td>
                   <td style="padding:8px;">${profHtml}</td>
+                  <td style="padding:8px;">${groupHtml}</td>
                   <td style="padding:8px;">${evoHtml}</td>
                   <td style="padding:8px; text-align:center;">${fav}</td>
                   <td style="padding:8px;">${v_int} / ${v_lim}</td>
@@ -3454,11 +3473,9 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
 
         if(visibleTasterRows > 0){
            anyRowShown = true;
-           const gDef = groupDef(t, s.groupKey);
-        const groupChip = gDef ? ('<span style=\"display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#fff;background:#' + esc(gDef.color) + '\">' + esc(gDef.label) + '<\/span>') : '';
         html += `<tr data-rowtype="sample" data-sampleid="${esc(s.id)}" data-search="${esc(sampleText + " " + name + " " + (groupDef(t,s.groupKey)?.label||""))}" style="background:#f9f5f0; border-top:2px solid #ccc;">
                    <td colspan="${cols.length}" style="padding:10px; font-weight:bold; font-size:14px; color:#333; border-bottom:1px solid #ddd;">
-                     <span style="color:#7a2938; margin-right:8px;">${esc(s.id)}</span> ${esc(name)} ${groupChip}
+                     <span style="color:#7a2938; margin-right:8px;">${esc(s.id)}</span> ${esc(name)}
                    </td>
                  </tr>`;
            html += tasterRowsHtml;
