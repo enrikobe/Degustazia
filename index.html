@@ -1849,19 +1849,59 @@ function cardDescriptorsHtml(ev){
       });
     }
 
+    function ensureTastingDescriptors(t){
+      if(!t) return null;
+      if(!t.descriptors){
+        // clone current global descriptors as base for this tasting
+        t.descriptors = JSON.parse(JSON.stringify(state.descriptors || {vista:{white:[],red:[]},olfatto:{white:[],red:[]},gusto:{white:[],red:[]}}));
+      }
+      ['vista','olfatto','gusto'].forEach(sec=>{
+        if(!t.descriptors[sec]) t.descriptors[sec] = {white:[], red:[]};
+        if(!Array.isArray(t.descriptors[sec].white)) t.descriptors[sec].white = [];
+        if(!Array.isArray(t.descriptors[sec].red)) t.descriptors[sec].red = [];
+      });
+      return t.descriptors;
+    }
+
+    function getActiveDescriptorSource(){
+      const t = getTasting();
+      if(t && t.descriptors) return t.descriptors;
+      return state.descriptors;
+    }
+
+    function addTastingDescriptor(sec, color){
+      try{
+        const t = getTasting();
+        if(!t) return;
+        const store = ensureTastingDescriptors(t);
+        const label = prompt('Nuovo descrittore ('+sec+' / '+(color==='white'?'Bianchi':'Rossi')+'):', '');
+        if(label==null) return;
+        const v = String(label||'').trim();
+        if(!v) return;
+        const arr = (store[sec] && store[sec][color]) ? store[sec][color] : [];
+        if(arr.includes(v)) return;
+        arr.push(v);
+        try{ arr.sort((a,b)=>String(a).localeCompare(String(b),'it')); }catch(e){}
+        store[sec][color] = arr;
+        saveState({skipCloud:true});
+        renderDescriptorPickers();
+      }catch(e){ console.error(e); }
+    }
+
     function renderDescriptorPickers(){
       ["vista","olfatto","gusto"].forEach(sec=>{
         const el = document.getElementById("pick"+sec);
         if(!el) return;
-        const w = state.descriptors[sec].white;
-        const r = state.descriptors[sec].red;
+        const src = getActiveDescriptorSource();
+        const w = (src[sec] && src[sec].white) ? src[sec].white : [];
+        const r = (src[sec] && src[sec].red) ? src[sec].red : [];
         el.innerHTML = `
           <div>
-            <div class="desc-col-title">Bianchi</div>
+            <div class="desc-col-title">Bianchi <span class="muted" style="font-weight:700; cursor:pointer;" onclick="addTastingDescriptor('${sec}','white')">+ aggiungi</span></div>
             <div class="desc-list">${w.map(d=>`<div class="desc-pill" data-sec="${esc(sec)}" data-desc="${esc(d)}" onclick="toggleDesc('${esc(sec)}','${esc(d)}', this)">${esc(d)}</div>`).join("")}</div>
           </div>
           <div>
-            <div class="desc-col-title">Rossi</div>
+            <div class="desc-col-title">Rossi <span class="muted" style="font-weight:700; cursor:pointer;" onclick="addTastingDescriptor('${sec}','red')">+ aggiungi</span></div>
             <div class="desc-list">${r.map(d=>`<div class="desc-pill" data-sec="${esc(sec)}" data-desc="${esc(d)}" onclick="toggleDesc('${esc(sec)}','${esc(d)}', this)">${esc(d)}</div>`).join("")}</div>
           </div>
         `;
@@ -2380,74 +2420,57 @@ function renderProductsStrip(){
       return {x,y};
     }
 
-    // --- Apple Pencil / iPad Pro: high-frequency stroke engine (coalesced events + smoothing + pressure) ---
+    // --- Apple Pencil: coalesced events + smoothing (quadratic) + pressure + rAF ---
     let __canvasActivePointerId = null;
     let __canvasLastPt = null;
-    let __canvasLastMid = null;
     let __canvasQueue = [];
     let __canvasRaf = 0;
 
-    function __canvasMid(a, b){
-      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    function __canvasMid(a, b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
+    function __canvasPressure(p){ const v=(typeof p==='number' && p>0)?p:0.5; return Math.max(0, Math.min(1,v)); }
+    function __canvasPenWidth(p){ const base=0.9, gain=2.1; const w=base+(__canvasPressure(p)*gain); return Math.max(0.8, Math.min(3.2,w)); }
+
+    function __canvasEnqueuePoint(x,y,pressure){
+      __canvasQueue.push({x:x,y:y,p:pressure});
+      if(!__canvasRaf) __canvasRaf = requestAnimationFrame(__canvasFlushQueue);
     }
 
-    function __canvasPressure(p){
-      const v = (typeof p === 'number' && p > 0) ? p : 0.5;
-      return Math.max(0, Math.min(1, v));
-    }
-
-    function __canvasPenWidth(p){
-      // Range indicativa: ~0.9 .. ~3.0 (pen) con pressione 0..1
-      const base = 0.9;
-      const gain = 2.1;
-      const w = base + (__canvasPressure(p) * gain);
-      return Math.max(0.8, Math.min(3.2, w));
-    }
-
-    function __canvasEnqueuePoint(x, y, pressure){
-      __canvasQueue.push({ x: x, y: y, p: pressure });
-      if(!__canvasRaf){
-        __canvasRaf = requestAnimationFrame(__canvasFlushQueue);
-      }
+    function __canvasRestoreFromDataUrl(dataUrl){
+      try{
+        if(!dataUrl) return;
+        if(typeof clearCanvasVisualOnly==='function') clearCanvasVisualOnly();
+        const img=new Image();
+        img.onload=()=>{ try{ ctx.globalCompositeOperation='source-over'; ctx.drawImage(img,0,0,canvas.width/(canvasDpr||1),canvas.height/(canvasDpr||1)); }catch(e){} };
+        img.src=dataUrl;
+      }catch(e){}
     }
 
     function __canvasFlushQueue(){
       __canvasRaf = 0;
-      if(!state.ui.isDrawing || !canvas || !ctx) { __canvasQueue.length = 0; return; }
-
+      if(!state.ui.isDrawing || !canvas || !ctx){ __canvasQueue.length=0; return; }
       while(__canvasQueue.length){
-        const pt = __canvasQueue.shift();
+        const pt=__canvasQueue.shift();
         if(!__canvasLastPt){
-          __canvasLastPt = { x: pt.x, y: pt.y, p: pt.p };
-          __canvasLastMid = { x: pt.x, y: pt.y };
+          __canvasLastPt={x:pt.x,y:pt.y,p:pt.p};
           ctx.beginPath();
           ctx.moveTo(pt.x, pt.y);
           continue;
         }
-
-        // Tool handling
-        if(state.ui.canvasTool === 'eraser'){
-          ctx.globalCompositeOperation = 'destination-out';
-          ctx.lineWidth = 16;
+        if(state.ui.canvasTool==='eraser'){
+          ctx.globalCompositeOperation='destination-out';
+          ctx.lineWidth=16;
         }else{
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.lineWidth = __canvasPenWidth(pt.p);
+          ctx.globalCompositeOperation='source-over';
+          ctx.lineWidth=__canvasPenWidth(pt.p);
         }
-
-        const prev = { x: __canvasLastPt.x, y: __canvasLastPt.y };
-        const cur = { x: pt.x, y: pt.y };
-        const mid = __canvasMid(prev, cur);
-
-        // Smoothing: quadratic curve to mid-point (sub-pixel coords)
+        const prev={x:__canvasLastPt.x,y:__canvasLastPt.y};
+        const cur={x:pt.x,y:pt.y};
+        const mid=__canvasMid(prev,cur);
         ctx.quadraticCurveTo(prev.x, prev.y, mid.x, mid.y);
         ctx.stroke();
-
-        // Start next segment from mid to keep path short (migliora performance)
         ctx.beginPath();
         ctx.moveTo(mid.x, mid.y);
-
-        __canvasLastPt = { x: pt.x, y: pt.y, p: pt.p };
-        __canvasLastMid = mid;
+        __canvasLastPt={x:pt.x,y:pt.y,p:pt.p};
       }
     }
 
@@ -2460,24 +2483,29 @@ function renderProductsStrip(){
       if(!canvas || !ctx) initCanvas();
       if(!canvas || !ctx) return;
 
-      // Lock to one pointer (Apple Pencil)
       __canvasActivePointerId = e.pointerId;
       try{ canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); }catch(err){}
 
+      // Snapshot del canvas salvato prima di iniziare (ripristino se la gomma svuota tutto)
+      try{
+        const t = getTasting();
+        const tid = currentTasterId();
+        const sid = selectedSampleId;
+        const ev = (t && tid && sid) ? getEval(t, tid, sid) : null;
+        state.ui.canvasPrevDataUrl = (ev && ev.data && ev.data.vista && ev.data.vista.canvas) ? String(ev.data.vista.canvas) : null;
+      }catch(err){ state.ui.canvasPrevDataUrl = null; }
+
       const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left); // float
-      const y = (e.clientY - rect.top);  // float
+      const x = (e.clientX - rect.left);
+      const y = (e.clientY - rect.top);
       const p = __canvasPressure(e.pressure);
 
       state.ui.isDrawing = true;
       __canvasQueue.length = 0;
       __canvasLastPt = null;
-      __canvasLastMid = null;
 
-      // Prime the path immediately
       ctx.beginPath();
       ctx.moveTo(x, y);
-
       __canvasEnqueuePoint(x, y, p);
     }
 
@@ -2508,7 +2536,6 @@ function renderProductsStrip(){
       if(!state.ui.isDrawing) return;
       if(__canvasActivePointerId!=null && e.pointerId!==__canvasActivePointerId) return;
 
-      // Flush any remaining points
       try{ __canvasFlushQueue(); }catch(err){}
 
       state.ui.isDrawing = false;
@@ -2517,23 +2544,35 @@ function renderProductsStrip(){
 
       if(!canvas || !ctx) return;
       ctx.closePath();
-      ctx.globalCompositeOperation = "source-over";
+      ctx.globalCompositeOperation = 'source-over';
 
-      // Persist canvas snapshot (stesso comportamento di prima)
       const t = getTasting();
       const tid = currentTasterId();
       const sid = selectedSampleId;
-      if(t && tid && sid){
-         const ev = getEval(t, tid, sid);
-         if(!ev.data) ev.data = {};
-         if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
-         // Sposta il toDataURL fuori dal frame corrente per ridurre micro-jank
-         setTimeout(()=>{
-           try{ ev.data.vista.canvas = canvas.toDataURL('image/png'); }catch(err){ ev.data.vista.canvas = null; }
-           saveState({skipCloud:true});
-           try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tid, sid, ev.data.vista.canvas); }catch(e){}
-         }, 0);
-      }
+      if(!(t && tid && sid)) return;
+
+      const ev = getEval(t, tid, sid);
+      if(!ev.data) ev.data = {};
+      if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
+
+      setTimeout(()=>{
+        try{
+          const dataUrl = canvas.toDataURL('image/png');
+          const prev = state.ui.canvasPrevDataUrl || null;
+
+          if(typeof isCanvasEmptyDataUrl==='function' && isCanvasEmptyDataUrl(dataUrl)){
+            if(prev && !isCanvasEmptyDataUrl(prev)){
+              ev.data.vista.canvas = prev;
+              __canvasRestoreFromDataUrl(prev);
+            }
+            return;
+          }
+
+          ev.data.vista.canvas = dataUrl;
+          saveState({skipCloud:true});
+          try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tid, sid, ev.data.vista.canvas); }catch(e){}
+        }catch(err){}
+      }, 0);
     }
 
 
@@ -3411,6 +3450,24 @@ function onResultsSearch(val){
       const c = cols4(p.cols);
       return (c[0] + (c[1]?" "+c[1]:"")).trim();
     }
+    function getSampleNameForResults(t, s){
+      // Solo per tabella confronto: nome completo (4 colonne) in formato col1 - col2 - col3 - col4
+      function join4(cols){
+        const c = cols4(cols);
+        return c.map(x=>String(x||'').trim()).filter(Boolean).join(' - ');
+      }
+
+      if(t.mode!=="cieca"){
+         return join4(s.cols) || ("Campione "+s.id);
+      }
+      // Blind: usa il prodotto associato per mostrare tutte le info
+      const pid = (t.blindMap||{})[String(s.id)];
+      if(!pid) return "Campione "+s.id+" (Non svelato)";
+      const p = (t.products||[]).find(x=>String(x.id)===String(pid));
+      if(!p) return "Campione "+s.id+" (Prod?)";
+      return join4(p.cols) || ("Campione "+s.id);
+    }
+
     function renderResultsTable(){
       const wrap = document.getElementById("resultsTableWrap");
       const sel = document.getElementById("resultsDegSelect");
@@ -3444,7 +3501,7 @@ function onResultsSearch(val){
       const resultsSort = state.ui.resultsSort || 'id';
 
       const cols = [
-        "Degustatore", "Profilo", "Evoluzione", "Preferito", 
+        "Degustatore", "Profilo", "Gruppo", "Evoluzione", "Preferito", 
         "Vista I/L", "Vista descr.", 
         "Olfatto I/C", "Olfatto descr.", 
         "Gusto C/A/P", "Gusto descr.", 
@@ -3468,7 +3525,7 @@ function onResultsSearch(val){
       }
 
       samplesList.forEach(s=>{
-        const name = getSampleName(t, s);
+        const name = getSampleNameForResults(t, s);
         const sampleText = (name + " " + s.id).toLowerCase();
 
         let tasterRowsHtml = "";
@@ -3510,7 +3567,14 @@ function onResultsSearch(val){
                  if(p) profHtml = `<span style="display:inline-block; padding:2px 8px; border-radius:10px; background:#${p.color}40; border:1px solid #${p.color}; font-size:11px; font-weight:bold;">${esc(p.label)}</span>`;
                }
 
-               const fav = ev.favourite ? '<span style="color:red; font-size:14px;">❤</span>' : "-";
+               
+               // Gruppo (tag colorato) in colonna dedicata
+               let groupHtml = "-";
+               const gDefRow = groupDef(t, s.groupKey);
+               if(gDefRow){
+                 groupHtml = '<span style=\"display:inline-block; padding:2px 8px; border-radius:10px; ' + 'background:#' + esc(gDefRow.color) + '40; border:1px solid #' + esc(gDefRow.color) + '; font-size:11px; font-weight:bold;\">' + esc(gDefRow.label) + '</span>';
+               }
+const fav = ev.favourite ? '<span style="color:red; font-size:14px;">❤</span>' : "-";
 
                const v_int = ev.data?.vista?.intensita || 0;
                const v_lim = ev.data?.vista?.limpidezza || 0;
@@ -3534,6 +3598,7 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
                tasterRowsHtml += `<tr data-rowtype="taster" data-sampleid="${esc(s.id)}" data-search="${esc(rowText)}" style="background:#fff; border-bottom:1px solid #eee;">
                   <td style="padding:8px; color:#666;">${esc(tas.name)}</td>
                   <td style="padding:8px;">${profHtml}</td>
+                  <td style="padding:8px;">${groupHtml}</td>
                   <td style="padding:8px;">${evoHtml}</td>
                   <td style="padding:8px; text-align:center;">${fav}</td>
                   <td style="padding:8px;">${v_int} / ${v_lim}</td>
@@ -3550,11 +3615,9 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
 
         if(visibleTasterRows > 0){
            anyRowShown = true;
-           const gDef = groupDef(t, s.groupKey);
-        const groupChip = gDef ? ('<span style=\"display:inline-block;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;color:#fff;background:#' + esc(gDef.color) + '\">' + esc(gDef.label) + '<\/span>') : '';
         html += `<tr data-rowtype="sample" data-sampleid="${esc(s.id)}" data-search="${esc(sampleText + " " + name + " " + (groupDef(t,s.groupKey)?.label||""))}" style="background:#f9f5f0; border-top:2px solid #ccc;">
                    <td colspan="${cols.length}" style="padding:10px; font-weight:bold; font-size:14px; color:#333; border-bottom:1px solid #ddd;">
-                     <span style="color:#7a2938; margin-right:8px;">${esc(s.id)}</span> ${esc(name)} ${groupChip}
+                     <span style="color:#7a2938; margin-right:8px;">${esc(s.id)}</span> ${esc(name)}
                    </td>
                  </tr>`;
            html += tasterRowsHtml;
