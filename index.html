@@ -2356,7 +2356,7 @@ function renderProductsStrip(){
       ctx.setTransform(dpr,0,0,dpr,0,0);
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = 1.6;
       ctx.strokeStyle = "#111";
       ctx.globalCompositeOperation = "source-over";
 
@@ -2380,6 +2380,78 @@ function renderProductsStrip(){
       return {x,y};
     }
 
+    // --- Apple Pencil / iPad Pro: high-frequency stroke engine (coalesced events + smoothing + pressure) ---
+    let __canvasActivePointerId = null;
+    let __canvasLastPt = null;
+    let __canvasLastMid = null;
+    let __canvasQueue = [];
+    let __canvasRaf = 0;
+
+    function __canvasMid(a, b){
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    }
+
+    function __canvasPressure(p){
+      const v = (typeof p === 'number' && p > 0) ? p : 0.5;
+      return Math.max(0, Math.min(1, v));
+    }
+
+    function __canvasPenWidth(p){
+      // Range indicativa: ~0.9 .. ~3.0 (pen) con pressione 0..1
+      const base = 0.9;
+      const gain = 2.1;
+      const w = base + (__canvasPressure(p) * gain);
+      return Math.max(0.8, Math.min(3.2, w));
+    }
+
+    function __canvasEnqueuePoint(x, y, pressure){
+      __canvasQueue.push({ x: x, y: y, p: pressure });
+      if(!__canvasRaf){
+        __canvasRaf = requestAnimationFrame(__canvasFlushQueue);
+      }
+    }
+
+    function __canvasFlushQueue(){
+      __canvasRaf = 0;
+      if(!state.ui.isDrawing || !canvas || !ctx) { __canvasQueue.length = 0; return; }
+
+      while(__canvasQueue.length){
+        const pt = __canvasQueue.shift();
+        if(!__canvasLastPt){
+          __canvasLastPt = { x: pt.x, y: pt.y, p: pt.p };
+          __canvasLastMid = { x: pt.x, y: pt.y };
+          ctx.beginPath();
+          ctx.moveTo(pt.x, pt.y);
+          continue;
+        }
+
+        // Tool handling
+        if(state.ui.canvasTool === 'eraser'){
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.lineWidth = 16;
+        }else{
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.lineWidth = __canvasPenWidth(pt.p);
+        }
+
+        const prev = { x: __canvasLastPt.x, y: __canvasLastPt.y };
+        const cur = { x: pt.x, y: pt.y };
+        const mid = __canvasMid(prev, cur);
+
+        // Smoothing: quadratic curve to mid-point (sub-pixel coords)
+        ctx.quadraticCurveTo(prev.x, prev.y, mid.x, mid.y);
+        ctx.stroke();
+
+        // Start next segment from mid to keep path short (migliora performance)
+        ctx.beginPath();
+        ctx.moveTo(mid.x, mid.y);
+
+        __canvasLastPt = { x: pt.x, y: pt.y, p: pt.p };
+        __canvasLastMid = mid;
+      }
+    }
+
+
     function onCanvasDown(e){
       try{ e.preventDefault(); }catch(err){}
       try{ e.stopPropagation(); }catch(err){}
@@ -2388,24 +2460,25 @@ function renderProductsStrip(){
       if(!canvas || !ctx) initCanvas();
       if(!canvas || !ctx) return;
 
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      // Lock to one pointer (Apple Pencil)
+      __canvasActivePointerId = e.pointerId;
+      try{ canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); }catch(err){}
 
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left); // float
+      const y = (e.clientY - rect.top);  // float
+      const p = __canvasPressure(e.pressure);
+
+      state.ui.isDrawing = true;
+      __canvasQueue.length = 0;
+      __canvasLastPt = null;
+      __canvasLastMid = null;
+
+      // Prime the path immediately
       ctx.beginPath();
       ctx.moveTo(x, y);
-      state.ui.isDrawing = true;
 
-      if(state.ui.canvasTool === 'eraser'){
-          ctx.globalCompositeOperation = "destination-out";
-          ctx.lineWidth = 15;
-      } else {
-          ctx.globalCompositeOperation = "source-over";
-          ctx.lineWidth = 2.2;
-          ctx.strokeStyle = "#111";
-      }
-
-      try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
+      __canvasEnqueuePoint(x, y, p);
     }
 
 
@@ -2414,14 +2487,17 @@ function renderProductsStrip(){
       try{ e.stopPropagation(); }catch(err){}
 
       if(!state.ui.isDrawing) return;
+      if(__canvasActivePointerId!=null && e.pointerId!==__canvasActivePointerId) return;
       if(!canvas || !ctx) return;
 
       const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      ctx.lineTo(x, y);
-      ctx.stroke();
+      const evs = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
+      for(const ce of evs){
+        const x = (ce.clientX - rect.left);
+        const y = (ce.clientY - rect.top);
+        const p = __canvasPressure(ce.pressure);
+        __canvasEnqueuePoint(x, y, p);
+      }
     }
 
 
@@ -2430,12 +2506,20 @@ function renderProductsStrip(){
       try{ e.stopPropagation(); }catch(err){}
 
       if(!state.ui.isDrawing) return;
-      state.ui.isDrawing = false;
-      if(!canvas || !ctx) return;
+      if(__canvasActivePointerId!=null && e.pointerId!==__canvasActivePointerId) return;
 
+      // Flush any remaining points
+      try{ __canvasFlushQueue(); }catch(err){}
+
+      state.ui.isDrawing = false;
+      __canvasActivePointerId = null;
+      try{ canvas.releasePointerCapture && canvas.releasePointerCapture(e.pointerId); }catch(err){}
+
+      if(!canvas || !ctx) return;
       ctx.closePath();
       ctx.globalCompositeOperation = "source-over";
 
+      // Persist canvas snapshot (stesso comportamento di prima)
       const t = getTasting();
       const tid = currentTasterId();
       const sid = selectedSampleId;
@@ -2443,9 +2527,12 @@ function renderProductsStrip(){
          const ev = getEval(t, tid, sid);
          if(!ev.data) ev.data = {};
          if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
-         try{ ev.data.vista.canvas = canvas.toDataURL('image/png'); }catch(err){ ev.data.vista.canvas = null; }
-         saveState({skipCloud:true});
-         try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tid, sid, ev.data.vista.canvas); }catch(e){}
+         // Sposta il toDataURL fuori dal frame corrente per ridurre micro-jank
+         setTimeout(()=>{
+           try{ ev.data.vista.canvas = canvas.toDataURL('image/png'); }catch(err){ ev.data.vista.canvas = null; }
+           saveState({skipCloud:true});
+           try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tid, sid, ev.data.vista.canvas); }catch(e){}
+         }, 0);
       }
     }
 
