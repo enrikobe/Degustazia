@@ -547,6 +547,55 @@
 .pchip { font-size:11px !important; padding:2px 8px !important; }
 
 .sample-card{ overflow-y:auto; overflow-x:hidden; }
+
+    .app-logo-img{height:18px;width:auto;margin-right:6px;vertical-align:middle;display:inline-block}
+
+    /* ZEN+ */
+    .zenplus-overlay{position:fixed;inset:0;background:var(--crema);z-index:9999;display:none}
+    .zenplus-overlay.active{display:flex;flex-direction:column}
+    .zenplus-top{flex:0 0 80vh;overflow:auto;padding:10px}
+    .zenplus-strip{flex:0 0 10vh;overflow:hidden;border-top:1px solid rgba(0,0,0,.08);background:#fff}
+    .zenplus-strip-inner{height:100%;display:flex;align-items:center;gap:10px;padding:6px 10px;overflow-x:auto;white-space:nowrap}
+    .zenplus-slot{display:flex;align-items:center;gap:10px}
+    .zenplus-strip-inner .profile-options,.zenplus-strip-inner .group-options{display:flex;flex-wrap:nowrap;gap:8px;grid-template-columns:none !important}
+    .zenplus-strip-inner .profile-option,.zenplus-strip-inner .group-option{min-width:140px}
+    .zenplus-desc-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.15);background:#fafafa;font-weight:800;font-size:12px;cursor:pointer}
+    .zenplus-desc-pill.selected{border-color:var(--bordeaux);background:rgba(122,41,56,.10)}
+    .zenplus-desc-sec{display:inline-block;width:18px;height:18px;border-radius:6px;background:rgba(122,41,56,.12);color:var(--bordeaux);font-weight:950;line-height:18px;text-align:center;font-size:11px}
+    .zenplus-exit{position:absolute;top:10px;right:10px;border:none;background:var(--bordeaux);color:#fff;font-weight:950;border-radius:10px;padding:8px 12px;cursor:pointer}
+    
+    /* ZEN+ overrides (V98) */
+    .zenplus-top{flex:0 0 78vh;overflow:auto;padding:10px}
+
+    .zenplus-strip{overflow:hidden;border-top:1px solid rgba(0,0,0,.08);background:#fff}
+    .zenplus-strip.profiles{flex:0 0 5vh}
+    .zenplus-strip.groups{flex:0 0 5vh}
+    .zenplus-strip.desc.vista{flex:0 0 4vh}
+    .zenplus-strip.desc.olfatto{flex:0 0 4vh}
+    .zenplus-strip.desc.gusto{flex:0 0 4vh}
+
+    /* Scrolling: solo orizzontale + scrollbar nascosta */
+    .zenplus-strip-inner{height:100%;display:flex;align-items:center;gap:10px;padding:6px 10px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}
+    .zenplus-strip-inner::-webkit-scrollbar{display:none;height:0}
+    .zenplus-slot{display:flex;align-items:center;gap:10px;white-space:nowrap;justify-content:flex-start}
+
+    /* Profili/Gruppi: single-line sempre */
+    .zenplus-strip-inner .profile-options,.zenplus-strip-inner .group-options{display:flex !important;flex-wrap:nowrap !important;gap:8px;grid-template-columns:none !important}
+
+    /* Descrittori */
+    .zenplus-desc-row{height:100%;display:flex;align-items:center;gap:10px;padding:6px 10px;overflow:hidden}
+    .zenplus-desc-title{flex:0 0 auto;font-weight:950;color:var(--bordeaux);font-size:12px;white-space:nowrap}
+    .zenplus-desc-add{margin-left:6px;font-weight:900;color:#666;cursor:pointer}
+    .zenplus-desc-list{flex:1 1 auto;display:flex;align-items:center;gap:8px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}
+    .zenplus-desc-list::-webkit-scrollbar{display:none;height:0}
+    .zenplus-desc-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.15);background:#fafafa;font-weight:850;font-size:14px;cursor:pointer}
+    .zenplus-desc-pill.selected{border-color:var(--bordeaux);background:rgba(122,41,56,.10)}
+
+    /* Cards quadrate SOLO in ZEN+ */
+    body.zenplus .sample-card{aspect-ratio: 1 / 1; min-height:0 !important}
+body.zenplus .menu-bar{display:none !important}
+    body.zenplus #zenBar{display:none !important}
+    
 </style>
 </head>
 
@@ -614,6 +663,18 @@ function forceEnableClear(){
     <button class="btn" onclick="toggleZen(false)">Esci ZEN</button>
   </div>
 
+  <div id="zenPlusOverlay" class="zenplus-overlay" aria-hidden="true">
+    <button class="zenplus-exit" onclick="toggleZenPlus(false)">Esci ZEN+</button>
+    <div id="zenPlusTop" class="zenplus-top"></div>
+
+    <div class="zenplus-strip profiles"><div class="zenplus-strip-inner"><div id="zenPlusProfilesSlot" class="zenplus-slot"></div></div></div>
+    <div class="zenplus-strip groups"><div class="zenplus-strip-inner"><div id="zenPlusGroupsSlot" class="zenplus-slot"></div></div></div>
+
+    <div class="zenplus-strip desc vista"><div class="zenplus-desc-row"><div class="zenplus-desc-title">Vista <span class="zenplus-desc-add" onclick="addTastingDescriptorQuick('vista')">+ aggiungi</span></div><div id="zenPlusDescVista" class="zenplus-desc-list"></div></div></div>
+    <div class="zenplus-strip desc olfatto"><div class="zenplus-desc-row"><div class="zenplus-desc-title">Olfatto <span class="zenplus-desc-add" onclick="addTastingDescriptorQuick('olfatto')">+ aggiungi</span></div><div id="zenPlusDescOlfatto" class="zenplus-desc-list"></div></div></div>
+    <div class="zenplus-strip desc gusto"><div class="zenplus-desc-row"><div class="zenplus-desc-title">Gusto <span class="zenplus-desc-add" onclick="addTastingDescriptorQuick('gusto')">+ aggiungi</span></div><div id="zenPlusDescGusto" class="zenplus-desc-list"></div></div></div>
+  </div>
+
   <div class="menu-bar">
     <div class="menu-left">
       <button id="btnMenuDeg" class="menu-btn" onclick="go('degustazione', this)">Degustazione</button>
@@ -623,7 +684,7 @@ function forceEnableClear(){
       <button id="btnMenuRes" class="menu-btn" onclick="go('risultati', this)">Confronto</button>
     </div>
 
-    <div class="app-title">DegustAPP by EB</div>
+    <div class="app-title"><img src="logo.png" class="app-logo-img" alt="" />DegustAPP by EB</div>
 
     <div class="menu-actions">
       <span id="syncLed" class="sync-led" title="Connessione / Sync" style="margin-right:8px; margin-left:0;"></span>
@@ -1608,6 +1669,115 @@ function cardDescriptorsHtml(ev){
         try{ if(document.fullscreenElement) await document.exitFullscreen(); }catch{}
       }
     }
+
+    // ZEN+: long-press su ZEN (senza rompere il tap normale)
+    let __zenPlusLP = 0;
+    let __zenPlusTriggered = false;
+
+    function bindZenPlusLongPress(){
+      const btn = document.getElementById('btnTopZen');
+      if(!btn || btn.dataset.zenPlusBound) return;
+      btn.dataset.zenPlusBound = '1';
+
+      const onDown = (e)=>{
+        clearTimeout(__zenPlusLP);
+        __zenPlusTriggered = false;
+        __zenPlusLP = setTimeout(()=>{ __zenPlusTriggered = true; toggleZenPlus(true); }, 650);
+      };
+      const onUp = ()=>{ clearTimeout(__zenPlusLP); };
+      const onClickCapture = (e)=>{
+        // Se è stato un long-press, blocca il click (che altrimenti attiverebbe anche ZEN)
+        if(__zenPlusTriggered){
+          try{ e.preventDefault(); e.stopPropagation(); }catch(err){}
+          __zenPlusTriggered = false;
+        }
+      };
+
+      btn.addEventListener('pointerdown', onDown, {passive:true, capture:true});
+      btn.addEventListener('pointerup', onUp, {passive:true, capture:true});
+      btn.addEventListener('pointercancel', onUp, {passive:true, capture:true});
+      btn.addEventListener('pointerleave', onUp, {passive:true, capture:true});
+      btn.addEventListener('click', onClickCapture, {passive:false, capture:true});
+    }
+
+    const __zenPlusMoved = {};
+    function __zenPlusMove(elId, targetId){
+      const el = document.getElementById(elId);
+      const target = document.getElementById(targetId);
+      if(!el || !target) return;
+      if(__zenPlusMoved[elId]) return;
+      __zenPlusMoved[elId] = { parent: el.parentNode, next: el.nextSibling };
+      target.appendChild(el);
+    }
+    function __zenPlusRestore(elId){
+      const m = __zenPlusMoved[elId];
+      if(!m) return;
+      const el = document.getElementById(elId);
+      if(!el || !m.parent) return;
+      if(m.next) m.parent.insertBefore(el, m.next);
+      else m.parent.appendChild(el);
+      delete __zenPlusMoved[elId];
+    }
+
+    function renderZenPlusDescriptors(){
+      const t = getTasting();
+      const tid = currentTasterId();
+      const sid = selectedSampleId;
+      const ev = (t && tid && sid) ? getEval(t, tid, sid) : null;
+      const src = (typeof getActiveDescriptorSource==='function') ? getActiveDescriptorSource() : (state.descriptors||{});
+
+      function renderRow(sec, mountId){
+        const el = document.getElementById(mountId);
+        if(!el) return;
+        const all = [].concat((src[sec]&&src[sec].white)||[], (src[sec]&&src[sec].red)||[]);
+        el.innerHTML = all.map(d=>{
+          const selected = !!(ev && ev.data && ev.data[sec] && Array.isArray(ev.data[sec].desc) && ev.data[sec].desc.includes(d));
+          return `<span class="zenplus-desc-pill ${selected?'selected':''}" onclick="zenPlusToggleDesc('${esc(sec)}','${esc(d)}', this)">${esc(d)}</span>`;
+        }).join('');
+      }
+
+      renderRow('vista','zenPlusDescVista');
+      renderRow('olfatto','zenPlusDescOlfatto');
+      renderRow('gusto','zenPlusDescGusto');
+    }
+
+    function toggleZenPlus(on){
+      const overlay = document.getElementById('zenPlusOverlay');
+      if(!overlay) return;
+      const enable = (on===undefined) ? !document.body.classList.contains('zenplus') : !!on;
+
+      if(enable){
+        document.body.classList.add('zenplus');
+        overlay.classList.add('active');
+        overlay.setAttribute('aria-hidden','false');
+
+        __zenPlusMove('samplesGrid','zenPlusTop');
+        __zenPlusMove('profileOptions','zenPlusProfilesSlot');
+        __zenPlusMove('groupOptions','zenPlusGroupsSlot');
+
+        renderZenPlusDescriptors();
+      }else{
+        document.body.classList.remove('zenplus');
+        overlay.classList.remove('active');
+        overlay.setAttribute('aria-hidden','true');
+
+        __zenPlusRestore('samplesGrid');
+        __zenPlusRestore('profileOptions');
+        __zenPlusRestore('groupOptions');
+      }
+    }
+
+    // Aggiorna descrittori in ZEN+ quando cambia campione
+    (function(){
+      const _sel = selectSample;
+      selectSample = function(sampleId){
+        _sel(sampleId);
+        try{ if(document.body.classList.contains('zenplus')) renderZenPlusDescriptors(); }catch(e){}
+      };
+    })();
+
+    setTimeout(bindZenPlusLongPress, 0);
+
     document.addEventListener("fullscreenchange", ()=>{
       const fs = !!document.fullscreenElement;
       if(document.body.classList.contains("zen") && !fs) setZenUI(false);
@@ -1852,7 +2022,6 @@ function cardDescriptorsHtml(ev){
     function ensureTastingDescriptors(t){
       if(!t) return null;
       if(!t.descriptors){
-        // clone current global descriptors as base for this tasting
         t.descriptors = JSON.parse(JSON.stringify(state.descriptors || {vista:{white:[],red:[]},olfatto:{white:[],red:[]},gusto:{white:[],red:[]}}));
       }
       ['vista','olfatto','gusto'].forEach(sec=>{
@@ -1888,6 +2057,18 @@ function cardDescriptorsHtml(ev){
       }catch(e){ console.error(e); }
     }
 
+    function addTastingDescriptorQuick(sec){
+      // No conferma: aggiunge nella lista Bianchi (default) e ricarica ZEN+
+      addTastingDescriptor(sec, 'white');
+      try{ if(document.body.classList.contains('zenplus')) setTimeout(renderZenPlusDescriptors,0); }catch(e){}
+    }
+
+    function zenPlusToggleDesc(sec, d, el){
+      toggleDesc(sec, d, el);
+      try{ if(document.body.classList.contains('zenplus')) setTimeout(renderZenPlusDescriptors,0); }catch(e){}
+    }
+
+
     function renderDescriptorPickers(){
       ["vista","olfatto","gusto"].forEach(sec=>{
         const el = document.getElementById("pick"+sec);
@@ -1897,11 +2078,11 @@ function cardDescriptorsHtml(ev){
         const r = (src[sec] && src[sec].red) ? src[sec].red : [];
         el.innerHTML = `
           <div>
-            <div class="desc-col-title">Bianchi <span class="muted" style="font-weight:700; cursor:pointer;" onclick="addTastingDescriptor('${sec}','white')">+ aggiungi</span></div>
+            <div class="desc-col-title">Bianchi <span class="muted" style="font-weight:800;cursor:pointer" onclick="addTastingDescriptor('${esc(sec)}','white')">+ aggiungi</span></div>
             <div class="desc-list">${w.map(d=>`<div class="desc-pill" data-sec="${esc(sec)}" data-desc="${esc(d)}" onclick="toggleDesc('${esc(sec)}','${esc(d)}', this)">${esc(d)}</div>`).join("")}</div>
           </div>
           <div>
-            <div class="desc-col-title">Rossi <span class="muted" style="font-weight:700; cursor:pointer;" onclick="addTastingDescriptor('${sec}','red')">+ aggiungi</span></div>
+            <div class="desc-col-title">Rossi <span class="muted" style="font-weight:800;cursor:pointer" onclick="addTastingDescriptor('${esc(sec)}','red')">+ aggiungi</span></div>
             <div class="desc-list">${r.map(d=>`<div class="desc-pill" data-sec="${esc(sec)}" data-desc="${esc(d)}" onclick="toggleDesc('${esc(sec)}','${esc(d)}', this)">${esc(d)}</div>`).join("")}</div>
           </div>
         `;
@@ -2486,7 +2667,7 @@ function renderProductsStrip(){
       __canvasActivePointerId = e.pointerId;
       try{ canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); }catch(err){}
 
-      // Snapshot del canvas salvato prima di iniziare (ripristino se la gomma svuota tutto)
+      // Snapshot dell'ultimo canvas salvato (ripristino se la gomma svuota tutto)
       try{
         const t = getTasting();
         const tid = currentTasterId();
@@ -2560,6 +2741,7 @@ function renderProductsStrip(){
           const dataUrl = canvas.toDataURL('image/png');
           const prev = state.ui.canvasPrevDataUrl || null;
 
+          // Protezione gomma: se il risultato è vuoto ripristina l'ultimo canvas valido
           if(typeof isCanvasEmptyDataUrl==='function' && isCanvasEmptyDataUrl(dataUrl)){
             if(prev && !isCanvasEmptyDataUrl(prev)){
               ev.data.vista.canvas = prev;
@@ -2641,7 +2823,7 @@ function renderProductsStrip(){
           const dataUrl = canvas.toDataURL('image/png');
           if(!prev.data) prev.data = {};
           if(!prev.data.vista) prev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
-          prev.data.vista.canvas = dataUrl;
+          if(!isCanvasEmptyDataUrl(dataUrl)) prev.data.vista.canvas = dataUrl;
           saveState({skipCloud:true});
           try{ window.queueCanvasSync && window.queueCanvasSync(t.id, tId, prevSid, dataUrl); }catch(e){}
         }catch(e){}
@@ -3234,14 +3416,21 @@ function renderAnagrafiche(){
     }
     function openComparison(id){
       go("risultati", document.getElementById("btnMenuRes"));
-      // Delay to allow page switch and select population
-      setTimeout(()=>{
-        const sel = document.getElementById("resultsDegSelect");
-        if(sel){
-           sel.value = id;
-           renderResultsTable();
-        }
-      }, 50);
+      const attempt = (delay)=>{
+        setTimeout(()=>{
+          try{ renderResultsSelect(); }catch(e){}
+          const sel = document.getElementById("resultsDegSelect");
+          const wrap = document.getElementById("resultsTableWrap");
+          if(sel){
+            sel.value = id;
+            try{ renderResultsTable(); }catch(e){}
+          }
+          // Retry se la tabella non si è popolata
+          const empty = !wrap || !wrap.innerHTML || wrap.innerHTML.includes('Seleziona una degustazione');
+          if(delay<300 && ( !sel || sel.value!==id || empty)) attempt(delay+150);
+        }, delay);
+      };
+      attempt(0);
     }
     
 function buildArchiveHaystack(t){
@@ -3460,7 +3649,6 @@ function onResultsSearch(val){
       if(t.mode!=="cieca"){
          return join4(s.cols) || ("Campione "+s.id);
       }
-      // Blind: usa il prodotto associato per mostrare tutte le info
       const pid = (t.blindMap||{})[String(s.id)];
       if(!pid) return "Campione "+s.id+" (Non svelato)";
       const p = (t.products||[]).find(x=>String(x.id)===String(pid));
