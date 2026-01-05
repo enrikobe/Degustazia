@@ -592,7 +592,94 @@
     .zenplus-desc-pill.selected{border-color:var(--bordeaux);background:rgba(122,41,56,.10)}
 
     /* Cards quadrate SOLO in ZEN+ */
-    body.zenplus .sample-card{aspect-ratio: 1 / 1; min-height:0 !important}
+
+
+/* ZEN+ Rotonda (V100) */
+body.zenplus .sample-card{
+  aspect-ratio: 1 / 1;
+  min-height: 0 !important;
+
+  /* Cerchio */
+  border-radius: 50% !important;
+
+  /* Niente sbordo + scroll interno solo verticale */
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+
+  /* Contenuti centrati */
+  display: flex;
+  flex-direction: column;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  text-align: center !important;
+
+  padding: 8px !important;
+  gap: 8px;
+
+  position: relative;
+}
+
+/* Cerchi più piccoli in ZEN+ (più colonne) */
+body.zenplus .samples-grid{ grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+@media (orientation:portrait){
+  body.zenplus .samples-grid{ grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* TAG cieca sopra alle card (quando attivi) */
+body.zenplus #productsStrip{ margin: 0 0 8px 0; padding: 6px 2px 10px 2px; width: 100%; }
+
+/* ZEN+ margine fondo 4% schermo (tablet-friendly) */
+body.zenplus .zenplus-overlay{ padding-bottom: 4vh; }
+
+/* Allineamenti interni */
+body.zenplus .sample-top{
+  width: 100%;
+  justify-content: center !important;
+  align-items: center !important;
+  flex-direction: column;
+  gap: 6px;
+}
+body.zenplus .sample-meta{ width: 100%; }
+body.zenplus .sample-id-col,
+body.zenplus .sample-lines,
+body.zenplus .chips-row,
+body.zenplus .evo-row{
+  align-items: center !important;
+  justify-content: center !important;
+}
+body.zenplus .sample-line{ text-align: center !important; }
+
+/* Cuore preferiti: sempre cliccabile in ZEN+ */
+body.zenplus .fav-heart{
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+/* Pulsante ripristino (∅) in ZEN+ */
+.zenplus-unhide{
+  position: absolute;
+  top: 10px;
+  right: 118px;
+  border: none;
+  background: #fff;
+  color: var(--bordeaux);
+  font-weight: 950;
+  border-radius: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0,0,0,.12);
+}
+
+/* Scrollbar interna (solo se presente) */
+body.zenplus .sample-card::-webkit-scrollbar{ width: 8px; }
+body.zenplus .sample-card::-webkit-scrollbar-thumb{ background: rgba(0,0,0,.18); border-radius: 999px; }
+body.zenplus .sample-card::-webkit-scrollbar-track{ background: transparent; }
 body.zenplus .menu-bar{display:none !important}
     body.zenplus #zenBar{display:none !important}
     
@@ -660,11 +747,13 @@ function forceEnableClear(){
 
   <div id="zenBar" class="zen-bar">
     <button class="btn primary" onclick="toggleFiltersPanel()">Filtri</button>
+    <button id=\"btnZenUnhide\" class=\"btn\" style=\"display:none\" onclick=\"unhideAllSamples()\" title=\"Ripristina campioni nascosti\">∅</button>
     <button class="btn" onclick="toggleZen(false)">Esci ZEN</button>
   </div>
 
   <div id="zenPlusOverlay" class="zenplus-overlay" aria-hidden="true">
     <button class="zenplus-exit" onclick="toggleZenPlus(false)">Esci ZEN+</button>
+  <button id=\"zenPlusUnhide\" class=\"zenplus-unhide\" style=\"display:none\" onclick=\"unhideAllSamples()\" title=\"Ripristina campioni nascosti\">∅</button>
     <div id="zenPlusTop" class="zenplus-top"></div>
 
     <div class="zenplus-strip profiles"><div class="zenplus-strip-inner"><div id="zenPlusProfilesSlot" class="zenplus-slot"></div></div></div>
@@ -691,6 +780,7 @@ function forceEnableClear(){
       <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
       <button id="btnTopFilters" class="menu-btn action" style="font-weight:950" onclick="toggleFiltersPanel()">Filtri</button>
       <button id="btnTopZen" class="menu-btn action" style="font-weight:950" onclick="toggleZen()">ZEN</button>
+        <button id=\"btnTopUnhide\" class=\"menu-btn action\" style=\"font-weight:950; display:none\" onclick=\"unhideAllSamples()\" title=\"Ripristina campioni nascosti\">∅</button>
     </div>
   </div>
 
@@ -1136,12 +1226,15 @@ function forceEnableClear(){
       if(!tid) { toast("Seleziona una degustazione"); return; }
       const t = state.tastings.find(x=>x.id===tid);
       if(!t) return;
+const tasterIdsFromTasting = (t.tasterIds && t.tasterIds.length) ? t.tasterIds.slice() : Object.keys((t.evaluations||{}));
+const tastersExpanded = (tasterIdsFromTasting||[]).map(id => {
+   return state.tasters.find(x=>String(x.id)===String(id)) || { id: id, name: `Degustatore ${id}`, email: '' };
+});
 
-      const activeTasters = state.tasters.filter(tas => {
-         if(!(t.tasterIds||[]).includes(tas.id)) return false;
-         const evs = t.evaluations && t.evaluations[String(tas.id)];
-         return evs && Object.keys(evs).length > 0;
-      });
+const activeTasters = tastersExpanded.filter(tas => {
+   const evs = t.evaluations && t.evaluations[String(tas.id)];
+   return evs && Object.keys(evs).length > 0;
+});
 
       const win = window.open('','_blank');
       if(!win) { toast("Popup bloccato"); return; }
@@ -1751,7 +1844,10 @@ function cardDescriptorsHtml(ev){
         overlay.classList.add('active');
         overlay.setAttribute('aria-hidden','false');
 
+        __zenPlusMove('productsStrip','zenPlusTop');
         __zenPlusMove('samplesGrid','zenPlusTop');
+        try{ renderProductsStrip(); }catch(e){}
+        try{ updateHiddenButtons(); }catch(e){}
         __zenPlusMove('profileOptions','zenPlusProfilesSlot');
         __zenPlusMove('groupOptions','zenPlusGroupsSlot');
 
@@ -1762,6 +1858,9 @@ function cardDescriptorsHtml(ev){
         overlay.setAttribute('aria-hidden','true');
 
         __zenPlusRestore('samplesGrid');
+        __zenPlusRestore('productsStrip');
+        try{ renderProductsStrip(); }catch(e){}
+        try{ updateHiddenButtons(); }catch(e){}
         __zenPlusRestore('profileOptions');
         __zenPlusRestore('groupOptions');
       }
@@ -2307,11 +2406,12 @@ function renderProductsStrip(){
       const grid = document.getElementById("samplesGrid");
       const t = getTasting();
       if(!grid) return;
-      if(!t){ grid.innerHTML=""; return; }
+      if(!t){ grid.innerHTML = ""; return; }
       const tId = currentTasterId();
       const ui = currentTasterId() ? getTasterUI(currentTasterId()) : { filterProfile:'tutti', filterGroup:'tutti', sort:'custom' }; const filterProfile = ui.filterProfile || "tutti";
       const filterGroup = ui.filterGroup || "tutti";
       let list = t.samples.slice();
+      try{ list = list.filter(s=>!isSampleHidden(t.id, s.id)); }catch(e){}
       if(ui.sort === 'custom') {
          if(tId) {
             const ord = getSampleOrder(t, tId);
@@ -3661,7 +3761,8 @@ function onResultsSearch(val){
       const sel = document.getElementById("resultsDegSelect");
       if(!wrap || !sel) return;
 
-      const tid = sel.value;
+      const tid = sel.value || String((state.ui && state.ui.resultsTastingId) || '');
+      if(!sel.value && tid) sel.value = tid;
       if(!tid){
         wrap.innerHTML = `<div class="muted">Seleziona una degustazione dall'elenco.</div>`;
         return;
@@ -5068,6 +5169,124 @@ window.toggleBlindProduct = async function(pid){
   toast('Assegnato');
 };
 
+
+
+/* =========================
+   UI: Campioni nascosti (V100)
+   - Long press 1.5s su card (senza movimento) => nasconde
+   - ∅ ripristina
+   ========================= */
+
+function _hidTid(tid){ return String(tid||''); }
+
+function getHiddenSamplesForTasting(tid){
+  if(!state.ui) state.ui = {};
+  if(!state.ui.hiddenSamples) state.ui.hiddenSamples = {};
+  return state.ui.hiddenSamples[_hidTid(tid)] || [];
+}
+
+function isSampleHidden(tid, sid){
+  const arr = getHiddenSamplesForTasting(tid);
+  return arr.includes(String(sid));
+}
+
+function hideSample(sid){
+  const t = getTasting();
+  if(!t) return;
+  const tid = _hidTid(t.id);
+  const arr = getHiddenSamplesForTasting(tid).slice();
+  const s = String(sid);
+  if(!arr.includes(s)) arr.push(s);
+  state.ui.hiddenSamples[tid] = arr;
+
+  if(String(selectedSampleId||'') === s) selectedSampleId = null;
+
+  saveState();
+  renderProductsStrip();
+  renderGrid();
+  updateDetail();
+  updateHiddenButtons();
+  toast('Campione nascosto');
+}
+
+function unhideAllSamples(){
+  const t = getTasting();
+  if(!t) return;
+  const tid = _hidTid(t.id);
+  if(state.ui && state.ui.hiddenSamples && state.ui.hiddenSamples[tid]){
+    delete state.ui.hiddenSamples[tid];
+    saveState();
+  }
+  renderProductsStrip();
+  renderGrid();
+  updateDetail();
+  updateHiddenButtons();
+  toast('Campioni ripristinati');
+}
+
+function countHiddenCurrent(){
+  const t = getTasting();
+  if(!t) return 0;
+  return getHiddenSamplesForTasting(t.id).length;
+}
+
+function updateHiddenButtons(){
+  const n = countHiddenCurrent();
+  ['btnTopUnhide','btnZenUnhide','zenPlusUnhide'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = (n>0 ? '' : 'none');
+  });
+}
+
+const __hideLP = { timer:null, x:0, y:0, suppressUntil:0 };
+
+function bindHideLongPress(){
+  const grid = document.getElementById('samplesGrid');
+  if(!grid || grid.__hideBound) return;
+  grid.__hideBound = true;
+
+  grid.addEventListener('pointerdown', (e)=>{
+    const card = e.target.closest('.sample-card');
+    if(!card) return;
+    if(e.target.closest('.fav-heart')) return; // non interferire col cuore
+
+    const sid = card.getAttribute('data-sid') || card.dataset.sid;
+    if(!sid) return;
+
+    __hideLP.x = e.clientX; __hideLP.y = e.clientY;
+    if(__hideLP.timer) clearTimeout(__hideLP.timer);
+
+    __hideLP.timer = setTimeout(()=>{
+      __hideLP.suppressUntil = Date.now() + 650;
+      try{ hideSample(sid); }catch(err){}
+    }, 1500);
+  }, {passive:true});
+
+  grid.addEventListener('pointermove', (e)=>{
+    if(!__hideLP.timer) return;
+    const dx = Math.abs(e.clientX - __hideLP.x);
+    const dy = Math.abs(e.clientY - __hideLP.y);
+    if(dx > 8 || dy > 8){
+      clearTimeout(__hideLP.timer);
+      __hideLP.timer = null;
+    }
+  }, {passive:true});
+
+  const cancel = ()=>{ if(__hideLP.timer){ clearTimeout(__hideLP.timer); __hideLP.timer = null; } };
+  grid.addEventListener('pointerup', cancel, {passive:true});
+  grid.addEventListener('pointercancel', cancel, {passive:true});
+  grid.addEventListener('pointerleave', cancel, {passive:true});
+
+  // Evita che il click successivo selezioni la card quando scatta il long-press
+  grid.addEventListener('click', (e)=>{
+    if(Date.now() < (__hideLP.suppressUntil||0)){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
+}
+
+setTimeout(()=>{ try{ bindHideLongPress(); updateHiddenButtons(); }catch(e){} }, 0);
 </script>
 <!-- FIREBASE CLOUD-ONLY END -->
 
