@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
+<!-- V111-OK -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -623,16 +624,16 @@ body.zenplus .sample-card{
 }
 
 /* Cerchi più piccoli in ZEN+ (più colonne) */
-body.zenplus .samples-grid{ grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+body.zenplus .samples-grid{ grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 7px; }
 @media (orientation:portrait){
-  body.zenplus .samples-grid{ grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  body.zenplus .samples-grid{ grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 
 /* TAG cieca sopra alle card (quando attivi) */
 body.zenplus #productsStrip{ margin: 0 0 8px 0; padding: 6px 2px 10px 2px; width: 100%; }
 
 /* ZEN+ margine fondo 4% schermo (tablet-friendly) */
-body.zenplus .zenplus-overlay{ padding-bottom: 4vh; }
+body.zenplus .zenplus-overlay{ padding-bottom: calc(3vh + env(safe-area-inset-bottom, 0px)); box-sizing:border-box; }
 
 /* Allineamenti interni */
 body.zenplus .sample-top{
@@ -663,26 +664,153 @@ body.zenplus .fav-heart{
 
 /* Pulsante ripristino (∅) in ZEN+ */
 .zenplus-unhide{
-  position: absolute;
-  top: 10px;
-  right: 118px;
-  border: none;
-  background: #fff;
-  color: var(--bordeaux);
-  font-weight: 950;
-  border-radius: 10px;
-  padding: 8px 12px;
-  cursor: pointer;
-  box-shadow: 0 6px 18px rgba(0,0,0,.12);
+  position:absolute;
+  top:10px;
+  right:74px; /* a sinistra di Esci ZEN+ */
+  width:44px;
+  height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:none;
+  background:var(--focus-blue);
+  color:#fff;
+  font-weight:950;
+  border-radius:6px;
+  cursor:pointer;
+  box-shadow:0 6px 18px rgba(0,0,0,.12);
+  z-index:10010;
 }
 
+
 /* Scrollbar interna (solo se presente) */
-body.zenplus .sample-card::-webkit-scrollbar{ width: 8px; }
+body.zenplus .sample-card::-webkit-scrollbar{ display:none; width:0; height:0; }
 body.zenplus .sample-card::-webkit-scrollbar-thumb{ background: rgba(0,0,0,.18); border-radius: 999px; }
 body.zenplus .sample-card::-webkit-scrollbar-track{ background: transparent; }
 body.zenplus .menu-bar{display:none !important}
     body.zenplus #zenBar{display:none !important}
     
+
+
+/* V103 UX helpers */
+.sample-card{ overflow-y:auto; overflow-x:hidden; scrollbar-width:none; }
+.sample-card::-webkit-scrollbar{ display:none; width:0; height:0; }
+
+.card-desc-row, .card-desc{ font-style: italic; }
+
+.sample-id-row{ display:flex; align-items:center; gap:6px; justify-content:flex-start; }
+body.zenplus .sample-id-row{ justify-content:center; }
+
+/* ∅ square button (blu/bianco) */
+.menu-btn.unhide-square{ background:var(--focus-blue) !important; color:#fff !important; border-radius:6px !important; width:44px; padding:10px 0 !important; text-align:center; }
+.btn.unhide-square{ background:var(--focus-blue) !important; border-color:var(--focus-blue) !important; color:#fff !important; border-radius:6px !important; width:44px; }
+
+/* ZEN+ container: evita strip tagliate */
+body.zenplus .zenplus-overlay{ height:100vh; }
+body.zenplus .zenplus-top{ flex:1 1 auto; min-height:0; }
+
+
+/* V103G UI PATCH */
+.sample-id-row{ display:flex; align-items:center; gap:6px; justify-content:flex-start; }
+body.zenplus .sample-id-row{ justify-content:center; }
+
+.sample-card{ overflow-y:auto; overflow-x:hidden; scrollbar-width:none; }
+.sample-card::-webkit-scrollbar{ display:none; width:0; height:0; }
+
+.unhide-restore{ width:57px; height:57px; display:inline-flex; align-items:center; justify-content:center; padding:0 !important; border-radius:10px !important; font-weight:950; line-height:1; }
+.menu-btn.unhide-restore{ background: rgba(255,255,255,.15); color:#fff; }
+.btn.unhide-restore{ background:#fff; color:var(--bordeaux); border:1px solid rgba(0,0,0,.12); }
+.unhide-restore.on{ background: var(--focus-blue) !important; color:#fff !important; }
+
+.zenplus-top-actions{ position:absolute; top:10px; right:10px; display:flex; gap:8px; z-index:10020; }
+.zenplus-top-actions .zenplus-btn{ border:none; border-radius:10px; padding:10px 12px; cursor:pointer; font-weight:950; box-shadow:0 6px 18px rgba(0,0,0,.12); }
+.zenplus-top-actions .zenplus-btn.exit{ background: var(--bordeaux); color:#fff; }
+.zenplus-top-actions .zenplus-btn.filters{ background:#fff; color:var(--bordeaux); border:1px solid rgba(0,0,0,.12); }
+.zenplus-top-actions .zenplus-btn.unhide{ background: rgba(255,255,255,.15); color:#fff; }
+.zenplus-top-actions .zenplus-btn.unhide.on{ background: var(--focus-blue); color:#fff; }
+
+
+    /* V103J hide unhide in bars */
+    #btnTopUnhide, #btnZenUnhide{ display:none !important; }
+
+    .unhide-pill{ background: var(--focus-blue); color:#fff; }
+    .unhide-pill.disabled{ background:#e7e7e7; color:#666; pointer-events:none; }
+
+
+/* V103J filters z */
+#filtersOverlay{ z-index:10040; }
+#filtersPanel{ z-index:10050; }
+
+/* V103J hide legacy zenplus unhide button */
+button.zenplus-unhide{ display:none !important; }
+
+/* V103J zenplus button height */
+.zenplus-top-actions .zenplus-btn{ height:36px; padding:0 12px; display:inline-flex; align-items:center; }
+
+/* V103J ZEN+ id/heart stacking */
+body.zenplus .sample-id-row{ flex-direction: column; gap: 2px; }
+body.zenplus .fav-heart{ padding:0 2px; }
+
+
+/* V103J ZEN+ strip avoid buttons, keep horizontal scroll */
+body.zenplus #productsStrip{
+  max-width: calc(100% - 240px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  white-space: nowrap;
+}
+
+
+/* V104 Unhide only in Filters */
+#btnTopUnhide, #btnZenUnhide, #zenPlusUnhide{ display:none !important; }
+button.zenplus-unhide{ display:none !important; }
+
+#btnFiltersUnhide{ width:100%; }
+.unhide-pill{ background: var(--focus-blue); color:#fff; border:none; }
+.unhide-pill.disabled{ background:#e7e7e7; color:#666; pointer-events:none; }
+
+
+/* V104 ZEN+ layout */
+body.zenplus .sample-id-row{ flex-direction: column; gap:2px; align-items:center; }
+body.zenplus .fav-heart{ display:flex; align-items:center; justify-content:center; padding:0; }
+
+.zenplus-top-actions .zenplus-btn{ height:36px; padding:0 12px; display:inline-flex; align-items:center; }
+
+/* Strip prodotti: non sotto ai pulsanti + scroll orizzontale */
+body.zenplus #productsStrip{
+  max-width: calc(100% - 240px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  white-space: nowrap;
+}
+
+/* Filtri sopra ZEN+ */
+#filtersOverlay{ z-index:10040; }
+#filtersPanel{ z-index:10050; }
+
+/* V107 OK: UI Filtri / campioni nascosti */
+:root{ --electric-blue:#007BFF; }
+#btnFiltersUnhide{ width:100%; margin-top:12px; }
+#btnFiltersUnhide.unhide-pill{ background: var(--electric-blue) !important; color:#fff !important; border:none !important; }
+#btnFiltersUnhide.unhide-pill.disabled{ background:#e7e7e7 !important; color:#666 !important; pointer-events:none; }
+.menu-btn.action.filters-has-hidden{ background: var(--electric-blue) !important; color:#fff !important; }
+#zenBar .filters-has-hidden{ background: var(--electric-blue) !important; border-color: var(--electric-blue) !important; color:#fff !important; }
+/* ZEN+ cuore sotto sample-id */
+body.zenplus .sample-id-row{ flex-direction: column !important; align-items:center !important; }
+body.zenplus .sample-id{ order:0; }
+body.zenplus .fav-heart{ order:1; position: static !important; top:auto !important; right:auto !important; margin-top:2px; }
+
+
+/* V111 OK: ZEN+ Filtri fix + hidden IDs */
+.zenplus-top-actions{ flex-direction: column; align-items:flex-end; }
+.zenplus-top-actions .zenplus-btn{ height:36px; padding:0 12px; display:inline-flex; align-items:center; }
+.zenplus-top-actions .zenplus-btn.filters{ background:#fff; color: var(--bordeaux); border:1px solid rgba(0,0,0,.12); }
+.zenplus-top-actions .zenplus-btn.filters.filters-has-hidden{ background: var(--electric-blue, #007BFF) !important; color:#fff !important; border-color: var(--electric-blue, #007BFF) !important; }
+.hidden-ids-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.hidden-id-btn{ background: var(--electric-blue, #007BFF); color:#fff; border:none; border-radius:999px; padding:8px 12px; font-weight:950; cursor:pointer; }
+
 </style>
 </head>
 
@@ -747,14 +875,16 @@ function forceEnableClear(){
 
   <div id="zenBar" class="zen-bar">
     <button class="btn primary" onclick="toggleFiltersPanel()">Filtri</button>
-    <button id=\"btnZenUnhide\" class=\"btn\" style=\"display:none\" onclick=\"unhideAllSamples()\" title=\"Ripristina campioni nascosti\">∅</button>
-    <button class="btn" onclick="toggleZen(false)">Esci ZEN</button>
+<button class="btn" onclick="toggleZen(false)">Esci ZEN</button>
   </div>
 
   <div id="zenPlusOverlay" class="zenplus-overlay" aria-hidden="true">
+  <div class="zenplus-top-actions">
+    <button class="zenplus-btn exit" onclick="toggleZenPlus(false)">Esci ZEN+</button>
+    <button id="btnZenPlusTopFilters" class="zenplus-btn filters" onclick="zenPlusToggleFilters(event)">Filtri</button>
+  </div>
     <button class="zenplus-exit" onclick="toggleZenPlus(false)">Esci ZEN+</button>
-  <button id=\"zenPlusUnhide\" class=\"zenplus-unhide\" style=\"display:none\" onclick=\"unhideAllSamples()\" title=\"Ripristina campioni nascosti\">∅</button>
-    <div id="zenPlusTop" class="zenplus-top"></div>
+<div id="zenPlusTop" class="zenplus-top"></div>
 
     <div class="zenplus-strip profiles"><div class="zenplus-strip-inner"><div id="zenPlusProfilesSlot" class="zenplus-slot"></div></div></div>
     <div class="zenplus-strip groups"><div class="zenplus-strip-inner"><div id="zenPlusGroupsSlot" class="zenplus-slot"></div></div></div>
@@ -780,8 +910,7 @@ function forceEnableClear(){
       <button id="btnTopFinish" class="menu-btn action" style="font-weight:950" onclick="finishTasting()">Termina</button>
       <button id="btnTopFilters" class="menu-btn action" style="font-weight:950" onclick="toggleFiltersPanel()">Filtri</button>
       <button id="btnTopZen" class="menu-btn action" style="font-weight:950" onclick="toggleZen()">ZEN</button>
-        <button id=\"btnTopUnhide\" class=\"menu-btn action\" style=\"font-weight:950; display:none\" onclick=\"unhideAllSamples()\" title=\"Ripristina campioni nascosti\">∅</button>
-    </div>
+</div>
   </div>
 
   <div class="container">
@@ -1076,13 +1205,16 @@ function forceEnableClear(){
 
   <div id="filtersOverlay" class="filters-overlay" onclick="closeFiltersPanel()"></div>
   <div id="filtersPanel" class="filters-panel">
-    <div class="filters-head">
+
+<div class="filters-head">
       <div class="filters-title">Filtri &amp; Ordine</div>
       <button class="btn" onclick="closeFiltersPanel()">Chiudi</button>
     </div>
 
     <div class="filters-body">
       <div class="help">Suggerimento: per riordinare i TAB trascinando, imposta Ordine = “Ordine” e filtri su “Tutti”.</div>
+      <button class="pill2 unhide-pill disabled" id="btnFiltersUnhide" onclick="unhideAllSamples()">Mostra Campioni Nascosti</button>
+      <div id="hiddenSampleIdsWrap" class="hidden-ids-wrap"></div>
 
       <div class="pill2">Ordina</div>
       <div id="sortBtnsWrap" class="row-actions"></div>
@@ -1261,6 +1393,24 @@ const activeTasters = tastersExpanded.filter(tas => {
 .modal { background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);width:90%;max-width:350px; }
 .modal-header { background:var(--bordeaux);color:#fff;padding:12px;font-weight:bold;text-align:center; }
 .pchip { font-size:11px !important; padding:2px 8px !important; }
+
+
+/* V103 UX helpers */
+.sample-card{ overflow-y:auto; overflow-x:hidden; scrollbar-width:none; }
+.sample-card::-webkit-scrollbar{ display:none; width:0; height:0; }
+
+.card-desc-row, .card-desc{ font-style: italic; }
+
+.sample-id-row{ display:flex; align-items:center; gap:6px; justify-content:flex-start; }
+body.zenplus .sample-id-row{ justify-content:center; }
+
+/* ∅ square button (blu/bianco) */
+.menu-btn.unhide-square{ background:var(--focus-blue) !important; color:#fff !important; border-radius:6px !important; width:44px; padding:10px 0 !important; text-align:center; }
+.btn.unhide-square{ background:var(--focus-blue) !important; border-color:var(--focus-blue) !important; color:#fff !important; border-radius:6px !important; width:44px; }
+
+/* ZEN+ container: evita strip tagliate */
+body.zenplus .zenplus-overlay{ height:100vh; }
+body.zenplus .zenplus-top{ flex:1 1 auto; min-height:0; }
 </style>
       </head><body>`;
 
@@ -1681,7 +1831,7 @@ function cardDescriptorsHtml(ev){
       pushAll(ev.data.olfatto?.desc);
       pushAll(ev.data.gusto?.desc);
       if(!a.length) return '';
-      const shown = a.slice(0,6);
+      const shown = a.slice(0,10);
       return `<div class="card-desc-row">` + shown.map((x,i)=>`<span class="card-desc">${esc(x)}</span>${i<shown.length-1?', ':''}`).join('') + `</div>`;
     }
 
@@ -1714,7 +1864,9 @@ function cardDescriptorsHtml(ev){
       document.getElementById("filtersOverlay")?.classList.remove("active");
     }
     function openFiltersPanel(){
-      if(!document.getElementById("page-degustazione")?.classList.contains("active")) return;
+      const okPage = document.getElementById("page-degustazione")?.classList.contains("active");
+      const okZen = document.body.classList.contains("zenplus") || document.body.classList.contains("zen");
+      if(!(okPage || okZen)) return;
       document.getElementById("filtersPanel")?.classList.add("active");
       document.getElementById("filtersOverlay")?.classList.add("active");
     }
@@ -1724,6 +1876,21 @@ function cardDescriptorsHtml(ev){
       if(p.classList.contains("active")) closeFiltersPanel();
       else openFiltersPanel();
     }
+
+    // V111: apertura Filtri in ZEN+ (evita chiusura immediata e forza overlay/pannello)
+    function forceOpenFiltersPanel(){
+      document.getElementById("filtersPanel")?.classList.add("active");
+      document.getElementById("filtersOverlay")?.classList.add("active");
+    }
+
+    function zenPlusToggleFilters(ev){
+      try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+      const p = document.getElementById("filtersPanel");
+      if(!p) return;
+      if(p.classList.contains("active")) closeFiltersPanel();
+      else forceOpenFiltersPanel();
+    }
+
 
     function setZenUI(on){
       document.body.classList.toggle("zen", !!on);
@@ -1787,9 +1954,13 @@ function cardDescriptorsHtml(ev){
       };
 
       btn.addEventListener('pointerdown', onDown, {passive:true, capture:true});
+      btn.addEventListener('touchstart', onDown, {passive:true, capture:true});
       btn.addEventListener('pointerup', onUp, {passive:true, capture:true});
+      btn.addEventListener('touchend', onUp, {passive:true, capture:true});
       btn.addEventListener('pointercancel', onUp, {passive:true, capture:true});
+      btn.addEventListener('touchcancel', onUp, {passive:true, capture:true});
       btn.addEventListener('pointerleave', onUp, {passive:true, capture:true});
+      btn.addEventListener('touchmove', onUp, {passive:true, capture:true});
       btn.addEventListener('click', onClickCapture, {passive:false, capture:true});
     }
 
@@ -2000,25 +2171,64 @@ function cardDescriptorsHtml(ev){
     function renderProfileFilterBtns(){
       const wrap = document.getElementById("profileFilterBtns");
       if(!wrap) return;
-      const tId = currentTasterId(); const ui = tId ? getTasterUI(tId) : { filterProfile: 'tutti' }; const current = ui.filterProfile || "tutti";
+      const t = getTasting();
+      const tId = currentTasterId();
+      const ui = tId ? getTasterUI(tId) : { filterProfile: 'tutti' };
+      let current = ui.filterProfile || "tutti";
+
+      // Mostra solo i profili effettivamente presenti nelle card (per degustatore corrente)
+      const used = new Set();
+      if(t && tId && Array.isArray(t.samples)){
+        t.samples.forEach(s=>{
+          try{
+            const ev = getEval(t, tId, s.id);
+            const k = ev && ev.profileKey ? String(ev.profileKey) : "";
+            if(k) used.add(k);
+          }catch(e){}
+        });
+      }
+
+      if(current !== 'tutti' && !used.has(String(current))){
+        try{ ui.filterProfile = 'tutti'; saveState(); }catch(e){}
+        current = 'tutti';
+      }
+
       const btn=(key,label)=>`<button class="filter-btn ${current===key?"active":""}" onclick="setFilterProfile('${esc(key)}', this)">${esc(label)}</button>`;
       let html = btn("tutti","Tutti");
-      state.profiles.forEach(p=> html += btn(p.key, p.label));
+      state.profiles.forEach(p=>{ if(used.has(String(p.key))) html += btn(p.key, p.label); });
       wrap.innerHTML = html;
     }
-    function renderGroupFilterBtns(){
+
+function renderGroupFilterBtns(){
       const wrap = document.getElementById("groupFilterBtns");
       const t = getTasting();
       if(!wrap) return;
       const groups = t ? groupsForTasting(t) : state.groups;
-      const tId = currentTasterId(); const ui = tId ? getTasterUI(tId) : { filterGroup: 'tutti' }; const current = ui.filterGroup || "tutti";
+      const tId = currentTasterId();
+      const ui = tId ? getTasterUI(tId) : { filterGroup: 'tutti' };
+      let current = ui.filterGroup || "tutti";
+
+      // Mostra solo i gruppi effettivamente presenti nelle card (assegnati ai campioni)
+      const used = new Set();
+      if(t && Array.isArray(t.samples)){
+        t.samples.forEach(s=>{
+          const k = (s && s.groupKey!=null) ? String(s.groupKey) : "";
+          if(k) used.add(k);
+        });
+      }
+
+      if(current !== 'tutti' && !used.has(String(current))){
+        try{ ui.filterGroup = 'tutti'; saveState(); }catch(e){}
+        current = 'tutti';
+      }
+
       const btn=(key,label)=>`<button class="filter-btn ${current===key?"active":""}" onclick="setFilterGroup('${esc(key)}', this)">${esc(label)}</button>`;
       let html = btn("tutti","Tutti");
-      groups.forEach(g=> html += btn(g.key, g.label));
+      groups.forEach(g=>{ if(used.has(String(g.key))) html += btn(g.key, g.label); });
       wrap.innerHTML = html;
     }
 
-    function attachProfileRenameLongPress(){
+function attachProfileRenameLongPress(){
       const wrap = document.getElementById("profileOptions");
       if(!wrap || wrap.dataset.lpAttached) return;
       wrap.dataset.lpAttached = "1";
@@ -2283,6 +2493,11 @@ function cardDescriptorsHtml(ev){
       try{ updateBlindCardTag(sSid); }catch(e){}
       renderProductsStrip();
       updateDetail();
+            // V103J: aggiorna subito UI locale
+      try{ renderGrid(); }catch(e){}
+      try{ updateDetail(); }catch(e){}
+      try{ updateHiddenButtons(); }catch(e){}
+      try{ if(document.body.classList.contains('zenplus')) renderZenPlusDescriptors(); }catch(e){}
       toast("✓ Assegnato");
     };
 
@@ -2444,36 +2659,51 @@ function renderProductsStrip(){
         const groupChip = group ? `<span class="chip group" style="background:#${esc(group.color)}">${esc(group.label)}</span>` : "";
         let profileChip = "";
         if(ev.profileKey){ const p = profileDef(t, ev.profileKey); if(p) profileChip = `<span class="chip profile" style="background:${hexToRgba(p.color,0.22)}">${esc(p.label)}</span>`; }
-        let assignedHtml = "";
-        if(blind){
-          const pid = (t.blindMap||{})[String(s.id)];
-          if(pid){
-            const p = productById(t,pid);
-            const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
-            const pm = pc[0] + (pc[1] ? " "+pc[1] : "");
-            assignedHtml = `<span class="pchip blind-assigned" data-sid="${esc(s.id)}" style="font-size:10px; padding:2px 6px; margin:2px 0; margin-right:auto; display:inline-block; width:auto; background:#444; color:#fff; border-color:#333; box-shadow:0 1px 2px rgba(0,0,0,0.2); cursor:pointer;">${esc(pm)}</span>`;
-          }
-        }
-        const evo = ev.evolution || 0;
+        
+let assignedHtml = "";
+let assignedHtmlTop = "";
+if(blind){
+  const pid = (t.blindMap||{})[String(s.id)];
+  if(pid){
+    const p = productById(t,pid);
+    const pc = p ? cols4(p.cols) : ["Prodotto?","","",""];
+    const pm = (pc[0]||"") + ((pc[1]||"") ? " "+(pc[1]||"") : "");
+    assignedHtmlTop = `<span class="pchip blind-assigned" data-sid="${esc(s.id)}" style="font-size:12px; padding:6px 10px; margin:2px auto; display:inline-flex; max-width:100%; background:#111; color:#fff; border-color:#111; box-shadow:0 1px 2px rgba(0,0,0,0.25); cursor:pointer; border-radius:999px;">${esc(pm || ("TAG: "+pid))}</span>`;
+    assignedHtml = ""; // de-dup
+  }
+}const evo = ev.evolution || 0;
         const dots = Array.from({length:5},(_,i)=>`<span class="dot ${i+1<=evo?"on":""}" data-dot-evo="${i+1}" data-dot-sample="${esc(s.id)}"></span>`).join("");
         const favOn = !!ev.favourite;
-        const l1 = blind ? "Campione" : (c[0]||"");
-        const l2 = blind ? "Alla cieca" : (c[1]||"");
-        const l3 = blind ? "" : (c[2]||"");
-        const l4 = blind ? "" : (c[3]||"");
+
+const l1 = blind ? "Campione" : (c[0]||"");
+const l2 = blind ? "Alla cieca" : (c[1]||"");
+const l3 = blind ? "" : (c[2]||"");
+const l4 = blind ? "" : (c[3]||"");
+
+let l1Html = esc(l1);
+let l2Html = esc(l2);
+let l3Html = esc(l3);
+let l4Html = esc(l4);
+if(blind && assignedHtmlTop){
+  l1Html = assignedHtmlTop;
+  l2Html = "";
+  l3Html = "";
+  l4Html = "";
+}
         return `
           <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg}">
             <div class="sample-top">
-              <div class="sample-id-col"><div class="sample-id">${esc(String(s.id).padStart(2,"0"))}</div></div>
+              <div class="sample-id-col"><div class="sample-id-row"><div class="sample-id">${esc(String(s.id).padStart(2,"0"))}</div>
+              <div class="fav-heart ${favOn?"on":""} ${(!tId||isArchived())?"disabled":""}" data-fav-sample="${esc(s.id)}">${favOn?"❤":"♡"}</div></div></div>
               <div class="sample-meta">
                 <div class="sample-lines" style="gap:1px">
-                  <div class="sample-line first">${esc(l1)}</div>
-                  <div class="sample-line other">${esc(l2)}</div>
-                  <div class="sample-line other">${esc(l3)}</div>
-                  <div class="sample-line other">${esc(l4)}</div>
+                  <div class="sample-line first">${l1Html}</div>
+                  <div class="sample-line other">${l2Html}</div>
+                  <div class="sample-line other">${l3Html}</div>
+                  <div class="sample-line other">${l4Html}</div>
                 </div>
               </div>
-              <div class="fav-heart ${favOn?"on":""} ${(!tId||isArchived())?"disabled":""}" data-fav-sample="${esc(s.id)}">${favOn?"❤":"♡"}</div>
+
             </div>
             <div class="chips-row">${profileChip}${groupChip}${assignedHtml}</div>
             <div class="evo-row"><span class="evo-label">Evol.</span><span class="dots">${dots}</span></div>
@@ -2485,16 +2715,27 @@ function renderProductsStrip(){
       grid.querySelectorAll(".sample-card").forEach(card=>{
         card.addEventListener("click", ()=>{ const sid = String(card.dataset.sampleid); if(sid) selectSample(sid); });
       });
-      // Blind mode: accept product drops + enable dissociation
-      if(blind && !isArchived()) {
-        grid.querySelectorAll('.sample-card').forEach(card=>{
-          card.addEventListener('dragover', window.handleSampleDragOver);
-          card.addEventListener('drop', window.handleSampleDrop);
-        });
-        grid.querySelectorAll('.blind-assigned').forEach(tag=>{
-          tag.addEventListener('click', (e)=>{ e.stopPropagation(); const sid = tag.dataset.sid; if(sid) window.dissociateBlindSample(sid); });
-        });
-      }
+      
+// Blind mode: accept product drops + enable dissociation
+if(blind && !isArchived()) {
+  grid.querySelectorAll('.sample-card').forEach(card=>{
+    card.addEventListener('dragover', window.handleSampleDragOver);
+    card.addEventListener('drop', window.handleSampleDrop);
+  });
+
+  grid.querySelectorAll('.blind-assigned').forEach(tag=>{
+    tag.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const sid = tag.dataset.sid;
+      if(!sid) return;
+      try{ window.dissociateBlindSample(String(sid)); }catch(err){}
+      // refresh immediato UI locale (no sync change)
+      try{ renderGrid(); }catch(err){}
+      try{ renderProductsStrip(); }catch(err){}
+      try{ updateDetail(); }catch(err){}
+    });
+  });
+}
       grid.querySelectorAll(".fav-heart").forEach(h=>{
          if(isArchived() || !currentTasterId()) { h.classList.add("disabled"); return; }
          h.addEventListener("click", e=>{ e.stopPropagation(); const sid = h.dataset.favSample; if(!sid) return; toggleFavourite(sid); });
@@ -3514,25 +3755,42 @@ function renderAnagrafiche(){
       try{ go('preparazione', document.getElementById('btnMenuPrep')); }catch(e){}
       try{ showPrepTab('bozze'); }catch(e){}
     }
-    function openComparison(id){
-      go("risultati", document.getElementById("btnMenuRes"));
-      const attempt = (delay)=>{
-        setTimeout(()=>{
-          try{ renderResultsSelect(); }catch(e){}
-          const sel = document.getElementById("resultsDegSelect");
-          const wrap = document.getElementById("resultsTableWrap");
-          if(sel){
-            sel.value = id;
-            try{ renderResultsTable(); }catch(e){}
-          }
-          // Retry se la tabella non si è popolata
-          const empty = !wrap || !wrap.innerHTML || wrap.innerHTML.includes('Seleziona una degustazione');
-          if(delay<300 && ( !sel || sel.value!==id || empty)) attempt(delay+150);
-        }, delay);
-      };
-      attempt(0);
+    async function openComparison(id){
+      const tid = String(id||'');
+      if(!tid) return;
+
+      go('risultati', document.getElementById('btnMenuRes'));
+
+      const wrap = document.getElementById('resultsTableWrap');
+      if(wrap) wrap.innerHTML = '<div class="muted">Caricamento dati archivio…</div>';
+
+      // Forza refresh metadati (se disponibile nel layer cloud)
+      try{ if(typeof pollTastings === 'function') await pollTastings(); }catch(e){}
+
+      // Attendi che i metadati della degustazione siano presenti
+      let t = state.tastings.find(x=>String(x.id)===tid);
+      for(let i=0;i<12 && (!t || !t.samples || !t.samples.length); i++){
+        await new Promise(r=>setTimeout(r,150));
+        try{ if(typeof pollTastings === 'function') await pollTastings(); }catch(e){}
+        t = state.tastings.find(x=>String(x.id)===tid);
+      }
+      if(!t){
+        if(wrap) wrap.innerHTML = '<div class="muted">Degustazione non trovata.</div>';
+        return;
+      }
+
+      // Forza prelievo valutazioni archiviate prima di rendere la tabella
+      try{ if(typeof fetchArchivedEvaluations === 'function') await fetchArchivedEvaluations(tid); }catch(e){}
+
+      try{ renderResultsSelect(); }catch(e){}
+      const sel = document.getElementById('resultsDegSelect');
+      if(sel) sel.value = tid;
+
+      try{ if(typeof onResultsDegChange === 'function') await onResultsDegChange(tid); else renderResultsTable(); }catch(e){
+        try{ renderResultsTable(); }catch(_e){}
+      }
     }
-    
+
 function buildArchiveHaystack(t){
       const parts = [];
       parts.push(t.title||"");
@@ -4266,7 +4524,7 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
       updateTopActions(lastPage);
 
       document.addEventListener("click", (e)=>{
-         if(!e.target.closest("#filtersPanel") && !e.target.closest("#btnTopFilters") && !e.target.closest("#zenBar button")){
+         if(!e.target.closest("#filtersPanel") && !e.target.closest("#btnTopFilters") && !e.target.closest("#zenBar button") && !e.target.closest("#btnZenPlusTopFilters")){
             closeFiltersPanel();
          }
       });
@@ -5185,15 +5443,27 @@ function getHiddenSamplesForTasting(tid){
   return state.ui.hiddenSamples[_hidTid(tid)] || [];
 }
 
-function isSampleHidden(tid, sid){
-  const arr = getHiddenSamplesForTasting(tid);
-  return arr.includes(String(sid));
+function isSampleHidden(tastingId, sampleId){
+  const key = hiddenKeyForCurrent();
+  if(!key) return false;
+  const arr = getHiddenSamplesForTasting(key) || [];
+  return arr.includes(String(sampleId));
 }
 
+
+
+function hiddenKeyForCurrent(){
+  const t = getTasting();
+  if(!t) return null;
+  const ta = currentTasterId();
+  // per degustatore: tastingId|tasterId (0 se non selezionato)
+  return String(t.id) + '|' + String(ta||0);
+}
 function hideSample(sid){
   const t = getTasting();
   if(!t) return;
-  const tid = _hidTid(t.id);
+  const tid = hiddenKeyForCurrent();
+  if(!tid) return;
   const arr = getHiddenSamplesForTasting(tid).slice();
   const s = String(sid);
   if(!arr.includes(s)) arr.push(s);
@@ -5212,11 +5482,42 @@ function hideSample(sid){
 function unhideAllSamples(){
   const t = getTasting();
   if(!t) return;
-  const tid = _hidTid(t.id);
+  const tid = hiddenKeyForCurrent();
+  if(!tid) return;
   if(state.ui && state.ui.hiddenSamples && state.ui.hiddenSamples[tid]){
-    delete state.ui.hiddenSamples[tid];
+    state.ui.hiddenSamples[tid] = [];
     saveState();
   }
+
+function unhideSingleSample(sampleId){
+  const tId = currentTasterId();
+  if(!tId) return;
+  const key = hiddenKeyForCurrent();
+  const list = getHiddenSamplesForTasting(key) || [];
+  const sid = String(sampleId);
+  const next = list.filter(x => String(x) !== sid);
+  setHiddenSamplesForTasting(key, next);
+  saveState({skipCloud:true});
+  try{ renderGrid(); }catch(e){}
+  try{ updateHiddenButtons(); }catch(e){}
+}
+
+function renderHiddenSampleIdBtns(){
+  const wrap = document.getElementById('hiddenSampleIdsWrap');
+  if(!wrap) return;
+  const tId = currentTasterId();
+  if(!tId){ wrap.innerHTML = ''; return; }
+
+  const key = hiddenKeyForCurrent();
+  const list = getHiddenSamplesForTasting(key) || [];
+  if(!list.length){ wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = '<div class="muted" style="margin-top:10px; font-weight:900">Campioni nascosti</div>' +
+    '<div class="hidden-ids-row">' +
+      list.map(sid => `<button class="hidden-id-btn" onclick="unhideSingleSample('${esc(String(sid))}')">${esc(String(sid))}</button>`).join('') +
+    '</div>';
+}
+
   renderProductsStrip();
   renderGrid();
   updateDetail();
@@ -5225,17 +5526,40 @@ function unhideAllSamples(){
 }
 
 function countHiddenCurrent(){
-  const t = getTasting();
-  if(!t) return 0;
-  return getHiddenSamplesForTasting(t.id).length;
+  const key = hiddenKeyForCurrent();
+  if(!key) return 0;
+  const arr = getHiddenSamplesForTasting(key) || [];
+  return arr.length;
 }
 
+
 function updateHiddenButtons(){
-  const n = countHiddenCurrent();
-  ['btnTopUnhide','btnZenUnhide','zenPlusUnhide'].forEach(id=>{
-    const el = document.getElementById(id);
-    if(el) el.style.display = (n>0 ? '' : 'none');
-  });
+  const tId = currentTasterId();
+  const n = tId ? countHiddenCurrent() : 0;
+
+  const btn = document.getElementById('btnFiltersUnhide');
+  if(btn){
+    const onUnhide = (tId && n>0);
+    btn.classList.toggle('disabled', !onUnhide);
+    btn.disabled = !onUnhide;
+  }
+
+  // Render lista ID campioni nascosti per degustatore attivo
+  try{ renderHiddenSampleIdBtns(); }catch(e){}
+
+  // Evidenzia Filtri SOLO se è selezionato un degustatore e ha campioni nascosti
+  const on = (tId && n>0);
+  const bTop = document.getElementById('btnTopFilters');
+  if(bTop) bTop.classList.toggle('filters-has-hidden', on);
+
+  const bZenPlus = document.getElementById('btnZenPlusTopFilters');
+  if(bZenPlus) bZenPlus.classList.toggle('filters-has-hidden', on);
+
+  try{
+    document.querySelectorAll('#zenBar button[onclick*="toggleFiltersPanel"]').forEach(b=>{
+      b.classList.toggle('filters-has-hidden', on);
+    });
+  }catch(e){}
 }
 
 const __hideLP = { timer:null, x:0, y:0, suppressUntil:0 };
@@ -5245,49 +5569,98 @@ function bindHideLongPress(){
   if(!grid || grid.__hideBound) return;
   grid.__hideBound = true;
 
-  grid.addEventListener('pointerdown', (e)=>{
-    const card = e.target.closest('.sample-card');
-    if(!card) return;
-    if(e.target.closest('.fav-heart')) return; // non interferire col cuore
+  const LP_MS = 1500;
+  const MOVE_PX = 12;
 
-    const sid = card.getAttribute('data-sid') || card.dataset.sid;
+  let timer = null;
+  let startX = 0, startY = 0;
+  let sid = null;
+  let fired = false;
+
+  const clear = ()=>{
+    if(timer){ clearTimeout(timer); timer = null; }
+    sid = null;
+  };
+
+  const start = (x,y,target)=>{
+    const card = target && target.closest ? target.closest('.sample-card') : null;
+    if(!card) return;
+    if(target.closest && (target.closest('.fav-heart') || target.closest('.dot'))) return;
+
+    sid = String(card.dataset.sampleid || card.getAttribute('data-sampleid') || '');
     if(!sid) return;
 
-    __hideLP.x = e.clientX; __hideLP.y = e.clientY;
-    if(__hideLP.timer) clearTimeout(__hideLP.timer);
+    startX = x; startY = y;
+    fired = false;
+    if(timer) clearTimeout(timer);
 
-    __hideLP.timer = setTimeout(()=>{
-      __hideLP.suppressUntil = Date.now() + 650;
+    timer = setTimeout(()=>{
+      fired = true;
       try{ hideSample(sid); }catch(err){}
-    }, 1500);
-  }, {passive:true});
+    }, LP_MS);
+  };
 
-  grid.addEventListener('pointermove', (e)=>{
-    if(!__hideLP.timer) return;
-    const dx = Math.abs(e.clientX - __hideLP.x);
-    const dy = Math.abs(e.clientY - __hideLP.y);
-    if(dx > 8 || dy > 8){
-      clearTimeout(__hideLP.timer);
-      __hideLP.timer = null;
-    }
-  }, {passive:true});
+  const move = (x,y)=>{
+    if(!timer) return;
+    const dx = Math.abs(x - startX);
+    const dy = Math.abs(y - startY);
+    if(dx>MOVE_PX || dy>MOVE_PX) clear();
+  };
 
-  const cancel = ()=>{ if(__hideLP.timer){ clearTimeout(__hideLP.timer); __hideLP.timer = null; } };
-  grid.addEventListener('pointerup', cancel, {passive:true});
-  grid.addEventListener('pointercancel', cancel, {passive:true});
-  grid.addEventListener('pointerleave', cancel, {passive:true});
+  const end = ()=>{ clear(); };
 
-  // Evita che il click successivo selezioni la card quando scatta il long-press
+  grid.addEventListener('pointerdown', (e)=> start(e.clientX, e.clientY, e.target), {capture:true});
+  grid.addEventListener('pointermove', (e)=> move(e.clientX, e.clientY), {capture:true, passive:true});
+  ['pointerup','pointercancel','pointerleave'].forEach(ev=> grid.addEventListener(ev, end, {capture:true, passive:true}));
+
+  // Touch fallback
+  grid.addEventListener('touchstart', (e)=>{
+    const t = e.touches && e.touches[0];
+    if(!t) return;
+    start(t.clientX, t.clientY, e.target);
+  }, {capture:true, passive:true});
+  grid.addEventListener('touchmove', (e)=>{
+    const t = e.touches && e.touches[0];
+    if(!t) return;
+    move(t.clientX, t.clientY);
+  }, {capture:true, passive:true});
+  ['touchend','touchcancel'].forEach(ev=> grid.addEventListener(ev, end, {capture:true, passive:true}));
+
+  // Blocca il click che segue il long-press
   grid.addEventListener('click', (e)=>{
-    if(Date.now() < (__hideLP.suppressUntil||0)){
+    if(fired){
       e.preventDefault();
       e.stopPropagation();
+      fired = false;
     }
   }, true);
 }
 
 setTimeout(()=>{ try{ bindHideLongPress(); updateHiddenButtons(); }catch(e){} }, 0);
 </script>
+
+
+// V103G Cloud bootstrap: sync immediato + retry (refresh e multi-istanza)
+document.addEventListener('DOMContentLoaded', ()=>{
+  const sync = ()=>{ try{ if(typeof window.cloudRequestSync==='function') window.cloudRequestSync(); }catch(e){} };
+  setTimeout(sync, 120);
+  setTimeout(sync, 900);
+  setTimeout(sync, 2200);
+});
+
+
+
+// V103J prep bootstrap: carica subito degustazioni attive dal cloud
+document.addEventListener('DOMContentLoaded', ()=>{
+  const boot = async ()=>{
+    try{ if(typeof pollTastings==='function') await pollTastings(); }catch(e){}
+    try{ renderPreparation(); }catch(e){}
+  };
+  setTimeout(boot, 250);
+  setTimeout(boot, 1200);
+  setTimeout(boot, 2500);
+});
+
 <!-- FIREBASE CLOUD-ONLY END -->
 
 
