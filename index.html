@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
-<!-- V111-OK -->
+<!-- V116-OK -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -811,6 +811,87 @@ body.zenplus .fav-heart{ order:1; position: static !important; top:auto !importa
 .hidden-ids-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .hidden-id-btn{ background: var(--electric-blue, #007BFF); color:#fff; border:none; border-radius:999px; padding:8px 12px; font-weight:950; cursor:pointer; }
 
+
+/* V114 OK: card scaling reale + griglia variabile + testo completo */
+:root{
+  --grid-card-min:160px;
+  --grid-card-min-portrait:130px;
+  --grid-card-min-zenplus:120px;
+  --grid-card-min-zenplus-portrait:105px;
+  --grid-gap:8px;
+  --grid-gap-zenplus:7px;
+  --card-padding:9px;
+  --card-gap:8px;
+  --card-radius:12px;
+  --card-min-height:126px;
+  --card-font-size:13px;
+}
+.card-ui-controls{ display:flex; flex-direction:column; gap:10px; }
+.card-ui-row{ display:flex; flex-direction:column; gap:6px; }
+.card-ui-label{ font-size:12px; font-weight:950; color: var(--grigio); }
+
+/* Griglia: varia n colonne al variare della dimensione card */
+.samples-grid{
+  grid-template-columns: repeat(auto-fit, minmax(var(--grid-card-min), 1fr)) !important;
+  gap: var(--grid-gap) !important;
+}
+@media (orientation:portrait){
+  .samples-grid{ grid-template-columns: repeat(auto-fit, minmax(var(--grid-card-min-portrait), 1fr)) !important; }
+}
+
+body.zenplus .samples-grid{
+  grid-template-columns: repeat(auto-fit, minmax(var(--grid-card-min-zenplus), 1fr)) !important;
+  gap: var(--grid-gap-zenplus) !important;
+}
+@media (orientation:portrait){
+  body.zenplus .samples-grid{ grid-template-columns: repeat(auto-fit, minmax(var(--grid-card-min-zenplus-portrait), 1fr)) !important; }
+}
+
+/* Card: cresce in larghezza (con la cella) e in altezza */
+.sample-card{
+  width:100% !important;
+  min-height: var(--card-min-height) !important;
+  padding: var(--card-padding) !important;
+  gap: var(--card-gap) !important;
+  border-radius: var(--card-radius) !important;
+}
+
+/* Testo: scala tutto dentro la card */
+.sample-card{ font-size: var(--card-font-size) !important; }
+.sample-id{ font-size: 1.55em !important; }
+.sample-line.first{ font-size: 0.98em !important; }
+.sample-line.other{ font-size: 0.88em !important; }
+.chip, .assigned-tag, .pchip, .blind-assigned{ font-size: 0.82em !important; }
+.evo-label{ font-size: 0.78em !important; }
+
+/* Icone/elementi */
+.fav-heart{ font-size: 2.05em !important; width: 2.2em !important; height: 2.2em !important; }
+.dot{ width: 0.85em !important; height: 0.85em !important; }
+
+
+/* V116 OK: slider colonne griglia (3 step +/-) */
+:root{
+  --grid-cols: 6;
+  --grid-cols-portrait: 4;
+  /* ZEN+ default più grande (tablet): meno colonne -> cerchi più grandi */
+  --grid-cols-zenplus: 6;
+  --grid-cols-zenplus-portrait: 4;
+}
+
+.samples-grid{
+  grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr)) !important;
+}
+@media (orientation:portrait){
+  .samples-grid{ grid-template-columns: repeat(var(--grid-cols-portrait), minmax(0, 1fr)) !important; }
+}
+
+body.zenplus .samples-grid{
+  grid-template-columns: repeat(var(--grid-cols-zenplus), minmax(0, 1fr)) !important;
+}
+@media (orientation:portrait){
+  body.zenplus .samples-grid{ grid-template-columns: repeat(var(--grid-cols-zenplus-portrait), minmax(0, 1fr)) !important; }
+}
+
 </style>
 </head>
 
@@ -1213,6 +1294,18 @@ function forceEnableClear(){
 
     <div class="filters-body">
       <div class="help">Suggerimento: per riordinare i TAB trascinando, imposta Ordine = “Ordine” e filtri su “Tutti”.</div>
+      <div class="pill2">Aspetto card</div>
+      <div class="card-ui-controls">
+        <div class="card-ui-row">
+          <div class="card-ui-label">Dimensione card: <span id="lblCardScale">100%</span></div>
+          <input id="rngCardScale" class="slider" type="range" min="-3" max="3" step="1" value="0" oninput="onCardScaleInput(this.value)">
+        </div>
+        <div class="card-ui-row">
+          <div class="card-ui-label">Dimensione testo/elementi: <span id="lblCardTextScale">100%</span></div>
+          <input id="rngCardTextScale" class="slider" type="range" min="50" max="180" value="100" oninput="onCardTextScaleInput(this.value)">
+        </div>
+      </div>
+
       <button class="pill2 unhide-pill disabled" id="btnFiltersUnhide" onclick="unhideAllSamples()">Mostra Campioni Nascosti</button>
       <div id="hiddenSampleIdsWrap" class="hidden-ids-wrap"></div>
 
@@ -1692,7 +1785,105 @@ body.zenplus .zenplus-top{ flex:1 1 auto; min-height:0; }
     }
 
 
-    function saveState(opts){
+    
+// V114: preferenze UI locali (NON sincronizzate)
+const LOCAL_UI_PREFS_KEY = 'degustapp_local_ui_prefs_v3';
+
+function getLocalCardUiPrefs(){
+  try{ return JSON.parse(localStorage.getItem(LOCAL_UI_PREFS_KEY) || '{}') || {}; }catch(e){ return {}; }
+}
+function setLocalCardUiPrefs(patch){
+  const cur = getLocalCardUiPrefs();
+  const next = Object.assign({}, cur, patch||{});
+  try{ localStorage.setItem(LOCAL_UI_PREFS_KEY, JSON.stringify(next)); }catch(e){}
+  return next;
+}
+
+function applyLocalCardUiPrefs(){
+  const p = getLocalCardUiPrefs();
+  const delta = (typeof p.cardColsDelta === 'number' && isFinite(p.cardColsDelta)) ? Math.round(p.cardColsDelta) : 0;
+  const d = Math.max(-3, Math.min(3, delta));
+  const ts = (typeof p.cardTextScale === 'number' && isFinite(p.cardTextScale)) ? p.cardTextScale : 1;
+
+  // Base colonne (default): in ZEN+ leggermente più grandi (tablet-friendly)
+  const baseCols = {
+    normal: { landscape: 6, portrait: 4 },
+    zenplus: { landscape: 6, portrait: 4 }
+  };
+
+  const cols = {
+    normal: {
+      landscape: Math.max(1, baseCols.normal.landscape + d),
+      portrait: Math.max(1, baseCols.normal.portrait + d)
+    },
+    zenplus: {
+      landscape: Math.max(1, baseCols.zenplus.landscape + d),
+      portrait: Math.max(1, baseCols.zenplus.portrait + d)
+    }
+  };
+
+  // Applica colonne via CSS vars
+  document.documentElement.style.setProperty('--grid-cols', String(cols.normal.landscape));
+  document.documentElement.style.setProperty('--grid-cols-portrait', String(cols.normal.portrait));
+  document.documentElement.style.setProperty('--grid-cols-zenplus', String(cols.zenplus.landscape));
+  document.documentElement.style.setProperty('--grid-cols-zenplus-portrait', String(cols.zenplus.portrait));
+
+  // Scala spaziature/min-height coerentemente al numero colonne della vista corrente
+  const isZenp = document.body.classList.contains('zenplus');
+  const isPortrait = window.matchMedia && window.matchMedia('(orientation: portrait)').matches;
+  const curBase = isZenp ? (isPortrait ? baseCols.zenplus.portrait : baseCols.zenplus.landscape)
+                         : (isPortrait ? baseCols.normal.portrait : baseCols.normal.landscape);
+  const curCols = isZenp ? (isPortrait ? cols.zenplus.portrait : cols.zenplus.landscape)
+                         : (isPortrait ? cols.normal.portrait : cols.normal.landscape);
+  const cs = Math.max(0.6, Math.min(1.8, curBase / Math.max(1, curCols)));
+
+  // Base px -> scalate via JS
+  const base = {
+    gridGap: 8,
+    gridGapZenplus: 7,
+    cardPadding: 9,
+    cardGap: 8,
+    cardRadius: 12,
+    cardMinHeight: 126,
+    cardFont: 13
+  };
+
+  document.documentElement.style.setProperty('--grid-gap', (base.gridGap * cs) + 'px');
+  document.documentElement.style.setProperty('--grid-gap-zenplus', (base.gridGapZenplus * cs) + 'px');
+  document.documentElement.style.setProperty('--card-padding', (base.cardPadding * cs) + 'px');
+  document.documentElement.style.setProperty('--card-gap', (base.cardGap * cs) + 'px');
+  document.documentElement.style.setProperty('--card-radius', (base.cardRadius * cs) + 'px');
+  document.documentElement.style.setProperty('--card-min-height', (base.cardMinHeight * cs) + 'px');
+
+  // Testo: scala tutto
+  document.documentElement.style.setProperty('--card-font-size', (base.cardFont * ts) + 'px');
+
+  const r1 = document.getElementById('rngCardScale');
+  const l1 = document.getElementById('lblCardScale');
+  if(r1){ r1.value = String(d); }
+  if(l1){ l1.textContent = 'Colonne: ' + String(curCols); }
+
+  const r2 = document.getElementById('rngCardTextScale');
+  const l2 = document.getElementById('lblCardTextScale');
+  if(r2){ r2.value = String(Math.round(ts*100)); }
+  if(l2){ l2.textContent = String(Math.round(ts*100)) + '%'; }
+}
+
+function onCardScaleInput(v){
+  const num = Math.max(-3, Math.min(3, parseInt(String(v),10) || 0));
+  setLocalCardUiPrefs({ cardColsDelta: num });
+  applyLocalCardUiPrefs();
+  try{ renderGrid(); }catch(e){}
+}
+
+function onCardTextScaleInput(v){
+  const num = Math.max(50, Math.min(180, parseInt(String(v),10) || 100));
+  setLocalCardUiPrefs({ cardTextScale: num/100 });
+  applyLocalCardUiPrefs();
+  try{ renderGrid(); }catch(e){}
+}
+
+function saveState(opts){
     // Cloud-only: nessun salvataggio locale.
     const skipCloud = !!(opts && opts.skipCloud);
     try{ window.markUiBusy && window.markUiBusy(1100); }catch(e){}
@@ -1869,6 +2060,8 @@ function cardDescriptorsHtml(ev){
       if(!(okPage || okZen)) return;
       document.getElementById("filtersPanel")?.classList.add("active");
       document.getElementById("filtersOverlay")?.classList.add("active");
+      try{ applyLocalCardUiPrefs(); }catch(e){}
+      try{ updateHiddenButtons(); }catch(e){}
     }
     function toggleFiltersPanel(){
       const p = document.getElementById("filtersPanel");
@@ -2114,6 +2307,8 @@ function cardDescriptorsHtml(ev){
       renderGrid();
       updateDetail();
       loadCanvasFromEval();
+      try{ updateHiddenButtons(); }catch(e){}
+      try{ applyLocalCardUiPrefs(); }catch(e){}
   // V31: Render evo picker
   const evoPick = document.getElementById('detailEvoPick');
   if(evoPick && tId && !isArchived()) {
@@ -2809,20 +3004,53 @@ if(blind && !isArchived()) {
             // fallback: Standard Touch API emulation
          });
 
-         // Touch Drag Emulation
+         // Touch Drag Emulation (tablet-safe)
+         // Arm move only after a long-press, and cancel if the finger moves (scroll).
+         const REORDER_LP_MS = 500;
+         const REORDER_MOVE_PX = 14;
+         let __reLpTimer = null;
+         let __reLpFired = false;
+         let __reStartX = 0, __reStartY = 0;
+
+         const __reClear = ()=>{
+            if(__reLpTimer){ clearTimeout(__reLpTimer); __reLpTimer = null; }
+            __reLpFired = false;
+            dragSrcId = null;
+            try{ card.style.opacity = '1'; }catch(_e){}
+         };
+
          card.addEventListener('touchstart', e => {
             if(e.target.closest('.fav-heart') || e.target.closest('.dot')) return;
-            dragSrcId = sid;
+            const t0 = e.touches && e.touches[0];
+            if(!t0) return;
+            __reClear();
+            __reStartX = t0.clientX; __reStartY = t0.clientY;
+            __reLpFired = false;
+            __reLpTimer = setTimeout(()=>{
+              __reLpFired = true;
+              dragSrcId = sid;
+              try{ card.style.opacity = '0.65'; }catch(_e){}
+            }, REORDER_LP_MS);
          }, {passive:true});
 
-         card.addEventListener('touchend', e => {
-            if(!dragSrcId) return;
-            const t = e.changedTouches[0];
+         card.addEventListener('touchmove', e => {
+            if(!__reLpTimer) return;
+            const t0 = e.touches && e.touches[0];
+            if(!t0) return;
+            const dx = Math.abs(t0.clientX - __reStartX);
+            const dy = Math.abs(t0.clientY - __reStartY);
+            if(dx > REORDER_MOVE_PX || dy > REORDER_MOVE_PX) __reClear();
+         }, {passive:true});
+
+         ['touchend','touchcancel'].forEach(ev=> card.addEventListener(ev, e => {
+            if(!__reLpFired || !dragSrcId){ __reClear(); return; }
+            const t = e.changedTouches && e.changedTouches[0];
+            if(!t){ __reClear(); return; }
             const el = document.elementFromPoint(t.clientX, t.clientY);
             const tgt = el ? el.closest('.sample-card') : null;
             if(tgt) doMove(dragSrcId, String(tgt.dataset.sampleid));
-            dragSrcId = null;
-         });
+            __reClear();
+         }));
       });
     }
 
@@ -4520,7 +4748,11 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
       renderResultsSelect();
       renderTastingPage(); 
 
-      const lastPage = document.querySelector(".page.active")?.id?.replace("page-","") || "preparazione";
+      
+
+      try{ applyLocalCardUiPrefs(); }catch(e){}
+      try{ updateHiddenButtons(); }catch(e){}
+const lastPage = document.querySelector(".page.active")?.id?.replace("page-","") || "preparazione";
       updateTopActions(lastPage);
 
       document.addEventListener("click", (e)=>{
