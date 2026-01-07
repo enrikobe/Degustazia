@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
-<!-- V116-OK -->
+<!-- V136-OK -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -892,6 +892,184 @@ body.zenplus .samples-grid{
   body.zenplus .samples-grid{ grid-template-columns: repeat(var(--grid-cols-zenplus-portrait), minmax(0, 1fr)) !important; }
 }
 
+
+/* V119: descrittori label non selezionabili */
+.desc-col-title, .desc-col-title *, .zenplus-desc-title{
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+
+/* V119: celle draft multilinea */
+.draft-input{ white-space: pre-wrap; }
+
+
+
+/* V124: tweak layout ID/cuore e spaziature (chirurgico)
+   - ZEN+: ID centrato, cuore a sinistra attaccato all'ID; meno spazio sotto
+   - Altre viste: cuore esattamente sotto ID (centrato) e meno spazio tra ID e info
+*/
+
+/* Riduci distanza tra colonna ID e info (tutte le viste) */
+.sample-top{ gap: 5px !important; }
+
+/* Altre viste (NON ZEN+): cuore sotto ID, centrato */
+body:not(.zenplus) .sample-id-row{
+  display:flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 0px !important;
+}
+body:not(.zenplus) .fav-heart{
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ZEN+: ID centrato nella card, cuore a sinistra attaccato all'ID */
+body.zenplus .sample-id-row{
+  display:flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0px !important;
+}
+body.zenplus .fav-heart{
+  position: static !important;
+  order: -1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+body.zenplus .sample-id{
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ZEN+: meno spazio tra blocco ID e righe info */
+body.zenplus .sample-top{ gap: 3px !important; }
+
+
+
+/* V125: Cuore/ID refine
+   - ZEN+: cuore a DESTRA dell'ID, molto vicino (gap/margini/width azzerati)
+   - Altre viste: cuore sotto e centrato, molto vicino (gap/margini azzerati)
+*/
+
+/* Avvicina colonna ID alle info (tutte le viste) */
+.sample-top{ gap: 3px !important; }
+
+/* Altre viste */
+body:not(.zenplus) .sample-id-col{ gap: 2px !important; }
+body:not(.zenplus) .sample-id-row{ gap: 0px !important; }
+body:not(.zenplus) .fav-heart{ margin: 0 !important; padding: 0 !important; width: auto !important; height: auto !important; }
+body:not(.zenplus) .sample-id{ margin: 0 !important; padding: 0 !important; }
+
+/* ZEN+ */
+body.zenplus .sample-id-row{ gap: 0px !important; }
+body.zenplus .fav-heart{ order: 1 !important; margin: 0 !important; padding: 0 !important; width: auto !important; height: auto !important; }
+body.zenplus .sample-id{ margin: 0 !important; padding: 0 !important; }
+
+/* ZEN+: riduci ulteriormente spazio tra ID/cuore e info sotto */
+body.zenplus .sample-top{ gap: 2px !important; }
+
+
+
+/* V126: ID centrato in ZEN+ (cuore non centrato) + spaziatura info
+   - NON ZEN+: aumenta leggermente gap tra ID-col e info a destra
+   - ZEN+: ID centrato nella card; cuore a destra ma senza centrare la coppia
+*/
+
+/* Non ZEN+: più aria tra ID e info campione */
+body:not(.zenplus) .sample-top{ gap: 5px !important; }
+
+/* ZEN+: centra SOLO l'ID, bilanciando il cuore a destra con uno spacer a sinistra */
+body.zenplus .sample-id-row{
+  justify-content: center !important;
+  gap: 0px !important;
+}
+body.zenplus .sample-id-row::before{
+  content: "";
+  display: block;
+  width: 2.2em; /* stesso box cliccabile del cuore */
+  height: 1px;
+}
+body.zenplus .sample-id{ order: 0 !important; }
+body.zenplus .fav-heart{
+  order: 1 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 2.2em !important;
+  height: 2.2em !important;
+}
+
+
+
+/* V128: Fix definitivo centratura ID in ZEN+ + gap non-ZEN più evidente
+   - ZEN+: ID centrato rigidamente al centro card; cuore a SINISTRA dell'ID con distanza controllata
+   - NON ZEN: aumenta visivamente gap tra ID e info campione a destra
+*/
+
+/* NON ZEN: gap più evidente tra colonna ID e info */
+body:not(.zenplus) .sample-top{
+  gap: 10px !important;
+}
+
+/* ZEN+: annulla approcci precedenti (spacer) e forza griglia 1fr-auto-1fr */
+body.zenplus .sample-id-row{
+  display: grid !important;
+  grid-template-columns: 1fr auto 1fr !important;
+  align-items: center !important;
+  column-gap: 6px !important; /* distanza cuore-ID (mantiene “distanza attuale” percepita) */
+  width: 100% !important;
+}
+body.zenplus .sample-id-row::before{
+  content: none !important;
+  display: none !important;
+}
+
+/* ID al centro assoluto della riga/card */
+body.zenplus .sample-id{
+  grid-column: 2 !important;
+  justify-self: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: center !important;
+}
+
+/* Cuore a sinistra dell'ID, attaccato alla colonna centrale */
+body.zenplus .fav-heart{
+  grid-column: 1 !important;
+  justify-self: end !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+
+
+/* V136: ZEN+ cuore sotto ID, centrati e molto vicini */
+body.zenplus .sample-id-row{
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0px !important;
+  white-space: normal !important;
+}
+body.zenplus .sample-id-row .sample-id{
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 0.98 !important;
+}
+body.zenplus .sample-id-row .fav-heart{
+  position: static !important;
+  margin: -2px 0 0 0 !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+
+.lock-ico{ margin-left: 6px; font-size: 0.95em; opacity: 0.95; }
+.profile-option.locked, .group-option.locked{ box-shadow: inset 0 0 0 3px var(--focus-blue); }
+
 </style>
 </head>
 
@@ -952,6 +1130,81 @@ function forceEnableClear(){
         }
     }
 }
+
+
+// V136: Lock profilo/gruppo via doppio tap/click (un solo lock attivo per volta)
+function toggleTaxLock(type, key){
+  if(!state.ui) state.ui = {};
+  const cur = state.ui.taxLock || null;
+  if(cur && cur.type === type && String(cur.key) === String(key)) state.ui.taxLock = null;
+  else state.ui.taxLock = { type, key };
+  saveState();
+  try{ renderProfileOptions(); }catch(e){}
+  try{ renderGroupOptions(); }catch(e){}
+}
+
+function applyTaxLockToSelectedSample(){
+  try{
+    if(isArchived()) return;
+    const lock = state.ui && state.ui.taxLock ? state.ui.taxLock : null;
+    if(!lock) return;
+    const t = getTasting();
+    if(!t || !selectedSampleId) return;
+
+    if(lock.type === 'group'){
+      const s = (t.samples||[]).find(x=>String(x.id)===String(selectedSampleId));
+      if(!s) return;
+      if(String(s.groupKey||'') === String(lock.key||'')) return;
+      s.groupKey = String(lock.key);
+      saveState();
+      return;
+    }
+
+    if(lock.type === 'profile'){
+      const tId = currentTasterId();
+      if(!tId) return;
+      const ev = getEval(t, tId, selectedSampleId);
+      if(String(ev.profileKey||'') === String(lock.key||'')) return;
+      ev.profileKey = String(lock.key);
+      ev.progress = calcProgress(ev);
+      ev.overall = calcOverall(ev);
+      saveState();
+      return;
+    }
+  }catch(e){}
+}
+
+function bindTaxLockHandlers(){
+  const els = Array.from(document.querySelectorAll('.profile-option[data-profile], .group-option[data-group]'));
+  els.forEach(el=>{
+    if(el.dataset.taxLockBound === '1') return;
+    el.dataset.taxLockBound = '1';
+
+    const type = el.dataset.profile ? 'profile' : 'group';
+    const key = el.dataset.profile ? el.dataset.profile : el.dataset.group;
+
+    const doSingle = ()=>{ try{ type==='profile' ? toggleProfile(String(key)) : toggleGroup(String(key)); }catch(e){} };
+    const doLock = ()=>{ try{ toggleTaxLock(type, String(key)); }catch(e){} };
+
+    el.addEventListener('pointerup', (e)=>{
+      const now = Date.now();
+      const last = parseInt(el.dataset.lastTapTs || '0', 10) || 0;
+
+      if(now - last < 320){
+        el.dataset.lastTapTs = '0';
+        if(el.__taxSingleTimer){ clearTimeout(el.__taxSingleTimer); el.__taxSingleTimer = null; }
+        try{ e.preventDefault(); e.stopPropagation(); }catch(_e){}
+        doLock();
+        return;
+      }
+
+      el.dataset.lastTapTs = String(now);
+      if(el.__taxSingleTimer){ clearTimeout(el.__taxSingleTimer); el.__taxSingleTimer = null; }
+      el.__taxSingleTimer = setTimeout(()=>{ el.__taxSingleTimer = null; doSingle(); }, 220);
+    }, { passive:false });
+  });
+}
+
 </script>
 
   <div id="zenBar" class="zen-bar">
@@ -1939,14 +2192,27 @@ function saveState(opts){
       s.ui = s.ui || {};
       return s;
     }
-
-    
-    function groupsForTasting(t){ if(!t) return state.groups; ensureTastingTaxonomies(t); return t.groups || []; }
     function ensureTastingTaxonomies(t){
       if(!t) return false;
       let changed = false;
-      if(!Array.isArray(t.groups) || !t.groups.length){ t.groups = clone(state.groups||[]); changed = true; }
-      if(!Array.isArray(t.profiles) || !t.profiles.length){ t.profiles = clone(state.profiles||[]); changed = true; }
+
+      // Gruppi: inizialmente uguali alle anagrafiche, ma subito dissociati (deep clone).
+      if(!Array.isArray(t.groups) || !t.groups.length){
+        t.groups = clone(state.groups||[]);
+        t.__groupsDetached = 1;
+        changed = true;
+      } else if(!t.__groupsDetached){
+        // Migrazione: spezza eventuali reference condivise create in passato.
+        t.groups = (t.groups||[]).map(g=>({ key:g.key, label:g.label, color:g.color }));
+        t.__groupsDetached = 1;
+        changed = true;
+      }
+
+      // Profili: già clonati (comportamento esistente)
+      if(!Array.isArray(t.profiles) || !t.profiles.length){
+        t.profiles = clone(state.profiles||[]);
+        changed = true;
+      }
       return changed;
     }
 
@@ -1961,7 +2227,11 @@ function saveState(opts){
       return !!t && t.status==="archiviata";
     }
     function groupsForTasting(t){
-      return (t && Array.isArray(t.groups) && t.groups.length) ? t.groups : state.groups;
+      if(!t) return state.groups;
+      // Gruppi sempre locali alla degustazione: se mancano, clona dall'anagrafica una sola volta.
+      const changed = ensureTastingTaxonomies(t);
+      if(changed) try{ saveState(true); }catch(_e){}
+      return t.groups || [];
     }
     function groupDef(t, key){ return groupsForTasting(t).find(g=>g.key===key); }
     function profileDef(t, key){ return profilesForTasting(t).find(p=>p.key===key); }
@@ -2176,7 +2446,21 @@ function cardDescriptorsHtml(ev){
       delete __zenPlusMoved[elId];
     }
 
-    function renderZenPlusDescriptors(){
+    function bindZenPlusDescWheelScroll(){
+      const lists = document.querySelectorAll('.zenplus-desc-list');
+      lists.forEach(el=>{
+        if(el.dataset.wheelBound==='1') return;
+        el.dataset.wheelBound='1';
+        el.addEventListener('wheel', (e)=>{
+          if(Math.abs(e.deltaY) > Math.abs(e.deltaX)){
+            el.scrollLeft += e.deltaY;
+            try{ e.preventDefault(); }catch(_e){}
+          }
+        }, {passive:false});
+      });
+    }
+
+function renderZenPlusDescriptors(){
       const t = getTasting();
       const tid = currentTasterId();
       const sid = selectedSampleId;
@@ -2196,6 +2480,7 @@ function cardDescriptorsHtml(ev){
       renderRow('vista','zenPlusDescVista');
       renderRow('olfatto','zenPlusDescOlfatto');
       renderRow('gusto','zenPlusDescGusto');
+      try{ bindZenPlusDescWheelScroll(); }catch(_e){}
     }
 
     function toggleZenPlus(on){
@@ -2462,29 +2747,37 @@ function attachProfileRenameLongPress(){
       const wrap = document.getElementById("profileOptions");
       const t = getTasting();
       if(!wrap || !t) return;
+      const lock = (state.ui && state.ui.taxLock) ? state.ui.taxLock : null;
       const profiles = profilesForTasting(t);
       const listHtml = profiles.map(p=>{
         const rgb = hexToRgbParts(p.color);
-        return `<div class="profile-option" data-profile="${esc(p.key)}" data-hascolor="1" style="--pcol-r:${rgb.r};--pcol-g:${rgb.g};--pcol-b:${rgb.b}" onclick="toggleProfile('${esc(p.key)}')">${esc(p.label)}</div>`;
+        const locked = !!(lock && lock.type==='profile' && String(lock.key)===String(p.key));
+        return `<div class="profile-option${locked?' locked':''}" data-profile="${esc(p.key)}" data-hascolor="1" style="--pcol-r:${rgb.r};--pcol-g:${rgb.g};--pcol-b:${rgb.b}">${esc(p.label)}${locked?' <span class=\"lock-ico\">🔒</span>':''}</div>`;
       }).join("");
       const addBtn = `<div class="profile-option" onclick="addNewLocalProfile()" style="border:1px dashed #ccc;background:#f9f9f9;justify-content:center;color:#666;cursor:pointer;">+ Nuovo</div>`;
       wrap.innerHTML = listHtml + addBtn;
       attachProfileRenameLongPress();
+      try{ bindTaxLockHandlers(); }catch(e){}
     }
     function renderGroupOptions(){
       const wrap = document.getElementById("groupOptions");
       const t = getTasting();
       if(!wrap || !t) return;
+      const lock = (state.ui && state.ui.taxLock) ? state.ui.taxLock : null;
       const groups = groupsForTasting(t);
-      const listHtml = groups.map(g=>`
-        <div class="group-option" data-group="${esc(g.key)}" onclick="toggleGroup('${esc(g.key)}')" style="border-left:8px solid #${esc(g.color)};background:${hexToRgba(g.color,0.1)}">
+      const listHtml = groups.map(g=>{
+        const locked = !!(lock && lock.type==='group' && String(lock.key)===String(g.key));
+        return `
+        <div class="group-option${locked?' locked':''}" data-group="${esc(g.key)}" style="border-left:8px solid #${esc(g.color)};background:${hexToRgba(g.color,0.1)}">
           <span class="group-swatch" style="background:#${esc(g.color)}"></span>
-          <span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(g.label)}</span>
+          <span class="group-label" style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(g.label)}${locked?' <span class=\"lock-ico\">🔒</span>':''}</span>
         </div>
-      `).join("");
+      `;
+      }).join("");
       const addBtn = `<div class="group-option" onclick="addNewLocalGroup()" style="border:1px dashed #ccc;background:#f9f9f9;justify-content:center;color:#666;cursor:pointer;">+ Nuovo</div>`;
       wrap.innerHTML = listHtml + addBtn;
       attachGroupRenameLongPress();
+      try{ bindTaxLockHandlers(); }catch(e){}
     }
 
     function attachGroupRenameLongPress(){
@@ -3029,12 +3322,13 @@ if(blind && !isArchived()) {
             __reLpTimer = setTimeout(()=>{
               __reLpFired = true;
               dragSrcId = sid;
+              __reLpTimer = null;
               try{ card.style.opacity = '0.65'; }catch(_e){}
             }, REORDER_LP_MS);
          }, {passive:true});
 
          card.addEventListener('touchmove', e => {
-            if(!__reLpTimer) return;
+            if(!__reLpTimer || __reLpFired) return;
             const t0 = e.touches && e.touches[0];
             if(!t0) return;
             const dx = Math.abs(t0.clientX - __reStartX);
@@ -3399,6 +3693,8 @@ if(blind && !isArchived()) {
       }
 
       selectedSampleId = sampleId;
+      // V136_applyLockHook
+      try{ applyTaxLockToSelectedSample(); }catch(e){}
       renderGrid();
       updateDetail();
       loadCanvasFromEval();
@@ -3728,12 +4024,8 @@ if(blind && !isArchived()) {
     function normHex6(v){ const h=String(v||"").trim().replace("#",""); return /^[0-9a-fA-F]{6}$/.test(h)?h.toLowerCase():null; }
     function moveInArray(arr,i,dir){ const j=i+(dir<0?-1:1); if(j>=0 && j<arr.length){ const t=arr[i]; arr[i]=arr[j]; arr[j]=t; } }
     function syncGroupsToTastings(){
-      const master=state.groups||[]; const ord=new Map(master.map((g,i)=>[g.key,i]));
-      (state.tastings||[]).forEach(t=>{
-         if(!Array.isArray(t.groups)) t.groups=JSON.parse(JSON.stringify(master));
-         t.groups.forEach(g=>{ const m=master.find(x=>x.key===g.key); if(m){ g.label=m.label; g.color=m.color; } });
-         t.groups.sort((a,b)=>(ord.get(a.key)??9999)-(ord.get(b.key)??9999));
-      });
+      // V125: DISABLED. Gruppi delle degustazioni sono indipendenti dall'anagrafica.
+      return;
     }
 
     function editProfileLabel(key,val){ const p=state.profiles.find(x=>x.key===key); if(p && val.trim()){ p.label=val.trim(); saveState(); renderAnagrafiche(); } }
@@ -3969,6 +4261,8 @@ function renderAnagrafiche(){
       if(!t) return;
       if(!confirm("Duplicare questa degustazione?")) return;
       const newT = clone(t);
+      // V125: detach groups on copy
+      try{ newT.groups = (newT.groups||[]).map(g=>({ key:g.key, label:g.label, color:g.color })); newT.__groupsDetached = 1; }catch(_e){}
       newT.id = uid();
       newT.title = newT.title + " (Copia)";
       newT.status = "bozza";
@@ -4547,23 +4841,56 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
       });
     });
 
-    // Paste from Excel
+    // Paste from Excel (robusto: evita che l'HTML di Excel rompa la tabella)
     document.addEventListener("paste", (e)=>{
-      if(!document.getElementById("modalTasting").classList.contains("active")) return;
-      // If user is inside an input, let default paste happen unless it looks like multiline/tab
       const active = document.activeElement;
-      if(active && active.tagName==="INPUT" && !active.classList.contains("draft-input")) return;
+      const isDraft = !!(active && active.classList && active.classList.contains("draft-input"));
+      const modal = document.getElementById("modalTasting");
+      const modalOpen = !!(modal && ((modal.classList && modal.classList.contains('active')) || (modal.style.display && modal.style.display !== 'none')));
+      if(!isDraft && !modalOpen) return;
+
+      if(active && active.tagName==="INPUT" && !isDraft) return;
 
       e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData("text");
-      const rows = text.split(/\r\n|\n|\r/).filter(r=>r.trim());
+      const cb = (e.clipboardData || window.clipboardData);
+      let grid = [];
+
+      // 1) Preferisci HTML di Excel se contiene <table>, ma PARSALO in sicurezza.
+      try{
+        const html = cb ? (cb.getData("text/html") || '') : '';
+        if(html && html.toLowerCase().includes('<table')){
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const table = doc.querySelector('table');
+          if(table){
+            const trs = Array.from(table.querySelectorAll('tr'));
+            trs.forEach(tr=>{
+              const tds = Array.from(tr.querySelectorAll('td'));
+              if(!tds.length) return;
+              const row = tds.map(td=>{
+                return String(td.innerText || '').replace(/ /g,' ').trim();
+              });
+              grid.push(row);
+            });
+          }
+        }
+      }catch(_e){}
+
+      // 2) Fallback: TSV da text/plain
+      if(!grid.length){
+        const plain = cb ? (cb.getData("text/plain") || cb.getData("text") || '') : '';
+        const norm = plain.split('\r\n').join('\n').split('\r').join('\n');
+        const lines = norm.split('\n');
+        grid = lines.filter(l=>l.length>0).map(l=>l.split('\t'));
+      }
+
+      if(!grid.length) return;
 
       let startIdx = 0;
-      let colOffset = 0; // 0=ID, 1=C1...
+      let colOffset = 0;
 
-      if(active && active.classList.contains("draft-input")){
+      if(isDraft){
         const r = parseIntSafe(active.dataset.r, -1);
-        const c = active.dataset.c; 
+        const c = active.dataset.c;
         if(r>=0) startIdx = r;
         if(c==="id") colOffset=0;
         else if(c==="c1") colOffset=1;
@@ -4572,17 +4899,16 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
         else if(c==="c4") colOffset=4;
       }
 
-      rows.forEach((line, i)=>{
-        const vals = line.split("\t");
+      grid.forEach((vals, i)=>{
         const rowIndex = startIdx + i;
-        if(rowIndex >= draft.items.length) addDraftRow(false);
+        while(rowIndex >= draft.items.length) addDraftRow(false);
 
         const it = draft.items[rowIndex];
-        it.use = true; 
+        it.use = true;
 
         vals.forEach((v, j)=>{
           const colAbs = colOffset + j;
-          const cleanV = v.trim();
+          const cleanV = String(v||'').split('\r\n').join('\n').split('\r').join('\n').trim();
           if(colAbs===0) it.id = cleanV;
           if(colAbs===1) it.c1 = cleanV;
           if(colAbs===2) it.c2 = cleanV;
@@ -4707,6 +5033,14 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
       };
 
       ensureTastingSampleIds(newT);
+
+      // V125: detach groups on create/edit (no anagrafica coupling)
+      try{
+        if(!newT.__groupsDetached){
+          newT.groups = (newT.groups||[]).map(g=>({ key:g.key, label:g.label, color:g.color }));
+          newT.__groupsDetached = 1;
+        }
+      }catch(_e){}
 
       if(existing){
         const idx = state.tastings.findIndex(x=>x.id===existing.id);
