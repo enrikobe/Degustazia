@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
-<!-- V136-OK -->
+<!-- V148-OK -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -208,6 +208,8 @@
     .sample-card.selected{
       border-color:var(--bordeaux);
       border-width:3px;
+    }
+    .sample-card.selected:not(.has-accent){
       background:rgba(122,41,56,.05);
     }
     .sample-card.dragging{opacity:.25}
@@ -1070,6 +1072,63 @@ body.zenplus .sample-id-row .fav-heart{
 .lock-ico{ margin-left: 6px; font-size: 0.95em; opacity: 0.95; }
 .profile-option.locked, .group-option.locked{ box-shadow: inset 0 0 0 3px var(--focus-blue); }
 
+
+
+/* V137: ZEN+ ID/cuore ancora più vicini (riduce spazio verticale reale del fav-heart) */
+body.zenplus .sample-id-row{ gap: 0px !important; }
+body.zenplus .sample-id-row .sample-id{ margin: 0 !important; padding: 0 !important; line-height: 0.92 !important; }
+body.zenplus .sample-id-row .fav-heart{
+  margin: -0.55em 0 -0.25em 0 !important; /* avvicina sopra e riduce sotto */
+  padding: 0 !important;
+  line-height: 1 !important;
+}
+
+
+
+/* V140: pulsante Reset disabilitato */
+.sort-btn.disabled, .sort-btn:disabled{ opacity:.45; cursor:not-allowed; }
+
+
+
+
+
+/* V141: switch stile iOS + accent card */
+.h3-switch{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+
+/* iOS-like toggle */
+.switch{ position:relative; display:inline-block; width:51px; height:31px; flex:0 0 auto; }
+.switch input{ opacity:0; width:0; height:0; }
+.switch .slider{
+  position:absolute; inset:0;
+  background:#e5e5ea;
+  transition: background .18s ease;
+  border-radius:999px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+}
+.switch .slider:before{
+  position:absolute; content:"";
+  height:27px; width:27px;
+  left:2px; top:2px;
+  background:#fff;
+  border-radius:50%;
+  transition: transform .18s ease;
+  box-shadow: 0 3px 8px rgba(0,0,0,.18);
+}
+.switch input:checked + .slider{ background:#34C759; }
+.switch input:checked + .slider:before{ transform: translateX(20px); }
+
+.sample-card.has-accent{
+  border-color: rgba(var(--acc-r), var(--acc-g), var(--acc-b), 0.55) !important;
+  background: rgba(var(--acc-r), var(--acc-g), var(--acc-b), 0.10) !important;
+}
+.sample-card.has-accent.selected{
+  border-color: var(--bordeaux) !important;
+}
+
+/* V143: mini switch e label in ZEN+ */
+.switch.mini{ transform: scale(.88); transform-origin:left center; }
+.zenplus-mini-label{ font-size:12px; opacity:.75; margin-left:6px; }
+
 </style>
 </head>
 
@@ -1118,6 +1177,7 @@ body.zenplus .sample-id-row .fav-heart{
   renderProductsStrip();
   renderGrid();
   updateDetail();
+      try{ syncCardColorModeUI(); }catch(e){}
 };
 
 function forceEnableClear(){
@@ -1151,12 +1211,15 @@ function applyTaxLockToSelectedSample(){
     const t = getTasting();
     if(!t || !selectedSampleId) return;
 
+    // V138: con lock attivo, se la card ha gia' lo stesso tag lo rimuove (toggle)
     if(lock.type === 'group'){
       const s = (t.samples||[]).find(x=>String(x.id)===String(selectedSampleId));
       if(!s) return;
-      if(String(s.groupKey||'') === String(lock.key||'')) return;
-      s.groupKey = String(lock.key);
+      const cur = String(s.groupKey||'');
+      const key = String(lock.key||'');
+      s.groupKey = (cur === key) ? null : key;
       saveState();
+      try{ renderGroupFilterBtns(); }catch(e){}
       return;
     }
 
@@ -1164,10 +1227,10 @@ function applyTaxLockToSelectedSample(){
       const tId = currentTasterId();
       if(!tId) return;
       const ev = getEval(t, tId, selectedSampleId);
-      if(String(ev.profileKey||'') === String(lock.key||'')) return;
-      ev.profileKey = String(lock.key);
-      ev.progress = calcProgress(ev);
-      ev.overall = calcOverall(ev);
+      const cur = String(ev.profileKey||'');
+      const key = String(lock.key||'');
+      ev.profileKey = (cur === key) ? null : key;
+      recalc();
       saveState();
       return;
     }
@@ -1190,7 +1253,7 @@ function bindTaxLockHandlers(){
       const now = Date.now();
       const last = parseInt(el.dataset.lastTapTs || '0', 10) || 0;
 
-      if(now - last < 320){
+      if(now - last < 420){
         el.dataset.lastTapTs = '0';
         if(el.__taxSingleTimer){ clearTimeout(el.__taxSingleTimer); el.__taxSingleTimer = null; }
         try{ e.preventDefault(); e.stopPropagation(); }catch(_e){}
@@ -1200,9 +1263,140 @@ function bindTaxLockHandlers(){
 
       el.dataset.lastTapTs = String(now);
       if(el.__taxSingleTimer){ clearTimeout(el.__taxSingleTimer); el.__taxSingleTimer = null; }
-      el.__taxSingleTimer = setTimeout(()=>{ el.__taxSingleTimer = null; doSingle(); }, 220);
+      el.__taxSingleTimer = setTimeout(()=>{ el.__taxSingleTimer = null; doSingle(); }, 450);
     }, { passive:false });
   });
+}
+
+
+
+// V140: Reset ordine (solo degustatore selezionato) + stato pulsante
+function markOrderDirty(){
+  try{
+    const tId = currentTasterId();
+    if(!tId) return;
+    const ui = getTasterUI(tId);
+    ui.orderDirty = true;
+    saveState();
+    try{ renderSortButtons(); }catch(e){}
+  }catch(e){}
+}
+
+function resetOrderForCurrentTaster(){
+  try{
+    const t = getTasting();
+    const tId = currentTasterId();
+    if(!t || !tId) return;
+
+    // Ripristina ordine iniziale (per ID crescente) SOLO per questo degustatore
+    const ord = (t.samples||[]).slice().sort((a,b)=>cmpSampleId(a.id,b.id)).map(s=>String(s.id));
+    setSampleOrder(t, tId, ord);
+
+    const ui = getTasterUI(tId);
+    ui.sort = 'custom';
+    ui.orderDirty = false;
+
+    saveState();
+    try{ renderSortButtons(); }catch(e){}
+    try{ renderGrid(); }catch(e){}
+  }catch(e){}
+}
+
+
+
+// V140: Copia vergine anche per degustazioni attive (crea una Bozza senza assegnazioni)
+function copyTastingVirgin(id){
+  const t = state.tastings.find(x=>x.id===id);
+  if(!t) return;
+  if(!confirm("Copiare questa degustazione (vergine)?")) return;
+
+  const newT = clone(t);
+  // V125: detach groups on copy (mantiene solo definizioni)
+  try{ newT.groups = (newT.groups||[]).map(g=>({ key:g.key, label:g.label, color:g.color })); newT.__groupsDetached = 1; }catch(_e){}
+
+  newT.id = uid();
+  newT.title = (newT.title || '') + " (Copia)";
+  newT.status = "bozza";
+  newT.createdAt = nowIso();
+  newT.finishedAt = null;
+
+  // Mantieni campioni ma azzera gruppo assegnato
+  try{ newT.samples = (newT.samples||[]).map(s=>({ ...s, groupKey: null })); }catch(e){}
+
+  // Nessuna valutazione / profilo / preferiti / ordine
+  newT.evaluations = {};
+
+  // Nessuna associazione cieca
+  newT.blindMap = {};
+
+  // Niente preferenze UI della degustazione (filtri, hidden, ecc) => torna default
+  try{ delete newT.uiPrefs; }catch(e){}
+
+  // V143: default swipe colore su PROFILO (copia)
+  try{ newT.uiPrefs = newT.uiPrefs || {}; newT.uiPrefs.cardColorModeByTaster = {}; (t.tasterIds||[]).forEach(id=> newT.uiPrefs.cardColorModeByTaster[String(id)]='profile'); }catch(e){}
+
+  state.tastings.unshift(newT);
+  saveState();
+
+  try{ go('preparazione', document.getElementById('btnMenuPrep')); }catch(e){}
+  try{ showPrepTab('attive'); }catch(e){}
+  try{ renderPreparation(); }catch(e){}
+  toast("Degustazione copiata (Bozza)");
+}
+
+
+
+// V140: Modalita' colore card (profilo vs gruppo), memorizzata nella degustazione
+function getCardColorMode(t){
+  try{
+    if(!t) t = getTasting();
+    const tasterId = currentTasterId();
+    const tastingId = String((t && t.id) || state?.ui?.currentTastingId || '');
+    if(!tasterId || !tastingId) return 'profile';
+
+    // Locale: per prestazioni e per evitare sync inutile
+    let m = __getLocalCardColorMode(tastingId, tasterId);
+    if(!m){
+      // Default: profilo
+      __setLocalCardColorMode(tastingId, tasterId, 'profile');
+      m = 'profile';
+    }
+    return (m === 'group') ? 'group' : 'profile';
+  }catch(e){ return 'profile'; }
+}
+
+function syncCardColorModeUI(){
+  try{
+    const t = getTasting();
+    const mode = getCardColorMode(t);
+
+    // Scheda Degustazione
+    const swP = document.getElementById('swColorProfile');
+    const swG = document.getElementById('swColorGroup');
+    if(swP) swP.checked = (mode === 'profile');
+    if(swG) swG.checked = (mode === 'group');
+
+    // ZEN+
+    const zP = document.getElementById('swZenColorProfile');
+    const zG = document.getElementById('swZenColorGroup');
+    if(zP) zP.checked = (mode === 'profile');
+    if(zG) zG.checked = (mode === 'group');
+  }catch(e){}
+}
+
+function setCardColorMode(mode){
+  try{
+    const t = getTasting();
+    const tasterId = currentTasterId();
+    const tastingId = String((t && t.id) || state?.ui?.currentTastingId || '');
+    if(!tasterId || !tastingId) return;
+
+    __setLocalCardColorMode(tastingId, tasterId, (String(mode)==='group') ? 'group' : 'profile');
+
+    // UI only (no cloud)
+    syncCardColorModeUI();
+    try{ renderGrid(); }catch(e){}
+  }catch(e){}
 }
 
 </script>
@@ -1220,8 +1414,8 @@ function bindTaxLockHandlers(){
     <button class="zenplus-exit" onclick="toggleZenPlus(false)">Esci ZEN+</button>
 <div id="zenPlusTop" class="zenplus-top"></div>
 
-    <div class="zenplus-strip profiles"><div class="zenplus-strip-inner"><div id="zenPlusProfilesSlot" class="zenplus-slot"></div></div></div>
-    <div class="zenplus-strip groups"><div class="zenplus-strip-inner"><div id="zenPlusGroupsSlot" class="zenplus-slot"></div></div></div>
+    <div class="zenplus-strip profiles"><div class="zenplus-strip-inner"><div id="zenPlusProfilesSlot" class="zenplus-slot"><label class="switch mini" title="Colore card: profilo"><input type="checkbox" id="swZenColorProfile" onchange="setCardColorMode('profile')"><span class="slider"></span></label><span class="zenplus-mini-label">Profili</span></div></div></div>
+    <div class="zenplus-strip groups"><div class="zenplus-strip-inner"><div id="zenPlusGroupsSlot" class="zenplus-slot"><label class="switch mini" title="Colore card: gruppo"><input type="checkbox" id="swZenColorGroup" onchange="setCardColorMode('group')"><span class="slider"></span></label><span class="zenplus-mini-label">Gruppi</span></div></div></div>
 
     <div class="zenplus-strip desc vista"><div class="zenplus-desc-row"><div class="zenplus-desc-title">Vista <span class="zenplus-desc-add" onclick="addTastingDescriptorQuick('vista')">+ aggiungi</span></div><div id="zenPlusDescVista" class="zenplus-desc-list"></div></div></div>
     <div class="zenplus-strip desc olfatto"><div class="zenplus-desc-row"><div class="zenplus-desc-title">Olfatto <span class="zenplus-desc-add" onclick="addTastingDescriptorQuick('olfatto')">+ aggiungi</span></div><div id="zenPlusDescOlfatto" class="zenplus-desc-list"></div></div></div>
@@ -1296,12 +1490,12 @@ function bindTaxLockHandlers(){
           <div class="fiche-content">
             <div class="params-column">
               <div class="fiche-box">
-                <h3>Profilo sensoriale</h3>
+                <h3 class="h3-switch"><span>Profilo sensoriale</span><label class="switch" title="Colora card per profilo"><input type="checkbox" id="swColorProfile" onchange="setCardColorMode('profile')"><span class="slider"></span></label></h3>
                 <div id="profileOptions" class="profile-options"></div>
               </div>
 
               <div class="fiche-box">
-                <h3>Gruppo campione</h3>
+                <h3 class="h3-switch"><span>Gruppo campione</span><label class="switch" title="Colora card per gruppo"><input type="checkbox" id="swColorGroup" onchange="setCardColorMode('group')"><span class="slider"></span></label></h3>
                 <div class="muted" style="margin-bottom:6px;">Suggerimento: long-press (650ms) per rinominare un gruppo.</div>
                 <div id="groupOptions" class="group-options"></div>
               </div>
@@ -1877,6 +2071,21 @@ body.zenplus .zenplus-top{ flex:1 1 auto; min-height:0; }
 
     function uid(){ return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2,10); }
     function nowIso(){ return new Date().toISOString(); }
+
+// V143: formato data "gggg gg/mm/aaaa" (giorno settimana + dd/mm/yyyy)
+function fmtDateIT(iso){
+  try{
+    if(!iso) return '';
+    const d = new Date(iso);
+    if(isNaN(d.getTime())) return '';
+    const wd = ['dom','lun','mar','mer','gio','ven','sab'][d.getDay()] || '';
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yyyy = d.getFullYear();
+    return `${wd} ${dd}/${mm}/${yyyy}`;
+  }catch(e){ return ''; }
+}
+
     function clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }
     function esc(s){
       return String(s ?? "")
@@ -1950,6 +2159,31 @@ body.zenplus .zenplus-top{ flex:1 1 auto; min-height:0; }
         }
       };
     }
+
+    // V148: una evaluation vuota creata automaticamente per la UI NON deve essere sincronizzata,
+    // altrimenti una nuova istanza puo' sovrascrivere dati reali presenti su cloud.
+    function isBlankEval(ev){
+      try{
+        if(!ev) return true;
+        if(ev.profileKey) return false;
+        if((parseInt(ev.evolution||0,10)||0) > 0) return false;
+        if(!!ev.favourite) return false;
+
+        const v = ev.data?.vista || {};
+        const o = ev.data?.olfatto || {};
+        const g = ev.data?.gusto || {};
+
+        const sliders = [v.intensita, v.limpidezza, o.intensita, o.complessita, g.corpo, g.acidita, g.persistenza];
+        if(sliders.some(x => (parseInt(x||0,10)||0) > 0)) return false;
+
+        if((v.desc||[]).length) return false;
+        if((o.desc||[]).length) return false;
+        if((g.desc||[]).length) return false;
+
+        return true;
+      }catch(e){ return false; }
+    }
+
     function defaultProfiles(){
       return [
         {key:"floreale", label:"Floreale", color:"5a8e3a"},
@@ -2122,6 +2356,34 @@ function applyLocalCardUiPrefs(){
   if(l2){ l2.textContent = String(Math.round(ts*100)) + '%'; }
 }
 
+// V144: preferenza colore card per degustatore+degustazione (LOCALE, no cloud)
+const LOCAL_COLOR_MODE_KEY = 'degustapp_color_mode_by_taster_v1';
+function __getLocalColorModeMap(){
+  try{
+    if(window.__localColorModeMap) return window.__localColorModeMap;
+    window.__localColorModeMap = JSON.parse(localStorage.getItem(LOCAL_COLOR_MODE_KEY) || '{}') || {};
+    return window.__localColorModeMap;
+  }catch(e){ window.__localColorModeMap = {}; return window.__localColorModeMap; }
+}
+function __saveLocalColorModeMap(){
+  try{ localStorage.setItem(LOCAL_COLOR_MODE_KEY, JSON.stringify(window.__localColorModeMap || {})); }catch(e){}
+}
+function __getLocalCardColorMode(tastingId, tasterId){
+  const map = __getLocalColorModeMap();
+  const key = String(tastingId||'') + '|' + String(tasterId||'');
+  const v = String(map[key] || '');
+  return (v === 'group') ? 'group' : (v === 'profile') ? 'profile' : '';
+}
+function __setLocalCardColorMode(tastingId, tasterId, mode){
+  try{
+    const map = __getLocalColorModeMap();
+    const key = String(tastingId||'') + '|' + String(tasterId||'');
+    map[key] = (String(mode)==='group') ? 'group' : 'profile';
+    __saveLocalColorModeMap();
+  }catch(e){}
+}
+
+
 function onCardScaleInput(v){
   const num = Math.max(-3, Math.min(3, parseInt(String(v),10) || 0));
   setLocalCardUiPrefs({ cardColsDelta: num });
@@ -2140,7 +2402,8 @@ function saveState(opts){
     // Cloud-only: nessun salvataggio locale.
     const skipCloud = !!(opts && opts.skipCloud);
     try{ window.markUiBusy && window.markUiBusy(1100); }catch(e){}
-  if(window.__cloudApplying || skipCloud) return;
+    try{ window.markLocalDirty && window.markLocalDirty(4500); }catch(e){}
+if(window.__cloudApplying || skipCloud) return;
   if(typeof window.cloudRequestSync === "function") window.cloudRequestSync();
 }
 
@@ -2500,6 +2763,7 @@ function renderZenPlusDescriptors(){
         __zenPlusMove('profileOptions','zenPlusProfilesSlot');
         __zenPlusMove('groupOptions','zenPlusGroupsSlot');
 
+        try{ syncCardColorModeUI(); }catch(e){} // V143
         renderZenPlusDescriptors();
       }else{
         document.body.classList.remove('zenplus');
@@ -2588,7 +2852,8 @@ function renderZenPlusDescriptors(){
     }
     function onSelectTaster(){
       state.currentTaster = currentTasterId();
-      saveState();
+      try{ syncCardColorModeUI(); }catch(e){}
+      saveState({skipCloud:true});
       renderGrid();
       updateDetail();
       loadCanvasFromEval();
@@ -2618,7 +2883,10 @@ function renderZenPlusDescriptors(){
     }
 
     function eligibleForReorder(){
-      const tId = currentTasterId(); if(!tId) return false; const ui = getTasterUI(tId); return ui.sort==="custom" && ui.filterProfile==="tutti" && ui.filterGroup==="tutti";
+      const tId = currentTasterId();
+      if(!tId) return false;
+      const ui = getTasterUI(tId);
+      return ui.filterProfile==="tutti" && ui.filterGroup==="tutti";
     }
     function setFilterProfile(profileKey, btnEl){
       const tId = currentTasterId(); if(!tId) return; const ui = getTasterUI(tId); ui.filterProfile = profileKey;
@@ -2635,7 +2903,59 @@ function renderZenPlusDescriptors(){
       renderGrid(); updateDetail();
     }
     function setSort(kind, btnEl){
-      const tId = currentTasterId(); if(!tId) return; const ui = getTasterUI(tId); ui.sort = kind;
+      const tId = currentTasterId();
+      if(!tId) return;
+      const ui = getTasterUI(tId);
+
+      // V148: Reset e' un'azione, non un ordinamento persistente
+      if(kind === 'reset'){
+        if(!ui.orderDirty) return;
+        resetOrderForCurrentTaster();
+        return;
+      }
+
+      // V148: ordinamenti NON vincolanti => generano un ordine custom iniziale ma permettono drag&drop
+      if(kind === 'group' || kind === 'profile' || kind === 'evolution'){
+        const t = getTasting();
+        if(!t) return;
+
+        let list = (t.samples||[]).slice();
+        try{ list = list.filter(s=>!isSampleHidden(t.id, s.id)); }catch(e){}
+
+        if(kind === 'group'){
+          const ord={};
+          try{ groupsForTasting(t).forEach((g,i)=>ord[g.key]=i+1); }catch(e){}
+          list.sort((a,b)=> (ord[a.groupKey]??9999) - (ord[b.groupKey]??9999) || cmpSampleId(a.id,b.id));
+        }
+
+        if(kind === 'profile'){
+          const ord={};
+          try{ profilesForTasting(t).forEach((p,i)=>ord[p.key]=i+1); }catch(e){}
+          list.sort((a,b)=>{
+            const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id);
+            return (ord[ea.profileKey]??9999) - (ord[eb.profileKey]??9999) || cmpSampleId(a.id,b.id);
+          });
+        }
+
+        if(kind === 'evolution'){
+          list.sort((a,b)=>{
+            const ea = getEval(t,tId,a.id), eb = getEval(t,tId,b.id);
+            return ( (eb.evolution||0) - (ea.evolution||0) ) || cmpSampleId(a.id,b.id);
+          });
+        }
+
+        const order = list.map(s=>String(s.id));
+        try{ setSampleOrder(t, tId, order); }catch(e){}
+
+        ui.sort = 'custom';
+        ui.orderDirty = true;
+        saveState();
+        try{ renderSortButtons(); }catch(e){}
+        renderGrid();
+        return;
+      }
+
+      ui.sort = kind;
       saveState();
       document.querySelectorAll("#sortBtnsWrap .sort-btn").forEach(b=>b.classList.remove("active"));
       btnEl?.classList.add("active");
@@ -2644,9 +2964,12 @@ function renderZenPlusDescriptors(){
     function renderSortButtons(){
       const wrap = document.getElementById("sortBtnsWrap");
       if(!wrap) return;
-      const tId = currentTasterId(); const ui = tId ? getTasterUI(tId) : { sort: 'custom' }; const current = ui.sort || "custom";
-      const btn=(key,label)=>`<button class="sort-btn ${current===key?"active":""}" onclick="setSort('${esc(key)}', this)">${esc(label)}</button>`;
-      wrap.innerHTML = btn("custom","Ordine") + btn("group","Gruppo") + btn("profile","Profilo") + btn("evolution","Evoluzione") + btn("reset","Reset");
+      const tId = currentTasterId();
+      const ui = tId ? getTasterUI(tId) : { sort: 'custom' };
+      const current = ui.sort || "custom";
+      const resetDisabled = !(tId && ui && ui.orderDirty);
+      const btn=(key,label,disabled)=>`<button class="sort-btn ${current===key?"active":""} ${disabled?"disabled":""}" onclick="setSort('${esc(key)}', this)" ${disabled?"disabled":""}>${esc(label)}</button>`;
+      wrap.innerHTML = btn("custom","Ordine",false) + btn("group","Gruppo",false) + btn("profile","Profilo",false) + btn("evolution","Evoluzione",false) + btn("reset","Reset",resetDisabled);
     }
     function renderProfileFilterBtns(){
       const wrap = document.getElementById("profileFilterBtns");
@@ -3143,7 +3466,32 @@ function renderProductsStrip(){
         ev.progress = calcProgress(ev); ev.overall = calcOverall(ev);
         const c = cols4(s.cols);
         const group = groupDef(t, s.groupKey);
-        const groupBg = group ? hexToRgba(group.color, 0.14) : "#fff";
+        const accent = (()=>{
+          try{
+            const __mode = getCardColorMode(t);
+            if(__mode==='profile' && tId){
+              const pk = String(ev.profileKey||'');
+              if(!pk) return {cls:'', style:''};
+              const p = profileDef(t, pk);
+              if(!p || !p.color) return {cls:'', style:''};
+              const rgb = hexToRgbParts(p.color);
+              return {cls:'has-accent', style:`--acc-r:${rgb.r};--acc-g:${rgb.g};--acc-b:${rgb.b};`};
+            }
+            if(__mode==='group'){
+              const gk = String(s.groupKey||'');
+              if(!gk) return {cls:'', style:''};
+              const g2 = groupDef(t, gk);
+              if(!g2 || !g2.color) return {cls:'', style:''};
+              const rgb = hexToRgbParts(g2.color);
+              return {cls:'has-accent', style:`--acc-r:${rgb.r};--acc-g:${rgb.g};--acc-b:${rgb.b};`};
+            }
+          }catch(e){}
+          return {cls:'', style:''};
+        })();
+        const accentClass = accent.cls;
+        const accentStyle = accent.style;
+        const cardColorMode = getCardColorMode(t);
+        const groupBg = (cardColorMode==='group' && group) ? hexToRgba(group.color, 0.14) : "#fff"; // V140
         const groupChip = group ? `<span class="chip group" style="background:#${esc(group.color)}">${esc(group.label)}</span>` : "";
         let profileChip = "";
         if(ev.profileKey){ const p = profileDef(t, ev.profileKey); if(p) profileChip = `<span class="chip profile" style="background:${hexToRgba(p.color,0.22)}">${esc(p.label)}</span>`; }
@@ -3179,7 +3527,7 @@ if(blind && assignedHtmlTop){
   l4Html = "";
 }
         return `
-          <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg}">
+          <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""} ${accentClass}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg};${accentStyle}">
             <div class="sample-top">
               <div class="sample-id-col"><div class="sample-id-row"><div class="sample-id">${esc(String(s.id).padStart(2,"0"))}</div>
               <div class="fav-heart ${favOn?"on":""} ${(!tId||isArchived())?"disabled":""}" data-fav-sample="${esc(s.id)}">${favOn?"❤":"♡"}</div></div></div>
@@ -3261,6 +3609,7 @@ if(blind && !isArchived()) {
             const item = order.splice(idxA, 1)[0];
             order.splice(idxB, 0, item);
             setSampleOrder(t, tId, order);
+      try{ markOrderDirty(); }catch(e){}
             saveState();
             renderGrid();
          }
@@ -3930,7 +4279,7 @@ if(blind && !isArchived()) {
       const divBoz = document.getElementById("prep-bozze");
       if(!divAtt || !divBoz) return;
 
-      const attive = state.tastings.filter(t=>t.status!=="archiviata" && t.status!=="bozza");
+      const attive = state.tastings.filter(t=>t.status!=="archiviata");
       const bozze = state.tastings.filter(t=>t.status==="bozza");
 
       const cardHtml = (t)=>`
@@ -3939,11 +4288,12 @@ if(blind && !isArchived()) {
           <div class="meta">
             <span>${esc(t.samples.length)} campioni</span>
             <span>${esc(t.mode)}</span>
-            <span>Creata: ${esc(t.createdAt.slice(0,10))}</span>
+            <span>Creata: ${esc(fmtDateIT(t.createdAt))}</span>
           </div>
           <div class="row-actions">
             <button class="btn primary" onclick="openTasting('${esc(t.id)}')">Apri</button>
             <button class="btn" onclick="openEditModal('${esc(t.id)}')">Modifica</button>
+            <button class=\"btn\" onclick=\"copyTastingVirgin('${esc(t.id)}')\">Copia</button>
             <button class="btn" onclick="deleteTasting('${esc(t.id)}')">Elimina</button>
           </div>
         </div>
@@ -4269,13 +4619,15 @@ function renderAnagrafiche(){
       newT.createdAt = nowIso();
       newT.evaluations = {}; 
       newT.blindMap = clone(t.blindMap || {});
+      // V143: default swipe colore su PROFILO (duplica)
+      try{ newT.uiPrefs = newT.uiPrefs || {}; newT.uiPrefs.cardColorModeByTaster = {}; (t.tasterIds||[]).forEach(id=> newT.uiPrefs.cardColorModeByTaster[String(id)]='profile'); }catch(e){}
       state.tastings.unshift(newT);
       saveState();
       try{ if(typeof pushTastingMeta === 'function') await pushTastingMeta(newT); }catch(e){ console.error('push copia error', e); }
-      renderArchive();
+      renderPreparation();
       toast("Degustazione duplicata (Bozza)");
       try{ go('preparazione', document.getElementById('btnMenuPrep')); }catch(e){}
-      try{ showPrepTab('bozze'); }catch(e){}
+      try{ showPrepTab('attive'); }catch(e){}
     }
     async function openComparison(id){
       const tid = String(id||'');
@@ -4368,7 +4720,7 @@ function renderArchive(){
           <div class="meta">
             <span>${esc(t.samples.length)} campioni</span>
             <span>${esc(t.mode)}</span>
-            <span>Terminata: ${esc(t.finishedAt?.slice(0,10)||"")}</span>
+            <span>Terminata: ${esc(fmtDateIT(t.finishedAt))}</span>
           </div>
           <div class="row-actions" style="gap:6px; flex-wrap:wrap">
             <button class="btn primary" onclick="viewArchived('${esc(t.id)}')">Visualizza</button>
@@ -5034,6 +5386,19 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
 
       ensureTastingSampleIds(newT);
 
+      // V143: default swipe colore su PROFILO (per ogni degustatore) alla creazione
+      try{
+        if(!existing){
+          if(!newT.uiPrefs) newT.uiPrefs = {};
+          if(!newT.uiPrefs.cardColorModeByTaster) newT.uiPrefs.cardColorModeByTaster = {};
+          (newT.tasterIds || []).forEach(id=>{
+            const k = String(id);
+            if(!newT.uiPrefs.cardColorModeByTaster[k]) newT.uiPrefs.cardColorModeByTaster[k] = 'profile';
+          });
+        }
+      }catch(e){}
+
+
       // V125: detach groups on create/edit (no anagrafica coupling)
       try{
         if(!newT.__groupsDetached){
@@ -5555,7 +5920,7 @@ const pushAnagrafiche = async () => {
     if(!window.__cloudReady) return;
     if(window.__cloudApplying) return;
     if(syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(runSync, 120);
+    syncTimer = setTimeout(runSync, 800);
   };
 
   async function runSync(){
@@ -5616,6 +5981,11 @@ const pushAnagrafiche = async () => {
           const key = `${tid}|${tasterId}|${sampleId}`;
           const eh = stableStringify(ev);
           if(lastEvalHash.get(key) !== eh){
+            // V148: non pushare evaluation vuote (placeholder UI) => evita overwrite cross-istanz a
+            if(typeof isBlankEval==='function' && isBlankEval(ev)){
+              lastEvalHash.set(key, eh);
+              continue;
+            }
             await pushEvalDoc(tid, tasterId, sampleId, ev);
             lastEvalHash.set(key, eh);
           }
@@ -5634,6 +6004,13 @@ const pushAnagrafiche = async () => {
   let __uiBusyUntil = 0;
   window.markUiBusy = (ms=1100)=>{ __uiBusyUntil = Date.now() + (ms||1100); };
 
+  // V142: finestra di protezione locale (evita che il polling sovrascriva modifiche appena fatte)
+  let __localDirtyUntil = 0;
+  window.markLocalDirty = (ms=4500)=>{
+    try{ __localDirtyUntil = Math.max(__localDirtyUntil, Date.now() + (ms||4500)); }catch(e){}
+  };
+
+
   let __lastTastingsHash = '';
   let __lastBlindHash = '';
   let __lastCanvasHash = '';
@@ -5641,27 +6018,43 @@ const pushAnagrafiche = async () => {
   async function pollTastings(){
     if(!db) return;
     const snap = await getDocs(collection(db,'tastings'));
-    const evalMap = new Map();
-    (state.tastings||[]).forEach(t=> evalMap.set(String(t.id), t.evaluations||{}));
+
+    // V146: preserva evaluations (profili/evoluzione/descrittori/preferiti) su refresh da altre istanze.
+    // Aggiorna solo metadati riusando l'oggetto esistente quando possibile.
+    const existingById = new Map();
+    (state.tastings||[]).forEach(t0=> existingById.set(String(t0.id), t0));
+
     const blindMapLocal = new Map();
-    (state.tastings||[]).forEach(t=> blindMapLocal.set(String(t.id), t.blindMap||{}));
+    (state.tastings||[]).forEach(t0=> blindMapLocal.set(String(t0.id), t0.blindMap||{}));
 
     const list = [];
     snap.forEach(ds=>{
       const d = ds.data() || {};
       try{ delete d.blindMap; }catch(e){}
-      const id = ds.id;
-      list.push({ ...d, id, evaluations: evalMap.get(String(id)) || {}, blindMap: blindMapLocal.get(String(id)) || {} });
+      const id = String(ds.id);
+
+      let obj = existingById.get(id);
+      if(obj){
+        const keepEvals = obj.evaluations || {};
+        const keepBlind = blindMapLocal.get(id) || obj.blindMap || {};
+        Object.assign(obj, d, { id });
+        obj.evaluations = keepEvals;
+        obj.blindMap = keepBlind;
+      } else {
+        obj = { ...d, id, evaluations: {}, blindMap: (blindMapLocal.get(id) || {}) };
+      }
+      list.push(obj);
     });
     list.sort((a,b)=>(String(b.createdAt||'')).localeCompare(String(a.createdAt||'')));
 
-    const meta = list.map(t=>({id:t.id, updatedAt:t.updatedAt||'', status:t.status||'', title:t.title||''}));
+const meta = list.map(t=>({id:t.id, updatedAt:t.updatedAt||'', status:t.status||'', title:t.title||''}));
     const h = stableStringify(meta);
     if(h === __lastTastingsHash) return;
 
     window.__cloudApplying = true;
     try{
       state.tastings = list;
+      // V146: oggetti riusati => non si perdono evaluations già caricate
       if(state.currentTastingId && !state.tastings.some(t=>String(t.id)===String(state.currentTastingId))){
         state.currentTastingId = state.tastings[0]?.id || null;
       }
@@ -5734,6 +6127,9 @@ const pushAnagrafiche = async () => {
   };
 
 async function pollEvaluations(tid){
+    // V142: evita overwrite da cloud mentre ci sono modifiche locali recenti o write in corso
+    try{ if((window.__syncInflight||0)>0) return; }catch(e){}
+    try{ if(Date.now() < __localDirtyUntil) return; }catch(e){}
     if(!db || !tid) return;
     const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
     if(!t) return;
@@ -5756,6 +6152,17 @@ async function pollEvaluations(tid){
         const key = `${tid}|${ta}|${sa}`;
         const eh = stableStringify(ev);
         if(lastEvalHash.get(key) !== eh){
+          // V148: merge updatedAt (non sovrascrivere locale piu' recente)
+          try{
+            const cur = t.evaluations?.[ta]?.[sa];
+            const rU = String(ev.updatedAt||'');
+            const lU = String(cur?.updatedAt||'');
+            if(cur && lU && rU && lU > rU && !(typeof isBlankEval==='function' && isBlankEval(cur))){
+              // locale piu' recente: aggiorna solo hash e non applicare
+              lastEvalHash.set(key, eh);
+              return;
+            }
+          }catch(_e){}
           t.evaluations[ta][sa] = ev;
           if(keepCanvas){
             try{
@@ -5868,7 +6275,7 @@ async function pollEvaluations(tid){
 
   if(db){
     pollOnce();
-    __pollTimer = setInterval(pollOnce, 1000);
+    __pollTimer = setInterval(pollOnce, 3500);
   }
 
   // compat stubs
