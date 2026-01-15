@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
-<!-- V148-OK -->
+<!-- V150-OK-FINAL: FIX sync completo - updatedAt + isBlankEval fix -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -1230,6 +1230,7 @@ function applyTaxLockToSelectedSample(){
       const cur = String(ev.profileKey||'');
       const key = String(lock.key||'');
       ev.profileKey = (cur === key) ? null : key;
+      ev.updatedAt = nowIso();
       recalc();
       saveState();
       return;
@@ -2165,6 +2166,8 @@ function fmtDateIT(iso){
     function isBlankEval(ev){
       try{
         if(!ev) return true;
+        // V150: se ha updatedAt, è stata modificata intenzionalmente, NON è blank
+        if(ev.updatedAt) return false;
         if(ev.profileKey) return false;
         if((parseInt(ev.evolution||0,10)||0) > 0) return false;
         if(!!ev.favourite) return false;
@@ -3747,6 +3750,7 @@ if(blind && !isArchived()) {
       if(!t || !tId){ toast("Seleziona un degustatore"); return; }
       const ev = getEval(t,tId,sampleId);
       ev.favourite = !ev.favourite;
+      ev.updatedAt = nowIso();
       saveState();
       renderGrid();
       if(selectedSampleId===sampleId) updateDetail();
@@ -3761,6 +3765,7 @@ if(blind && !isArchived()) {
       const ev = getEval(t,tId,sampleId);
       const next = clamp(parseIntSafe(evo,0), 1, 5);
       ev.evolution = (ev.evolution||0)===next ? 0 : next;
+      ev.updatedAt = nowIso();
       ev.progress = calcProgress(ev);
       ev.overall = calcOverall(ev);
       saveState();
@@ -4194,6 +4199,7 @@ if(blind && !isArchived()) {
       if(!t || !tId || !selectedSampleId) return;
       const ev = getEval(t,tId,selectedSampleId);
       ev.data[sec][key] = parseIntSafe(value,0);
+      ev.updatedAt = nowIso();
       recalc();
       saveState();
       renderGrid();
@@ -4206,6 +4212,7 @@ if(blind && !isArchived()) {
       if(!t || !tId || !selectedSampleId){ toast("Seleziona degustatore e campione"); return; }
       const ev = getEval(t,tId,selectedSampleId);
       ev.profileKey = (ev.profileKey===key) ? null : key;
+      ev.updatedAt = nowIso();
       recalc();
       saveState();
       renderGrid();
@@ -4236,6 +4243,7 @@ if(blind && !isArchived()) {
       if(i>=0) arr.splice(i,1);
       else arr.push(desc);
       el?.classList.toggle("selected");
+      ev.updatedAt = nowIso();
       recalc();
       saveState();
       renderGrid();
