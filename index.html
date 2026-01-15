@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
-<!-- V150-OK-FINAL: FIX sync completo - updatedAt + isBlankEval fix -->
+<!-- V151-UX: V150 sync + iOS switches + ZEN+ opacity + smooth scroll inerzia -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -1128,6 +1128,21 @@ body.zenplus .sample-id-row .fav-heart{
 /* V143: mini switch e label in ZEN+ */
 .switch.mini{ transform: scale(.88); transform-origin:left center; }
 .zenplus-mini-label{ font-size:12px; opacity:.75; margin-left:6px; }
+
+
+      /* V151-UX: ZEN+ pulsanti semitrasparenti fino a hover/click */
+      body.zenplus .zenplus-btn,
+      body.zenplus .zenplus-exit {
+        opacity: 0.35;
+        transition: opacity 0.25s ease;
+      }
+      body.zenplus .zenplus-btn:hover,
+      body.zenplus .zenplus-btn:active,
+      body.zenplus .zenplus-btn.active,
+      body.zenplus .zenplus-exit:hover,
+      body.zenplus .zenplus-exit:active {
+        opacity: 1;
+      }
 
 </style>
 </head>
@@ -2717,10 +2732,34 @@ function cardDescriptorsHtml(ev){
       lists.forEach(el=>{
         if(el.dataset.wheelBound==='1') return;
         el.dataset.wheelBound='1';
+
+        let velocity = 0;
+        let animFrame = null;
+
+        const applyMomentum = () => {
+          if(Math.abs(velocity) < 0.5){
+            velocity = 0;
+            animFrame = null;
+            return;
+          }
+          el.scrollLeft += velocity;
+          velocity *= 0.92;
+          animFrame = requestAnimationFrame(applyMomentum);
+        };
+
         el.addEventListener('wheel', (e)=>{
           if(Math.abs(e.deltaY) > Math.abs(e.deltaX)){
-            el.scrollLeft += e.deltaY;
-            try{ e.preventDefault(); }catch(_e){}
+            const delta = e.deltaY;
+            if(animFrame){
+              cancelAnimationFrame(animFrame);
+              animFrame = null;
+            }
+            el.scrollLeft += delta * 0.8;
+            velocity = delta * 0.6;
+            if(Math.abs(velocity) > 1){
+              animFrame = requestAnimationFrame(applyMomentum);
+            }
+            try{ e.preventDefault(); }catch(err){}
           }
         }, {passive:false});
       });
