@@ -1583,7 +1583,7 @@ function setCardColorMode(mode){
                 </h3>
                 <div class="canvas-container">
                   <div class="canvas-lines-bg"></div>
-                    <button class="tool-btn" onclick="window.toggleNotesFullscreen()" title="Apri a tutto schermo (ESC)" style="background:#2196F3;color:white;font-size:18px;font-weight:bold;padding:8px 14px;">⛶</button>
+                    
                     
                   <canvas id="drawingCanvas"></canvas>
                 </div>
@@ -1736,34 +1736,7 @@ function setCardColorMode(mode){
       <!-- ================================================ -->
       <!-- EXPORT EXCEL BUTTON - SUPER VISIBILE -->
       <!-- ================================================ -->
-      <div id="v160ExportBox" style="margin:20px;padding:25px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border-radius:12px;box-shadow:0 8px 25px rgba(102,126,234,0.4);animation:fadeIn 0.5s;">
-        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
-          <button onclick="window.exportComparisonTableToExcel()" 
-                  style="padding:20px 40px;
-                         background:white;
-                         color:#667eea;
-                         border:none;
-                         border-radius:10px;
-                         cursor:pointer;
-                         font-size:20px;
-                         font-weight:700;
-                         box-shadow:0 5px 15px rgba(0,0,0,0.2);
-                         display:inline-flex;
-                         align-items:center;
-                         gap:15px;
-                         transition:all 0.3s ease;
-                         letter-spacing:0.5px;"
-                  onmouseover="this.style.transform='translateY(-3px) scale(1.05)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.3)'"
-                  onmouseout="this.style.transform='translateY(0) scale(1)';this.style.boxShadow='0 5px 15px rgba(0,0,0,0.2)'">
-            <span style="font-size:32px;">📊</span>
-            <span>ESPORTA TABELLA EXCEL</span>
-          </button>
-
-          <div style="flex:1;min-width:250px;">
-            <div style="color:white;font-size:17px;font-weight:600;margin-bottom:8px;">
-              📥 Esporta i dati di confronto
-            </div>
-            <div style="color:rgba(255,255,255,0.9);font-size:15px;line-height:1.5;">
+      <div style="color:rgba(255,255,255,0.9);font-size:15px;line-height:1.5;">
               Scarica la tabella completa in formato CSV compatibile con Excel e LibreOffice Calc
             </div>
           </div>
@@ -3903,172 +3876,9 @@ function setNpToolEraser() {
   if (penBtn) penBtn.classList.remove('active');
 }
 
-function openCanvasNotePanel() {
-  console.log('📝 Apertura pannello espanso...');
 
-  const panel = document.getElementById('canvasNotePanel');
-  const mainCanvas = document.getElementById('canvasDrawArea');
-  npCanvas = document.getElementById('canvasNotePanelCanvas');
 
-  if (!panel || !npCanvas) {
-    console.error('❌ Elementi pannello mancanti');
-    toast('Errore apertura pannello');
-    return;
-  }
 
-  npCtx = npCanvas.getContext('2d');
-  if (!npCtx) {
-    console.error('❌ Context non disponibile');
-    toast('Errore context');
-    return;
-  }
-
-  npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
-
-  // CARICA NOTE ESISTENTI
-  if (mainCanvas) {
-    try {
-      const dataUrl = mainCanvas.toDataURL('image/png');
-      if (dataUrl && dataUrl.length > 100) {
-        const img = new Image();
-        img.onload = function() {
-          npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
-          npCtx.drawImage(img, 0, 0, npCanvas.width, npCanvas.height);
-          console.log('✅ Note esistenti caricate');
-        };
-        img.onerror = function() {
-          console.warn('⚠️ Errore caricamento immagine');
-        };
-        img.src = dataUrl;
-      }
-    } catch (e) {
-      console.error('❌ Errore caricamento:', e);
-    }
-  }
-
-  // TITOLO DINAMICO
-  const titleEl = document.getElementById('canvasNotePanelTitle');
-  if (titleEl) {
-    try {
-      const t = getTasting();
-      const sid = selectedSampleId;
-      if (t && sid) {
-        const sample = t.samples.find(s => s.id === sid);
-        if (sample) {
-          const name = sample.name || sample.id || 'Campione';
-          titleEl.textContent = '📝 Note: ' + name;
-          console.log('✅ Titolo:', name);
-        } else {
-          titleEl.textContent = '📝 Note e Appunti';
-        }
-      } else {
-        titleEl.textContent = '📝 Note e Appunti';
-      }
-    } catch(e) {
-      titleEl.textContent = '📝 Note e Appunti';
-    }
-  }
-
-  panel.style.display = 'block';
-
-  setupNotePanelCanvasDrawing();
-
-  setNpToolPen();
-
-  console.log('✅ Pannello aperto');
-}
-
-function closeCanvasNotePanel() {
-  console.log('💾 Chiusura e salvataggio pannello...');
-
-  const panel = document.getElementById('canvasNotePanel');
-  const mainCanvas = document.getElementById('canvasDrawArea');
-
-  if (!panel) {
-    console.error('❌ Panel mancante');
-    return;
-  }
-
-  // SALVA APPUNTI
-  if (mainCanvas && npCanvas) {
-    try {
-      const dataUrl = npCanvas.toDataURL('image/png');
-      console.log('📸 DataURL generato (lunghezza:', dataUrl.length, ')');
-
-      const mainCtx = mainCanvas.getContext('2d');
-
-      if (mainCtx && dataUrl) {
-        const img = new Image();
-
-        img.onload = function() {
-          console.log('🖼️ Immagine caricata, copiando...');
-
-          mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
-          mainCtx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
-          console.log('✅ Canvas principale aggiornato');
-
-          try {
-            const t = getTasting();
-            const tid = currentTasterId();
-            const sid = selectedSampleId;
-
-            console.log('💾 Salvataggio eval:', {tid, sid});
-
-            if (t && tid && sid) {
-              const ev = getEval(t, tid, sid);
-
-              if (!ev.data) ev.data = {};
-              if (!ev.data.vista) {
-                ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
-              }
-
-              ev.data.vista.canvas = dataUrl;
-              ev.updatedAt = nowIso();
-
-              console.log('✅ Evaluation aggiornata');
-
-              saveState({skipCloud: true});
-              console.log('✅ Stato salvato');
-
-              try {
-                if (typeof window.queueCanvasSync === 'function') {
-                  window.queueCanvasSync(t.id, tid, sid, dataUrl);
-                  console.log('✅ Canvas sync queued');
-                }
-              } catch (e) {
-                console.error('❌ Errore queue sync:', e);
-              }
-
-              toast('✅ Appunti salvati');
-              console.log('✅ Salvataggio completato');
-            } else {
-              console.warn('⚠️ Dati mancanti:', {t: !!t, tid, sid});
-              toast('⚠️ Seleziona un campione');
-            }
-          } catch (e) {
-            console.error('❌ Errore salvataggio eval:', e);
-            toast('❌ Errore salvataggio');
-          }
-        };
-
-        img.onerror = function() {
-          console.error('❌ Errore caricamento immagine');
-          toast('❌ Errore salvataggio');
-        };
-
-        img.src = dataUrl;
-      } else {
-        console.error('❌ Context o dataURL mancante');
-      }
-    } catch (e) {
-      console.error('❌ Errore chiusura:', e);
-      toast('❌ Errore');
-    }
-  }
-
-  panel.style.display = 'none';
-  console.log('✅ Pannello chiuso');
-}
 
 function clearNotePanelCanvas() {
   if (!npCanvas || !npCtx) {
@@ -4084,6 +3894,120 @@ function clearNotePanelCanvas() {
   toast('🗑️ Canvas pulito');
 }
 
+
+function openCanvasNotePanel() {
+  const panel = document.getElementById('canvasNotePanel');
+  const mainCanvas = document.getElementById('drawingCanvas');
+  npCanvas = document.getElementById('canvasNotePanelCanvas');
+
+  if (!panel || !npCanvas) {
+    toast('Errore apertura pannello');
+    return;
+  }
+
+  npCtx = npCanvas.getContext('2d');
+  if (!npCtx) {
+    toast('Errore context');
+    return;
+  }
+
+  npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
+
+  if (mainCanvas) {
+    try {
+      const dataUrl = mainCanvas.toDataURL('image/png');
+      if (dataUrl && dataUrl.length > 100) {
+        const img = new Image();
+        img.onload = function () {
+          npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
+          npCtx.drawImage(img, 0, 0, npCanvas.width, npCanvas.height);
+        };
+        img.src = dataUrl;
+      }
+    } catch (e) {
+      console.error('Errore caricamento note:', e);
+    }
+  }
+
+  const titleEl = document.getElementById('canvasNotePanelTitle');
+  if (titleEl) {
+    try {
+      const t = getTasting();
+      const sid = window.selectedSampleId;
+      if (t && sid) {
+        const sample = t.samples.find(s => String(s.id) === String(sid));
+        const name = sample && (sample.name || sample.id) || 'Campione';
+        titleEl.textContent = 'Note: ' + name;
+      } else {
+        titleEl.textContent = 'Note e Appunti';
+      }
+    } catch (e) {
+      titleEl.textContent = 'Note e Appunti';
+    }
+  }
+
+  panel.style.display = 'block';
+  setupNotePanelCanvasDrawing();
+  setNpToolPen();
+}
+
+function closeCanvasNotePanel() {
+  const panel = document.getElementById('canvasNotePanel');
+  const mainCanvas = document.getElementById('drawingCanvas');
+
+  if (!panel) return;
+
+  if (mainCanvas && npCanvas && npCtx) {
+    try {
+      const dataUrl = npCanvas.toDataURL('image/png');
+      const mainCtx = mainCanvas.getContext('2d');
+
+      if (mainCtx && dataUrl && dataUrl.length > 100) {
+        const img = new Image();
+        img.onload = function () {
+          mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+          mainCtx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
+
+          try {
+            const t = getTasting();
+            const tid = typeof currentTasterId === 'function' ? currentTasterId() : null;
+            const sid = window.selectedSampleId;
+
+            if (t && tid && sid) {
+              const ev = getEval(t, tid, sid);
+              if (!ev.data) ev.data = {};
+              if (!ev.data.vista) {
+                ev.data.vista = { intensita: 0, limpidezza: 0, desc: [], canvas: null };
+              }
+
+              ev.data.vista.canvas = dataUrl;
+              ev.updatedAt = nowIso();
+
+              saveState({ skipCloud: true });
+
+              if (typeof window.queueCanvasSync === 'function') {
+                window.queueCanvasSync(t.id, tid, sid, dataUrl);
+              }
+
+              toast('Appunti salvati');
+            } else {
+              toast('Seleziona un campione');
+            }
+          } catch (e) {
+            console.error('Errore salvataggio eval:', e);
+            toast('Errore salvataggio');
+          }
+        };
+        img.src = dataUrl;
+      }
+    } catch (e) {
+      console.error('Errore chiusura pannello:', e);
+      toast('Errore salvataggio');
+    }
+  }
+
+  panel.style.display = 'none';
+}
 function setupNotePanelCanvasDrawing() {
   if (!npCanvas || !npCtx) return;
 
