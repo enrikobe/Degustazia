@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
+<!-- V159-HYBRID: BroadcastChannel (<10ms) + onSnapshot (50-100ms) + Polling fallback (10s) -->
 <!-- V151-UX: V150 sync + iOS switches + ZEN+ opacity + smooth scroll inerzia -->
   <style>
 #resultsDegSelect{display:none !important;}
@@ -6322,7 +6323,7 @@ async function pollEvaluations(tid){
 
   if(db){
     pollOnce();
-    __pollTimer = setInterval(pollOnce, 3500);
+    __pollTimer = setInterval(pollOnce, 10000);
   }
 
   // compat stubs
@@ -6704,5 +6705,134 @@ document.addEventListener('DOMContentLoaded', ()=>{
   </div>
 </div>
 
+
+<script>
+
+  // ========================================================================
+  // V159-HYBRID: BroadcastChannel + onSnapshot + Polling Ridotto
+  // ========================================================================
+
+  (function() {
+    'use strict';
+
+    // Tracking listeners onSnapshot
+    window.v159Listeners = window.v159Listeners || new Map();
+
+    // Setup listener Firebase real-time per tasting specifico
+    window.setupRealtimeListener = function(tastingId) {
+      if(!db || !tastingId) return;
+      if(v159Listeners.has(tastingId)) return; // Già attivo
+
+      try {
+        var tastingRef = doc(db, 'tastings', tastingId);
+
+        var unsubscribe = onSnapshot(tastingRef, function(docSnap) {
+          if(!docSnap.exists()) return;
+
+          var cloudData = docSnap.data();
+          var localTasting = state.tastings.find(function(t) { return t.id === tastingId; });
+
+          if(localTasting) {
+            var cloudTs = cloudData._lastModified || 0;
+            var localTs = localTasting._lastModified || 0;
+
+            // Solo se cloud è più recente
+            if(cloudTs > localTs) {
+              console.log('⚡ onSnapshot update:', tastingId, '(lag: ' + (Date.now() - cloudTs) + 'ms)');
+
+              // Merge dati cloud
+              Object.assign(localTasting, cloudData);
+              localTasting._lastModified = cloudTs;
+
+              saveState();
+
+              // Render se è tasting corrente
+              if(state.currentTastingId === tastingId) {
+                requestAnimationFrame(function() {
+                  if(typeof renderTastingPage === 'function') renderTastingPage();
+                  if(typeof renderGrid === 'function') renderGrid();
+                  if(typeof updateDetail === 'function') updateDetail();
+                });
+              }
+
+              // Notifica altre tab locali via BroadcastChannel (se esiste)
+              if(typeof tastingChannel !== 'undefined' && tastingChannel) {
+                tastingChannel.postMessage({
+                  type: 'cloud_update',
+                  tastingId: tastingId,
+                  timestamp: cloudTs
+                });
+              }
+            }
+          }
+        }, function(error) {
+          console.error('❌ onSnapshot error:', error);
+          v159Listeners.delete(tastingId);
+        });
+
+        v159Listeners.set(tastingId, unsubscribe);
+        console.log('✓ Real-time listener attivo:', tastingId);
+
+      } catch(e) {
+        console.error('Errore setup onSnapshot:', e);
+      }
+    };
+
+    // Cleanup listener quando chiudi tasting
+    window.cleanupRealtimeListener = function(tastingId) {
+      var unsub = v159Listeners.get(tastingId);
+      if(unsub) {
+        unsub();
+        v159Listeners.delete(tastingId);
+        console.log('✓ Listener chiuso:', tastingId);
+      }
+    };
+
+    // Attiva listener su tasting corrente
+    var originalOpenTasting = window.openTasting;
+    if(originalOpenTasting) {
+      window.openTasting = function(tasting) {
+        var result = originalOpenTasting.apply(this, arguments);
+
+        // Attiva onSnapshot per questo tasting
+        if(tasting && tasting.id) {
+          setTimeout(function() {
+            setupRealtimeListener(tasting.id);
+          }, 100);
+        }
+
+        return result;
+      };
+    }
+
+    // Debounced writes (riduce Firebase writes)
+    var writeTimers = {};
+    var originalPush = window.pushTastingMeta;
+
+    if(originalPush) {
+      window.pushTastingMeta = function(tasting, immediate) {
+        tasting._lastModified = Date.now();
+
+        // Se immediato, scrivi subito
+        if(immediate === true) {
+          return originalPush(tasting);
+        }
+
+        // Altrimenti debounce 500ms
+        var key = 'tasting_' + tasting.id;
+        if(writeTimers[key]) clearTimeout(writeTimers[key]);
+
+        writeTimers[key] = setTimeout(function() {
+          originalPush(tasting);
+          delete writeTimers[key];
+          console.log('💾 Firebase write (debounced):', tasting.id);
+        }, 500);
+      };
+    }
+
+    console.log('✓ V159-HYBRID caricato (BroadcastChannel + onSnapshot + Polling)');
+
+  })();
+</script>
 </body>
 </html>
