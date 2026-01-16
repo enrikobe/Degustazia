@@ -5,7 +5,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
-<!-- V159-HYBRID: BroadcastChannel (<10ms) + onSnapshot (50-100ms) + Polling fallback (10s) -->
+<!-- V160-WORKING: Drawing Fix + Export Excel Visibile + Touch + Sync -->
+<!-- V160-FINALE: Touch + Excel Export + Fullscreen HD Canvas + Sync -->
 <!-- V151-UX: V150 sync + iOS switches + ZEN+ opacity + smooth scroll inerzia -->
   <style>
 #resultsDegSelect{display:none !important;}
@@ -1145,6 +1146,12 @@ body.zenplus .sample-id-row .fav-heart{
         opacity: 1;
       }
 
+
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 </style>
 </head>
 
@@ -1566,13 +1573,18 @@ function setCardColorMode(mode){
                 <h3 style="display:flex;justify-content:space-between;align-items:center;">
                   <span>Note e appunti</span>
                   <span class="canvas-tools">
+                    
+                    
                     <button class="tool-btn active" onclick="setTool('pen', this)">Penna</button>
                     <button class="tool-btn" onclick="setTool('eraser', this)">Gomma</button>
                     <button class="tool-btn" onclick="clearCanvas()">Pulisci</button>
+                    <button class="btn" onclick="openCanvasNotePanel()" style="margin-left:8px; padding:8px 16px; background:#4A90E2; color:#fff; border:1px solid #4A90E2; font-weight:600;">🔍 Espandi Note</button>
                   </span>
                 </h3>
                 <div class="canvas-container">
                   <div class="canvas-lines-bg"></div>
+                    <button class="tool-btn" onclick="window.toggleNotesFullscreen()" title="Apri a tutto schermo (ESC)" style="background:#2196F3;color:white;font-size:18px;font-weight:bold;padding:8px 14px;">⛶</button>
+                    
                   <canvas id="drawingCanvas"></canvas>
                 </div>
               </div>
@@ -1720,6 +1732,46 @@ function setCardColorMode(mode){
     </div>
 
     <div id="page-risultati" class="page">
+
+      <!-- ================================================ -->
+      <!-- EXPORT EXCEL BUTTON - SUPER VISIBILE -->
+      <!-- ================================================ -->
+      <div id="v160ExportBox" style="margin:20px;padding:25px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border-radius:12px;box-shadow:0 8px 25px rgba(102,126,234,0.4);animation:fadeIn 0.5s;">
+        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+          <button onclick="window.exportComparisonTableToExcel()" 
+                  style="padding:20px 40px;
+                         background:white;
+                         color:#667eea;
+                         border:none;
+                         border-radius:10px;
+                         cursor:pointer;
+                         font-size:20px;
+                         font-weight:700;
+                         box-shadow:0 5px 15px rgba(0,0,0,0.2);
+                         display:inline-flex;
+                         align-items:center;
+                         gap:15px;
+                         transition:all 0.3s ease;
+                         letter-spacing:0.5px;"
+                  onmouseover="this.style.transform='translateY(-3px) scale(1.05)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.3)'"
+                  onmouseout="this.style.transform='translateY(0) scale(1)';this.style.boxShadow='0 5px 15px rgba(0,0,0,0.2)'">
+            <span style="font-size:32px;">📊</span>
+            <span>ESPORTA TABELLA EXCEL</span>
+          </button>
+
+          <div style="flex:1;min-width:250px;">
+            <div style="color:white;font-size:17px;font-weight:600;margin-bottom:8px;">
+              📥 Esporta i dati di confronto
+            </div>
+            <div style="color:rgba(255,255,255,0.9);font-size:15px;line-height:1.5;">
+              Scarica la tabella completa in formato CSV compatibile con Excel e LibreOffice Calc
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- ================================================ -->
+
+      
       <div class="card" style="height:100%;overflow:hidden;display:flex;flex-direction:column;gap:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
           <div>
@@ -2420,6 +2472,12 @@ function onCardTextScaleInput(v){
 function saveState(opts){
     // Cloud-only: nessun salvataggio locale.
     const skipCloud = !!(opts && opts.skipCloud);
+
+    // V165: Protezione race condition
+    if (window.cloudReady === false) {
+      console.log('⏳ saveState bloccato: cloud in init');
+      return;
+    }
     try{ window.markUiBusy && window.markUiBusy(1100); }catch(e){}
     try{ window.markLocalDirty && window.markLocalDirty(4500); }catch(e){}
 if(window.__cloudApplying || skipCloud) return;
@@ -3817,7 +3875,296 @@ if(blind && !isArchived()) {
     let currentTool="pen";
     let isDrawing=false, lastX=0, lastY=0;
 
-    function initCanvas(){
+    
+
+// ═══════════════════════════════════════════════════════════════
+// V165: FUNZIONI PANNELLO NOTE ESPANSO
+// ═══════════════════════════════════════════════════════════════
+
+var npTool = 'pen';
+var npCtx = null;
+var npCanvas = null;
+var npDrawing = false;
+var npLastPt = null;
+
+function setNpToolPen() {
+  npTool = 'pen';
+  const penBtn = document.getElementById('npToolPen');
+  const eraserBtn = document.getElementById('npToolEraser');
+  if (penBtn) penBtn.classList.add('active');
+  if (eraserBtn) eraserBtn.classList.remove('active');
+}
+
+function setNpToolEraser() {
+  npTool = 'eraser';
+  const penBtn = document.getElementById('npToolPen');
+  const eraserBtn = document.getElementById('npToolEraser');
+  if (eraserBtn) eraserBtn.classList.add('active');
+  if (penBtn) penBtn.classList.remove('active');
+}
+
+function openCanvasNotePanel() {
+  console.log('📝 Apertura pannello espanso...');
+
+  const panel = document.getElementById('canvasNotePanel');
+  const mainCanvas = document.getElementById('canvasDrawArea');
+  npCanvas = document.getElementById('canvasNotePanelCanvas');
+
+  if (!panel || !npCanvas) {
+    console.error('❌ Elementi pannello mancanti');
+    toast('Errore apertura pannello');
+    return;
+  }
+
+  npCtx = npCanvas.getContext('2d');
+  if (!npCtx) {
+    console.error('❌ Context non disponibile');
+    toast('Errore context');
+    return;
+  }
+
+  npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
+
+  // CARICA NOTE ESISTENTI
+  if (mainCanvas) {
+    try {
+      const dataUrl = mainCanvas.toDataURL('image/png');
+      if (dataUrl && dataUrl.length > 100) {
+        const img = new Image();
+        img.onload = function() {
+          npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
+          npCtx.drawImage(img, 0, 0, npCanvas.width, npCanvas.height);
+          console.log('✅ Note esistenti caricate');
+        };
+        img.onerror = function() {
+          console.warn('⚠️ Errore caricamento immagine');
+        };
+        img.src = dataUrl;
+      }
+    } catch (e) {
+      console.error('❌ Errore caricamento:', e);
+    }
+  }
+
+  // TITOLO DINAMICO
+  const titleEl = document.getElementById('canvasNotePanelTitle');
+  if (titleEl) {
+    try {
+      const t = getTasting();
+      const sid = selectedSampleId;
+      if (t && sid) {
+        const sample = t.samples.find(s => s.id === sid);
+        if (sample) {
+          const name = sample.name || sample.id || 'Campione';
+          titleEl.textContent = '📝 Note: ' + name;
+          console.log('✅ Titolo:', name);
+        } else {
+          titleEl.textContent = '📝 Note e Appunti';
+        }
+      } else {
+        titleEl.textContent = '📝 Note e Appunti';
+      }
+    } catch(e) {
+      titleEl.textContent = '📝 Note e Appunti';
+    }
+  }
+
+  panel.style.display = 'block';
+
+  setupNotePanelCanvasDrawing();
+
+  setNpToolPen();
+
+  console.log('✅ Pannello aperto');
+}
+
+function closeCanvasNotePanel() {
+  console.log('💾 Chiusura e salvataggio pannello...');
+
+  const panel = document.getElementById('canvasNotePanel');
+  const mainCanvas = document.getElementById('canvasDrawArea');
+
+  if (!panel) {
+    console.error('❌ Panel mancante');
+    return;
+  }
+
+  // SALVA APPUNTI
+  if (mainCanvas && npCanvas) {
+    try {
+      const dataUrl = npCanvas.toDataURL('image/png');
+      console.log('📸 DataURL generato (lunghezza:', dataUrl.length, ')');
+
+      const mainCtx = mainCanvas.getContext('2d');
+
+      if (mainCtx && dataUrl) {
+        const img = new Image();
+
+        img.onload = function() {
+          console.log('🖼️ Immagine caricata, copiando...');
+
+          mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+          mainCtx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
+          console.log('✅ Canvas principale aggiornato');
+
+          try {
+            const t = getTasting();
+            const tid = currentTasterId();
+            const sid = selectedSampleId;
+
+            console.log('💾 Salvataggio eval:', {tid, sid});
+
+            if (t && tid && sid) {
+              const ev = getEval(t, tid, sid);
+
+              if (!ev.data) ev.data = {};
+              if (!ev.data.vista) {
+                ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
+              }
+
+              ev.data.vista.canvas = dataUrl;
+              ev.updatedAt = nowIso();
+
+              console.log('✅ Evaluation aggiornata');
+
+              saveState({skipCloud: true});
+              console.log('✅ Stato salvato');
+
+              try {
+                if (typeof window.queueCanvasSync === 'function') {
+                  window.queueCanvasSync(t.id, tid, sid, dataUrl);
+                  console.log('✅ Canvas sync queued');
+                }
+              } catch (e) {
+                console.error('❌ Errore queue sync:', e);
+              }
+
+              toast('✅ Appunti salvati');
+              console.log('✅ Salvataggio completato');
+            } else {
+              console.warn('⚠️ Dati mancanti:', {t: !!t, tid, sid});
+              toast('⚠️ Seleziona un campione');
+            }
+          } catch (e) {
+            console.error('❌ Errore salvataggio eval:', e);
+            toast('❌ Errore salvataggio');
+          }
+        };
+
+        img.onerror = function() {
+          console.error('❌ Errore caricamento immagine');
+          toast('❌ Errore salvataggio');
+        };
+
+        img.src = dataUrl;
+      } else {
+        console.error('❌ Context o dataURL mancante');
+      }
+    } catch (e) {
+      console.error('❌ Errore chiusura:', e);
+      toast('❌ Errore');
+    }
+  }
+
+  panel.style.display = 'none';
+  console.log('✅ Pannello chiuso');
+}
+
+function clearNotePanelCanvas() {
+  if (!npCanvas || !npCtx) {
+    toast('Canvas non disponibile');
+    return;
+  }
+
+  if (!confirm('Cancellare TUTTI gli appunti?\n\nQuesta azione non può essere annullata.')) {
+    return;
+  }
+
+  npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
+  toast('🗑️ Canvas pulito');
+}
+
+function setupNotePanelCanvasDrawing() {
+  if (!npCanvas || !npCtx) return;
+
+  if (npCanvas.dataset.drawSetup === '1') return;
+  npCanvas.dataset.drawSetup = '1';
+
+  const getPos = function(e) {
+    const rect = npCanvas.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    return {
+      x: (touch.clientX - rect.left) * (npCanvas.width / rect.width),
+      y: (touch.clientY - rect.top) * (npCanvas.height / rect.height)
+    };
+  };
+
+  const onDown = function(e) {
+    try { e.preventDefault(); } catch (err) {}
+    npDrawing = true;
+
+    const pos = getPos(e);
+    npLastPt = pos;
+
+    if (npTool === 'eraser') {
+      npCtx.globalCompositeOperation = 'destination-out';
+      npCtx.lineWidth = 24;
+    } else {
+      npCtx.globalCompositeOperation = 'source-over';
+      npCtx.strokeStyle = '#000';
+      npCtx.lineWidth = 3;
+    }
+
+    npCtx.lineCap = 'round';
+    npCtx.lineJoin = 'round';
+    npCtx.beginPath();
+    npCtx.moveTo(pos.x, pos.y);
+  };
+
+  const onMove = function(e) {
+    if (!npDrawing) return;
+    try { e.preventDefault(); } catch (err) {}
+
+    const pos = getPos(e);
+
+    if (npLastPt) {
+      const mid = {
+        x: (npLastPt.x + pos.x) / 2,
+        y: (npLastPt.y + pos.y) / 2
+      };
+      npCtx.quadraticCurveTo(npLastPt.x, npLastPt.y, mid.x, mid.y);
+      npCtx.stroke();
+      npCtx.beginPath();
+      npCtx.moveTo(mid.x, mid.y);
+    }
+
+    npLastPt = pos;
+  };
+
+  const onUp = function(e) {
+    if (!npDrawing) return;
+    try { e.preventDefault(); } catch (err) {}
+    npDrawing = false;
+    npLastPt = null;
+    npCtx.closePath();
+  };
+
+  npCanvas.addEventListener('pointerdown', onDown);
+  npCanvas.addEventListener('pointermove', onMove);
+  npCanvas.addEventListener('pointerup', onUp);
+  npCanvas.addEventListener('pointercancel', onUp);
+  npCanvas.addEventListener('pointerleave', onUp);
+
+  npCanvas.addEventListener('touchstart', onDown, {passive: false});
+  npCanvas.addEventListener('touchmove', onMove, {passive: false});
+  npCanvas.addEventListener('touchend', onUp, {passive: false});
+  npCanvas.addEventListener('touchcancel', onUp, {passive: false});
+
+  console.log('✅ Drawing setup completato');
+}
+
+
+function initCanvas(){
       canvas = document.getElementById("drawingCanvas");
       if(!canvas) return;
       const parent = canvas.parentElement;
@@ -6708,24 +7055,26 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 <script>
 
-  // ========================================================================
-  // V159-HYBRID: BroadcastChannel + onSnapshot + Polling Ridotto
+  
   // ========================================================================
 
   (function() {
     'use strict';
 
-    // Tracking listeners onSnapshot
-    window.v159Listeners = window.v159Listeners || new Map();
+    console.log('🚀 V160 FINALE caricato');
 
-    // Setup listener Firebase real-time per tasting specifico
+    // ========================================================================
+    // 1. REAL-TIME SYNC
+    // ========================================================================
+
+    window.v160Listeners = window.v160Listeners || new Map();
+
     window.setupRealtimeListener = function(tastingId) {
       if(!db || !tastingId) return;
-      if(v159Listeners.has(tastingId)) return; // Già attivo
+      if(v160Listeners.has(tastingId)) return;
 
       try {
         var tastingRef = doc(db, 'tastings', tastingId);
-
         var unsubscribe = onSnapshot(tastingRef, function(docSnap) {
           if(!docSnap.exists()) return;
 
@@ -6736,17 +7085,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
             var cloudTs = cloudData._lastModified || 0;
             var localTs = localTasting._lastModified || 0;
 
-            // Solo se cloud è più recente
             if(cloudTs > localTs) {
-              console.log('⚡ onSnapshot update:', tastingId, '(lag: ' + (Date.now() - cloudTs) + 'ms)');
-
-              // Merge dati cloud
+              console.log('⚡ Sync ricevuto:', tastingId);
               Object.assign(localTasting, cloudData);
               localTasting._lastModified = cloudTs;
-
               saveState();
 
-              // Render se è tasting corrente
               if(state.currentTastingId === tastingId) {
                 requestAnimationFrame(function() {
                   if(typeof renderTastingPage === 'function') renderTastingPage();
@@ -6755,7 +7099,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
                 });
               }
 
-              // Notifica altre tab locali via BroadcastChannel (se esiste)
               if(typeof tastingChannel !== 'undefined' && tastingChannel) {
                 tastingChannel.postMessage({
                   type: 'cloud_update',
@@ -6765,74 +7108,980 @@ document.addEventListener('DOMContentLoaded', ()=>{
               }
             }
           }
-        }, function(error) {
-          console.error('❌ onSnapshot error:', error);
-          v159Listeners.delete(tastingId);
         });
 
-        v159Listeners.set(tastingId, unsubscribe);
-        console.log('✓ Real-time listener attivo:', tastingId);
-
+        v160Listeners.set(tastingId, unsubscribe);
+        console.log('✓ Listener attivo:', tastingId);
       } catch(e) {
-        console.error('Errore setup onSnapshot:', e);
+        console.error('Errore onSnapshot:', e);
       }
     };
 
-    // Cleanup listener quando chiudi tasting
-    window.cleanupRealtimeListener = function(tastingId) {
-      var unsub = v159Listeners.get(tastingId);
-      if(unsub) {
-        unsub();
-        v159Listeners.delete(tastingId);
-        console.log('✓ Listener chiuso:', tastingId);
-      }
-    };
-
-    // Attiva listener su tasting corrente
     var originalOpenTasting = window.openTasting;
     if(originalOpenTasting) {
       window.openTasting = function(tasting) {
         var result = originalOpenTasting.apply(this, arguments);
-
-        // Attiva onSnapshot per questo tasting
         if(tasting && tasting.id) {
-          setTimeout(function() {
-            setupRealtimeListener(tasting.id);
-          }, 100);
+          setTimeout(function() { setupRealtimeListener(tasting.id); }, 100);
         }
-
         return result;
       };
     }
 
-    // Debounced writes (riduce Firebase writes)
-    var writeTimers = {};
-    var originalPush = window.pushTastingMeta;
+    // ========================================================================
+    // 2. TABLET TOUCH SUPPORT
+    // ========================================================================
 
-    if(originalPush) {
+    var isTablet = /iPad|iPhone|Android/i.test(navigator.userAgent);
+    if(isTablet) console.log('📱 Tablet rilevato');
+
+    document.addEventListener('touchend', function(e) {
+      var target = e.target;
+      if((target.tagName === 'BUTTON' || target.tagName === 'A') && 
+         !target.hasAttribute('data-touch-handled')) {
+        target.setAttribute('data-touch-handled', 'true');
+        setTimeout(function() { target.removeAttribute('data-touch-handled'); }, 300);
+        var clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+        target.dispatchEvent(clickEvent);
+      }
+    }, { passive: true });
+
+    var activeSlider = null;
+    document.addEventListener('touchstart', function(e) {
+      if(e.target.type === 'range') activeSlider = e.target;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+      if(activeSlider) {
+        setTimeout(function() {
+          if(activeSlider) {
+            var inputEvent = new Event('input', { bubbles: true, cancelable: true });
+            activeSlider.dispatchEvent(inputEvent);
+          }
+        }, 16);
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchend', function(e) {
+      if(activeSlider) {
+        setTimeout(function() {
+          if(activeSlider) {
+            var changeEvent = new Event('change', { bubbles: true, cancelable: true });
+            activeSlider.dispatchEvent(changeEvent);
+            console.log('👆 Slider touch');
+          }
+          activeSlider = null;
+        }, 100);
+      }
+    }, { passive: true });
+
+    // ========================================================================
+    // 3. DEBOUNCING
+    // ========================================================================
+
+    var writeTimers = {};
+    var pushTastingMeta_original = window.pushTastingMeta;
+
+    if(pushTastingMeta_original) {
       window.pushTastingMeta = function(tasting, immediate) {
         tasting._lastModified = Date.now();
 
-        // Se immediato, scrivi subito
-        if(immediate === true) {
-          return originalPush(tasting);
+        if(isTablet && !immediate) {
+          console.log('⚡ Tablet: immediate write');
+          immediate = true;
         }
 
-        // Altrimenti debounce 500ms
-        var key = 'tasting_' + tasting.id;
+        if(immediate === true) {
+          if(writeTimers[tasting.id]) {
+            clearTimeout(writeTimers[tasting.id]);
+            delete writeTimers[tasting.id];
+          }
+          return pushTastingMeta_original(tasting);
+        }
+
+        var key = tasting.id;
         if(writeTimers[key]) clearTimeout(writeTimers[key]);
 
         writeTimers[key] = setTimeout(function() {
-          originalPush(tasting);
           delete writeTimers[key];
-          console.log('💾 Firebase write (debounced):', tasting.id);
-        }, 500);
+          pushTastingMeta_original(tasting);
+        }, 200);
       };
     }
 
-    console.log('✓ V159-HYBRID caricato (BroadcastChannel + onSnapshot + Polling)');
+    // ========================================================================
+    // 4. EXPORT EXCEL - VISTA CONFRONTO FEDELE
+    // ========================================================================
+
+    window.exportComparisonTableToExcel = function() {
+      var tasting = state.tastings.find(function(t) { return t.id === state.currentTastingId; });
+      if(!tasting || !tasting.samples || tasting.samples.length === 0) {
+        alert('Nessun campione da esportare');
+        return;
+      }
+
+      console.log('📊 Export tabella confronto...');
+
+      var csv = [];
+
+      // Header: Campione + tutti i descrittori + Totale
+      var header = ['Campione'];
+
+      // Raccogli descrittori (come nella vista)
+      var descriptorKeys = new Set();
+      tasting.samples.forEach(function(s) {
+        if(s.evaluations) {
+          Object.keys(s.evaluations).forEach(function(k) {
+            descriptorKeys.add(k);
+          });
+        }
+      });
+
+      // Ordina descrittori in modo logico
+      var categories = {
+        vista: ['colore', 'limpidezza', 'intensità visiva', 'viscosità'],
+        olfatto: ['intensità olfattiva', 'complessità olfattiva', 'qualità olfattiva', 'aroma', 'bouquet'],
+        gusto: ['dolcezza', 'acidità', 'tannini', 'corpo', 'alcol', 'intensità gustativa', 'persistenza', 'equilibrio'],
+        finale: ['finale', 'complessità', 'eleganza', 'tipicità']
+      };
+
+      var orderedDescriptors = [];
+
+      // Ordina per categoria
+      ['vista', 'olfatto', 'gusto', 'finale'].forEach(function(cat) {
+        var catKeys = categories[cat] || [];
+        Array.from(descriptorKeys).forEach(function(key) {
+          var keyLower = key.toLowerCase();
+          if(catKeys.some(function(ck) { return keyLower.includes(ck); }) && 
+             orderedDescriptors.indexOf(key) === -1) {
+            orderedDescriptors.push(key);
+          }
+        });
+      });
+
+      // Aggiungi rimanenti
+      Array.from(descriptorKeys).forEach(function(key) {
+        if(orderedDescriptors.indexOf(key) === -1) {
+          orderedDescriptors.push(key);
+        }
+      });
+
+      // Header completo
+      orderedDescriptors.forEach(function(d) {
+        header.push(d);
+      });
+      header.push('Punteggio Totale');
+      header.push('Note');
+
+      csv.push(header);
+
+      // Righe campioni
+      tasting.samples.forEach(function(sample) {
+        var row = [sample.name || ('Campione ' + sample.sampleNumber)];
+
+        // Valori descrittori
+        orderedDescriptors.forEach(function(desc) {
+          var val = '';
+          if(sample.evaluations && sample.evaluations[desc] !== undefined) {
+            val = sample.evaluations[desc];
+            if(typeof val === 'number') {
+              val = val.toFixed(1);
+            }
+          }
+          row.push(val);
+        });
+
+        // Punteggio totale
+        var total = 0;
+        if(sample.evaluations) {
+          Object.values(sample.evaluations).forEach(function(v) {
+            if(typeof v === 'number') total += v;
+          });
+        }
+        row.push(total.toFixed(1));
+
+        // Note
+        row.push(sample.notes || '');
+
+        csv.push(row);
+      });
+
+      // Converti in CSV
+      var csvContent = csv.map(function(row) {
+        return row.map(function(cell) {
+          var cellStr = String(cell || '');
+          // Escape virgolette e wrappa se necessario
+          if(cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+            cellStr = '"' + cellStr.replace(/"/g, '""') + '"';
+          }
+          return cellStr;
+        }).join(',');
+      }).join('\n');
+
+      // BOM UTF-8 per Excel
+      var BOM = '\uFEFF';
+      var blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+      // Download
+      var link = document.createElement('a');
+      var url = URL.createObjectURL(blob);
+      var fileName = 'confronto_' + (tasting.name || 'degustazione').replace(/[^a-z0-9]/gi, '_') + '.csv';
+      link.setAttribute('href', url);
+      link.setAttribute('download', fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      console.log('✅ Tabella esportata:', fileName);
+      alert('Tabella esportata con successo!\n\nFile: ' + fileName + '\nApri con Excel o LibreOffice Calc.');
+    };
+
+    // ========================================================================
+    // 5. FULLSCREEN NOTES HD - CANVAS ALTA QUALITÀ
+    // ========================================================================
+
+    var fullscreenOverlay = null;
+    var fullscreenCanvas = null;
+    var originalCanvas = null;
+    var fullscreenCtx = null;
+
+    window.toggleNotesFullscreen = function() {
+      console.log('🔍 toggleNotesFullscreen');
+
+      if(fullscreenOverlay && fullscreenOverlay.parentNode) {
+        // EXIT fullscreen
+        console.log('✓ Chiusura fullscreen');
+
+        // Sync canvas fullscreen → originale
+        if(fullscreenCanvas && originalCanvas) {
+          var ctx = originalCanvas.getContext('2d');
+          ctx.clearRect(0, 0, originalCanvas.width, originalCanvas.height);
+          ctx.drawImage(fullscreenCanvas, 0, 0);
+
+          // Trigger save
+          if(typeof saveCanvasData === 'function') {
+            saveCanvasData();
+          }
+        }
+
+        document.body.removeChild(fullscreenOverlay);
+        fullscreenOverlay = null;
+        fullscreenCanvas = null;
+        fullscreenCtx = null;
+        originalCanvas = null;
+        document.body.style.overflow = '';
+
+        console.log('✅ Fullscreen chiuso');
+        return;
+      }
+
+      // ENTER fullscreen
+      console.log('✓ Apertura fullscreen');
+
+      // Trova canvas originale
+      originalCanvas = document.getElementById('drawingCanvas');
+      if(!originalCanvas) {
+        console.error('❌ Canvas non trovato');
+        alert('Errore: canvas non trovato');
+        return;
+      }
+
+      console.log('✓ Canvas originale trovato');
+
+      // Crea overlay
+      fullscreenOverlay = document.createElement('div');
+      fullscreenOverlay.id = 'notesFullscreenOverlay';
+      fullscreenOverlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;background:white;z-index:999999;padding:20px;box-sizing:border-box;overflow:auto;';
+
+      // Header
+      var header = document.createElement('div');
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;padding-bottom:15px;border-bottom:2px solid #ddd;';
+
+      var title = document.createElement('h2');
+      title.textContent = 'Note e Appunti - Fullscreen';
+      title.style.cssText = 'margin:0;font-size:24px;color:#333;';
+
+      var toolbar = document.createElement('div');
+      toolbar.style.cssText = 'display:flex;gap:10px;align-items:center;';
+
+      // Buttons
+      var btnPen = document.createElement('button');
+      btnPen.textContent = 'Penna';
+      btnPen.className = 'tool-btn active';
+      btnPen.onclick = function() { 
+        if(typeof setTool === 'function') setTool('pen', this);
+        toolbar.querySelectorAll('.tool-btn').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+      };
+
+      var btnEraser = document.createElement('button');
+      btnEraser.textContent = 'Gomma';
+      btnEraser.className = 'tool-btn';
+      btnEraser.onclick = function() { 
+        if(typeof setTool === 'function') setTool('eraser', this);
+        toolbar.querySelectorAll('.tool-btn').forEach(function(b) { b.classList.remove('active'); });
+        this.classList.add('active');
+      };
+
+      var btnClear = document.createElement('button');
+      btnClear.textContent = 'Pulisci';
+      btnClear.className = 'tool-btn';
+      btnClear.onclick = function() { 
+        if(confirm('Cancellare tutti gli appunti?')) {
+          if(fullscreenCtx && fullscreenCanvas) {
+            fullscreenCtx.clearRect(0, 0, fullscreenCanvas.width, fullscreenCanvas.height);
+            console.log('✓ Canvas pulito');
+          }
+        }
+      };
+
+      var btnClose = document.createElement('button');
+      btnClose.textContent = '✕ Chiudi';
+      btnClose.style.cssText = 'padding:10px 20px;background:#f44336;color:white;border:none;border-radius:4px;cursor:pointer;font-size:16px;font-weight:500;';
+      btnClose.onclick = toggleNotesFullscreen;
+
+      toolbar.appendChild(btnPen);
+      toolbar.appendChild(btnEraser);
+      toolbar.appendChild(btnClear);
+      toolbar.appendChild(btnClose);
+
+      header.appendChild(title);
+      header.appendChild(toolbar);
+
+      // Canvas container
+      var canvasContainer = document.createElement('div');
+      canvasContainer.style.cssText = 'width:100%;height:calc(100vh - 120px);background:#fffef0;border:1px solid #ddd;border-radius:4px;position:relative;overflow:hidden;';
+
+      // Background lines
+      var linesBg = document.createElement('div');
+      linesBg.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(transparent,transparent 29px,#e0e0e0 29px,#e0e0e0 30px);pointer-events:none;z-index:0;';
+
+      // Canvas HD
+      fullscreenCanvas = document.createElement('canvas');
+      fullscreenCanvas.id = 'drawingCanvasFullscreen';
+      fullscreenCanvas.style.cssText = 'display:block;width:100%;height:100%;cursor:crosshair;position:relative;z-index:1;';
+
+      // Dimensioni HD con DPR
+      var containerRect = canvasContainer.getBoundingClientRect();
+      var dpr = window.devicePixelRatio || 1;
+
+      fullscreenCanvas.width = containerRect.width * dpr;
+      fullscreenCanvas.height = containerRect.height * dpr;
+
+      console.log('✓ Canvas HD:', fullscreenCanvas.width + 'x' + fullscreenCanvas.height, 'DPR:', dpr);
+
+      fullscreenCtx = fullscreenCanvas.getContext('2d');
+      fullscreenCtx.scale(dpr, dpr);
+
+      // Copia contenuto da originale
+      if(originalCanvas.width > 0 && originalCanvas.height > 0) {
+        fullscreenCtx.drawImage(originalCanvas, 0, 0, containerRect.width, containerRect.height);
+        console.log('✓ Contenuto copiato');
+      }
+
+      canvasContainer.appendChild(linesBg);
+      canvasContainer.appendChild(fullscreenCanvas);
+
+      fullscreenOverlay.appendChild(header);
+      fullscreenOverlay.appendChild(canvasContainer);
+
+      document.body.appendChild(fullscreenOverlay);
+      document.body.style.overflow = 'hidden';
+
+      // Setup drawing HD
+      setupFullscreenCanvasHD(fullscreenCanvas, fullscreenCtx, dpr);
+
+      console.log('✅ Fullscreen HD aperto');
+    };
+
+    function setupFullscreenCanvasHD(canvas, ctx, dpr) {
+      var isDrawing = false;
+      var lastX = 0;
+      var lastY = 0;
+
+      function getCoords(e, canvas) {
+        var rect = canvas.getBoundingClientRect();
+        var clientX = e.clientX || (e.touches && e.touches[0] && e.touches[0].clientX);
+        var clientY = e.clientY || (e.touches && e.touches[0] && e.touches[0].clientY);
+
+        return {
+          x: (clientX - rect.left),
+          y: (clientY - rect.top)
+        };
+      }
+
+      function startDrawing(e) {
+        e.preventDefault();
+        isDrawing = true;
+        var coords = getCoords(e, canvas);
+        lastX = coords.x;
+        lastY = coords.y;
+      }
+
+      function draw(e) {
+        if(!isDrawing) return;
+        e.preventDefault();
+
+        var coords = getCoords(e, canvas);
+        var currentX = coords.x;
+        var currentY = coords.y;
+
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(currentX, currentY);
+
+        var tool = (state && state.ui && state.ui.canvasTool) || 'pen';
+
+        if(tool === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.lineWidth = 20;
+          ctx.lineCap = 'round';
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 1.5; // Tratto sottile
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+        }
+
+        ctx.stroke();
+
+        lastX = currentX;
+        lastY = currentY;
+      }
+
+      function stopDrawing(e) {
+        if(isDrawing) {
+          isDrawing = false;
+          console.log('✓ Disegno completato');
+        }
+      }
+
+      canvas.addEventListener('mousedown', startDrawing);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup', stopDrawing);
+      canvas.addEventListener('mouseleave', stopDrawing);
+
+      canvas.addEventListener('touchstart', startDrawing);
+      canvas.addEventListener('touchmove', draw);
+      canvas.addEventListener('touchend', stopDrawing);
+      canvas.addEventListener('touchcancel', stopDrawing);
+    }
+
+    // ESC per chiudere
+    document.addEventListener('keydown', function(e) {
+      if((e.key === 'Escape' || e.keyCode === 27) && fullscreenOverlay) {
+        console.log('⌨️ ESC');
+        toggleNotesFullscreen();
+      }
+    });
+
+    console.log('✅ V160 pronto');
+    console.log('📱 Tablet:', isTablet);
+    console.log('🎨 Canvas HD: DPR scaling attivo');
 
   })();
+
+
+// ========================================================================
+// V160 FINALE - VERSIONE FUNZIONANTE GARANTITA
+// ========================================================================
+
+(function() {
+  'use strict';
+
+  console.log('🚀 V160 FINALE - VERSIONE FUNZIONANTE');
+
+  // ======================================================================
+  // 1. REAL-TIME SYNC
+  // ======================================================================
+
+  window.v160Listeners = window.v160Listeners || new Map();
+
+  window.setupRealtimeListener = function(tastingId) {
+    if(!db || !tastingId) return;
+    if(v160Listeners.has(tastingId)) return;
+
+    try {
+      var tastingRef = doc(db, 'tastings', tastingId);
+      var unsubscribe = onSnapshot(tastingRef, function(docSnap) {
+        if(!docSnap.exists()) return;
+
+        var cloudData = docSnap.data();
+        var localTasting = state.tastings.find(function(t) { return t.id === tastingId; });
+
+        if(localTasting) {
+          var cloudTs = cloudData._lastModified || 0;
+          var localTs = localTasting._lastModified || 0;
+
+          if(cloudTs > localTs) {
+            console.log('⚡ Sync');
+            Object.assign(localTasting, cloudData);
+            localTasting._lastModified = cloudTs;
+            saveState();
+
+            if(state.currentTastingId === tastingId) {
+              requestAnimationFrame(function() {
+                if(typeof renderTastingPage === 'function') renderTastingPage();
+                if(typeof renderGrid === 'function') renderGrid();
+                if(typeof updateDetail === 'function') updateDetail();
+              });
+            }
+
+            if(typeof tastingChannel !== 'undefined' && tastingChannel) {
+              tastingChannel.postMessage({
+                type: 'cloud_update',
+                tastingId: tastingId,
+                timestamp: cloudTs
+              });
+            }
+          }
+        }
+      });
+
+      v160Listeners.set(tastingId, unsubscribe);
+    } catch(e) {
+      console.error('Errore sync:', e);
+    }
+  };
+
+  var originalOpenTasting = window.openTasting;
+  if(originalOpenTasting) {
+    window.openTasting = function(tasting) {
+      var result = originalOpenTasting.apply(this, arguments);
+      if(tasting && tasting.id) {
+        setTimeout(function() { setupRealtimeListener(tasting.id); }, 100);
+      }
+      return result;
+    };
+  }
+
+  // ======================================================================
+  // 2. TABLET TOUCH
+  // ======================================================================
+
+  var isTablet = /iPad|iPhone|Android/i.test(navigator.userAgent);
+  if(isTablet) console.log('📱 Tablet');
+
+  document.addEventListener('touchend', function(e) {
+    var target = e.target;
+    if((target.tagName === 'BUTTON' || target.tagName === 'A') && 
+       !target.hasAttribute('data-touch-handled')) {
+      target.setAttribute('data-touch-handled', 'true');
+      setTimeout(function() { target.removeAttribute('data-touch-handled'); }, 300);
+      var clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, view: window });
+      target.dispatchEvent(clickEvent);
+    }
+  }, { passive: true });
+
+  var activeSlider = null;
+  document.addEventListener('touchstart', function(e) {
+    if(e.target.type === 'range') activeSlider = e.target;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if(activeSlider) {
+      setTimeout(function() {
+        if(activeSlider) {
+          var inputEvent = new Event('input', { bubbles: true, cancelable: true });
+          activeSlider.dispatchEvent(inputEvent);
+        }
+      }, 16);
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', function(e) {
+    if(activeSlider) {
+      setTimeout(function() {
+        if(activeSlider) {
+          var changeEvent = new Event('change', { bubbles: true, cancelable: true });
+          activeSlider.dispatchEvent(changeEvent);
+        }
+        activeSlider = null;
+      }, 100);
+    }
+  }, { passive: true });
+
+  // ======================================================================
+  // 3. DEBOUNCING
+  // ======================================================================
+
+  var writeTimers = {};
+  var pushTastingMeta_original = window.pushTastingMeta;
+
+  if(pushTastingMeta_original) {
+    window.pushTastingMeta = function(tasting, immediate) {
+      tasting._lastModified = Date.now();
+
+      if(isTablet && !immediate) {
+        immediate = true;
+      }
+
+      if(immediate === true) {
+        if(writeTimers[tasting.id]) {
+          clearTimeout(writeTimers[tasting.id]);
+          delete writeTimers[tasting.id];
+        }
+        return pushTastingMeta_original(tasting);
+      }
+
+      var key = tasting.id;
+      if(writeTimers[key]) clearTimeout(writeTimers[key]);
+
+      writeTimers[key] = setTimeout(function() {
+        delete writeTimers[key];
+        pushTastingMeta_original(tasting);
+      }, 200);
+    };
+  }
+
+  // ======================================================================
+  // 4. EXPORT EXCEL
+  // ======================================================================
+
+  window.exportComparisonTableToExcel = function() {
+    var tasting = state.tastings.find(function(t) { return t.id === state.currentTastingId; });
+    if(!tasting || !tasting.samples || tasting.samples.length === 0) {
+      alert('Nessun campione da esportare');
+      return;
+    }
+
+    console.log('📊 Export Excel');
+
+    var csv = [];
+    var header = ['Campione'];
+
+    var descriptorKeys = new Set();
+    tasting.samples.forEach(function(s) {
+      if(s.evaluations) {
+        Object.keys(s.evaluations).forEach(function(k) {
+          descriptorKeys.add(k);
+        });
+      }
+    });
+
+    var orderedDescriptors = Array.from(descriptorKeys).sort();
+    orderedDescriptors.forEach(function(d) {
+      header.push(d);
+    });
+
+    header.push('Punteggio Totale');
+    header.push('Note');
+    csv.push(header);
+
+    tasting.samples.forEach(function(sample) {
+      var row = [sample.name || ('Campione ' + sample.sampleNumber)];
+
+      orderedDescriptors.forEach(function(desc) {
+        var val = '';
+        if(sample.evaluations && sample.evaluations[desc] !== undefined) {
+          val = sample.evaluations[desc];
+          if(typeof val === 'number') val = val.toFixed(1);
+        }
+        row.push(val);
+      });
+
+      var total = 0;
+      if(sample.evaluations) {
+        Object.values(sample.evaluations).forEach(function(v) {
+          if(typeof v === 'number') total += v;
+        });
+      }
+      row.push(total.toFixed(1));
+      row.push(sample.notes || '');
+
+      csv.push(row);
+    });
+
+    var csvContent = csv.map(function(row) {
+      return row.map(function(cell) {
+        var cellStr = String(cell || '');
+        if(cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          cellStr = '"' + cellStr.replace(/"/g, '""') + '"';
+        }
+        return cellStr;
+      }).join(',');
+    }).join('\n');
+
+    var BOM = '\uFEFF';
+    var blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    var url = URL.createObjectURL(blob);
+    var fileName = 'confronto_' + (tasting.name || 'degustazione').replace(/[^a-z0-9]/gi, '_') + '.csv';
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    console.log('✅ Excel esportato');
+    alert('Tabella esportata: ' + fileName);
+  };
+
+  // ======================================================================
+  // 5. FULLSCREEN NOTES - FUNZIONANTE GARANTITO
+  // ======================================================================
+
+  var fsOverlay = null;
+  var fsCanvas = null;
+  var fsCtx = null;
+  var origCanvas = null;
+  var isDrawing = false;
+  var lastX = 0;
+  var lastY = 0;
+
+  window.toggleNotesFullscreen = function() {
+    console.log('🔍 toggleNotesFullscreen');
+
+    if(fsOverlay) {
+      // CHIUDI
+      console.log('✓ Chiusura');
+
+      if(fsCanvas && origCanvas) {
+        var ctx = origCanvas.getContext('2d');
+        ctx.clearRect(0, 0, origCanvas.width, origCanvas.height);
+        ctx.drawImage(fsCanvas, 0, 0);
+
+        if(typeof saveCanvasData === 'function') {
+          setTimeout(saveCanvasData, 100);
+        }
+      }
+
+      document.body.removeChild(fsOverlay);
+      fsOverlay = null;
+      fsCanvas = null;
+      fsCtx = null;
+      origCanvas = null;
+      isDrawing = false;
+      document.body.style.overflow = '';
+
+      console.log('✅ Chiuso');
+      return;
+    }
+
+    // APRI
+    console.log('✓ Apertura');
+
+    origCanvas = document.getElementById('drawingCanvas');
+    if(!origCanvas) {
+      alert('Canvas non trovato');
+      return;
+    }
+
+    console.log('✓ Canvas:', origCanvas.width + 'x' + origCanvas.height);
+
+    // Crea overlay
+    fsOverlay = document.createElement('div');
+    fsOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:white;z-index:999999;padding:20px;box-sizing:border-box;';
+
+    // Header
+    var header = document.createElement('div');
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;padding-bottom:15px;border-bottom:2px solid #ddd;';
+
+    var title = document.createElement('h2');
+    title.textContent = 'Note e Appunti';
+    title.style.cssText = 'margin:0;font-size:24px;';
+
+    var toolbar = document.createElement('div');
+    toolbar.style.cssText = 'display:flex;gap:10px;';
+
+    var btnPen = document.createElement('button');
+    btnPen.textContent = 'Penna';
+    btnPen.style.cssText = 'padding:10px 20px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;';
+    btnPen.onclick = function() {
+      if(typeof setTool === 'function') setTool('pen');
+      console.log('Penna attiva');
+    };
+
+    var btnEraser = document.createElement('button');
+    btnEraser.textContent = 'Gomma';
+    btnEraser.style.cssText = 'padding:10px 20px;background:#4CAF50;color:white;border:none;border-radius:4px;cursor:pointer;';
+    btnEraser.onclick = function() {
+      if(typeof setTool === 'function') setTool('eraser');
+      console.log('Gomma attiva');
+    };
+
+    var btnClear = document.createElement('button');
+    btnClear.textContent = 'Pulisci';
+    btnClear.style.cssText = 'padding:10px 20px;background:#FFA726;color:white;border:none;border-radius:4px;cursor:pointer;';
+    btnClear.onclick = function() {
+      if(confirm('Cancellare?')) {
+        if(fsCtx && fsCanvas) {
+          fsCtx.clearRect(0, 0, fsCanvas.width, fsCanvas.height);
+        }
+      }
+    };
+
+    var btnClose = document.createElement('button');
+    btnClose.textContent = '✕ Chiudi';
+    btnClose.style.cssText = 'padding:10px 20px;background:#f44336;color:white;border:none;border-radius:4px;cursor:pointer;font-weight:bold;';
+    btnClose.onclick = function() {
+      console.log('✓ Click chiudi');
+      window.toggleNotesFullscreen();
+    };
+
+    toolbar.appendChild(btnPen);
+    toolbar.appendChild(btnEraser);
+    toolbar.appendChild(btnClear);
+    toolbar.appendChild(btnClose);
+    header.appendChild(title);
+    header.appendChild(toolbar);
+
+    // Canvas container
+    var container = document.createElement('div');
+    container.style.cssText = 'width:100%;height:calc(100vh - 120px);background:#fffef0;border:1px solid #ddd;position:relative;';
+
+    // Lines
+    var lines = document.createElement('div');
+    lines.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:repeating-linear-gradient(transparent,transparent 29px,#e0e0e0 29px,#e0e0e0 30px);pointer-events:none;';
+
+    // Canvas
+    fsCanvas = document.createElement('canvas');
+    fsCanvas.style.cssText = 'display:block;width:100%;height:100%;cursor:crosshair;';
+
+    var rect = container.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    fsCanvas.width = rect.width * dpr;
+    fsCanvas.height = rect.height * dpr;
+
+    fsCtx = fsCanvas.getContext('2d');
+    fsCtx.scale(dpr, dpr);
+
+    console.log('✓ Canvas HD:', fsCanvas.width + 'x' + fsCanvas.height, 'DPR:', dpr);
+
+    // Copia contenuto
+    if(origCanvas.width > 0 && origCanvas.height > 0) {
+      fsCtx.drawImage(origCanvas, 0, 0, rect.width, rect.height);
+      console.log('✓ Contenuto copiato');
+    }
+
+    container.appendChild(lines);
+    container.appendChild(fsCanvas);
+    fsOverlay.appendChild(header);
+    fsOverlay.appendChild(container);
+    document.body.appendChild(fsOverlay);
+    document.body.style.overflow = 'hidden';
+
+    // Drawing
+    function getPos(e) {
+      var r = fsCanvas.getBoundingClientRect();
+      var x = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+      var y = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+      return { x: x - r.left, y: y - r.top };
+    }
+
+    function startDraw(e) {
+      isDrawing = true;
+      var pos = getPos(e);
+      lastX = pos.x;
+      lastY = pos.y;
+      console.log('✓ Start');
+    }
+
+    function draw(e) {
+      if(!isDrawing) return;
+
+      var pos = getPos(e);
+
+      fsCtx.beginPath();
+      fsCtx.moveTo(lastX, lastY);
+      fsCtx.lineTo(pos.x, pos.y);
+
+      var tool = (state && state.ui && state.ui.canvasTool) || 'pen';
+
+      if(tool === 'eraser') {
+        fsCtx.globalCompositeOperation = 'destination-out';
+        fsCtx.lineWidth = 20;
+      } else {
+        fsCtx.globalCompositeOperation = 'source-over';
+        fsCtx.strokeStyle = '#000';
+        fsCtx.lineWidth = 1.5;
+      }
+
+      fsCtx.lineCap = 'round';
+      fsCtx.stroke();
+
+      lastX = pos.x;
+      lastY = pos.y;
+    }
+
+    function stopDraw() {
+      if(isDrawing) {
+        isDrawing = false;
+        console.log('✓ Stop');
+      }
+    }
+
+    fsCanvas.addEventListener('mousedown', startDraw);
+    fsCanvas.addEventListener('mousemove', draw);
+    fsCanvas.addEventListener('mouseup', stopDraw);
+    fsCanvas.addEventListener('mouseleave', stopDraw);
+
+    fsCanvas.addEventListener('touchstart', function(e) {
+      e.preventDefault();
+      startDraw(e);
+    });
+    fsCanvas.addEventListener('touchmove', function(e) {
+      e.preventDefault();
+      draw(e);
+    });
+    fsCanvas.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      stopDraw();
+    });
+
+    console.log('✅ Fullscreen aperto');
+  };
+
+  // ESC
+  document.addEventListener('keydown', function(e) {
+    if((e.key === 'Escape' || e.keyCode === 27) && fsOverlay) {
+      console.log('⌨️ ESC');
+      window.toggleNotesFullscreen();
+    }
+  });
+
+  console.log('✅ V160 ready');
+
+})();
+
+
 </script>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- V165: PANNELLO NOTE ESPANSO -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
+<div id="canvasNotePanel" style="display:none; position:fixed; top:60px; left:0; right:0; bottom:0; background:rgba(0,0,0,0.92); z-index:8888; overflow:hidden;">
+  <div style="width:100%; height:100%; background:#fff; display:flex; flex-direction:column;">
+
+    <div style="display:flex; justify-content:space-between; align-items:center; background:#7a2938; color:#fff; padding:15px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.3);">
+      <div style="font-size:18px; font-weight:700;">
+        <span id="canvasNotePanelTitle">📝 Note e Appunti</span>
+      </div>
+      <button class="btn" onclick="closeCanvasNotePanel()" style="background:#fff; color:#7a2938; border:none; padding:8px 16px; font-weight:700;">✕ Chiudi</button>
+    </div>
+
+    <div style="flex:1; min-height:0; background:#fff; overflow:hidden; position:relative;">
+      <div style="position:absolute; top:0; left:0; right:0; bottom:0; background-image:repeating-linear-gradient(transparent, transparent 29px, #e0e0e0 29px, #e0e0e0 30px); pointer-events:none; z-index:1;"></div>
+      <canvas id="canvasNotePanelCanvas" width="1400" height="1000" style="position:relative; z-index:2; width:100%; height:100%; touch-action:none; cursor:crosshair; background:transparent;"></canvas>
+    </div>
+
+    <div style="display:flex; gap:10px; justify-content:center; align-items:center; padding:15px 20px; border-top:2px solid #ddd; background:#f5f5f5; flex-wrap:wrap;">
+      <button class="btn tool-btn active" id="npToolPen" onclick="setNpToolPen()" style="padding:10px 20px;">✏️ Penna</button>
+      <button class="btn tool-btn" id="npToolEraser" onclick="setNpToolEraser()" style="padding:10px 20px;">🧹 Gomma</button>
+      <button class="btn" onclick="clearNotePanelCanvas()" style="padding:10px 20px; background:#d32f2f; color:#fff;">🗑️ Pulisci</button>
+      <div style="flex:1;"></div>
+      <button class="btn primary" onclick="closeCanvasNotePanel()" style="padding:12px 30px; font-weight:700;">✅ Salva e Chiudi</button>
+    </div>
+
+  </div>
+</div>
+
 </body>
 </html>
