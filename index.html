@@ -1736,8 +1736,32 @@ function setCardColorMode(mode){
       <!-- ================================================ -->
       <!-- EXPORT EXCEL BUTTON - SUPER VISIBILE -->
       <!-- ================================================ -->
-      <div style="color:rgba(255,255,255,0.9);font-size:15px;line-height:1.5;">
-              Scarica la tabella completa in formato CSV compatibile con Excel e LibreOffice Calc
+      <div id="v160ExportBox" style="margin:20px;padding:25px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border-radius:12px;box-shadow:0 8px 25px rgba(102,126,234,0.4);animation:fadeIn 0.5s;">
+        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+          <button onclick="window.exportComparisonTableToExcel()" 
+                  style="padding:20px 40px;
+                         background:white;
+                         color:#667eea;
+                         border:none;
+                         border-radius:10px;
+                         cursor:pointer;
+                         font-size:20px;
+                         font-weight:700;
+                         box-shadow:0 5px 15px rgba(0,0,0,0.2);
+                         display:inline-flex;
+                         align-items:center;
+                         gap:15px;
+                         transition:all 0.3s ease;
+                         letter-spacing:0.5px;"
+                  onmouseover="this.style.transform='translateY(-3px) scale(1.05)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.3)'"
+                  onmouseout="this.style.transform='translateY(0) scale(1)';this.style.boxShadow='0 5px 15px rgba(0,0,0,0.2)'">
+            <span style="font-size:32px;">📊</span>
+            <span>ESPORTA TABELLA EXCEL</span>
+          </button>
+
+          <div style="flex:1;min-width:250px;">
+            <div style="color:white;font-size:17px;font-weight:600;margin-bottom:8px;">
+              📥 Esporta i dati di confronto
             </div>
           </div>
         </div>
