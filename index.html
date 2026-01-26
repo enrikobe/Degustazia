@@ -5,6 +5,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
+<!-- V182: Notes Storage Persistence Fix + Session Login + CSV/MD Export -->
+<!-- V181-FULL-FIX: Session Login + Notes Fullscreen + CSV/MD Export -->
 <!-- V160-WORKING: Drawing Fix + Export Excel Visibile + Touch + Sync -->
 <!-- V160-FINALE: Touch + Excel Export + Fullscreen HD Canvas + Sync -->
 <!-- V151-UX: V150 sync + iOS switches + ZEN+ opacity + smooth scroll inerzia -->
@@ -32,7 +34,7 @@
     }
 
     /* Menu top scroll orizzontale */
-    .menu-bar{
+    .menu-bar{justify-content:center;
       background:var(--bordeaux);
       color:#fff;
       padding:0 10px;
@@ -1214,7 +1216,7 @@ button.zenplus-btn:hover:not(:disabled) {
   box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
 }
 
-/* Splash degustatori */
+/* Splash degustatori - V181 */
 #splash-tasters-list {
   display: none;
   flex-direction: column;
@@ -1227,6 +1229,38 @@ button.zenplus-btn:hover:not(:disabled) {
 
 #splash-tasters-list.visible {
   display: flex;
+}
+
+.splash-tasters-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.splash-taster-btn {
+  padding: 14px 40px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-radius: 12px;
+  text-align: center;
+  min-width: 180px;
+  backdrop-filter: blur(4px);
+}
+
+.splash-taster-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.03);
+}
+
+.splash-taster-btn:active {
+  transform: scale(0.98);
 }
 
 .splash-taster-item {
@@ -1254,11 +1288,167 @@ button.zenplus-btn:hover:not(:disabled) {
     flex-wrap: wrap;
     justify-content: center;
   }
+  
+  .splash-tasters-container {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 
-  .splash-taster-item {
+  .splash-taster-item,
+  .splash-taster-btn {
     font-size: 16px;
     padding: 12px 24px;
   }
+}
+
+/* V181: iOS Notes Style Fullscreen */
+#notesFullscreenV181 {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999999;
+  background: #fff;
+  flex-direction: column;
+}
+
+.notes-ios-header {
+  flex: 0 0 auto;
+  background: #f8f8f8;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+}
+
+.notes-ios-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: #d4a017;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.notes-ios-back:hover {
+  background: rgba(212, 160, 23, 0.1);
+}
+
+.notes-ios-done {
+  background: #f4d03f;
+  color: #333;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notes-ios-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.notes-ios-body {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.notes-ios-canvas-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.notes-ios-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    transparent,
+    transparent 39px,
+    #e8e8e8 39px,
+    #e8e8e8 40px
+  );
+  pointer-events: none;
+}
+
+.notes-ios-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.notes-ios-toolbar {
+  flex: 0 0 auto;
+  background: #f8f8f8;
+  border-top: 1px solid #e0e0e0;
+  padding: 12px 20px 20px;
+}
+
+.notes-ios-toolbar-inner {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  align-items: center;
+}
+
+.notes-ios-tool {
+  width: 48px;
+  height: 48px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.notes-ios-tool:hover {
+  background: #f0f0f0;
+}
+
+.notes-ios-tool.active {
+  border-color: #d4a017;
+  box-shadow: 0 0 0 2px rgba(212, 160, 23, 0.3);
+}
+
+.notes-ios-color-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #000 25%, #e74c3c 25%, #e74c3c 50%, #3498db 50%, #3498db 75%, #27ae60 75%);
+  cursor: pointer;
+  margin-left: 10px;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 </style>
@@ -1274,9 +1464,12 @@ button.zenplus-btn:hover:not(:disabled) {
   </div>
 </div>
   <script>
-    setTimeout(()=>{
-      const sp=document.getElementById("splashScreen");
-      if(sp){ sp.classList.add("hide"); setTimeout(()=>sp.style.display="none",500); }
+    // V181: Dopo 3s mostra selezione degustatori - NON chiudere splash fino a selezione
+    setTimeout(function(){
+      if (typeof window.showSplashTastersV181 === 'function') {
+        window.showSplashTastersV181();
+      }
+      // V181: NON c'è più fallback che chiude la splash - rimane aperta
     }, 3000);
   window.toggleBlindProduct = function(pid){
   if(isArchived()) return;
@@ -1689,7 +1882,7 @@ function setCardColorMode(mode){
                     <button class="tool-btn active" onclick="setTool('pen', this)">Penna</button>
                     <button class="tool-btn" onclick="setTool('eraser', this)">Gomma</button>
                     <button class="tool-btn" onclick="clearCanvas()">Pulisci</button>
-                    <button class="btn" onclick="openA4Overlay()">🔍 Espandi Note</button>
+                    <button class="btn" onclick="openNotesFullscreenV181()">🔍 Espandi</button>
                   </span>
                 </h3>
                 <div class="canvas-container">
@@ -1845,40 +2038,7 @@ function setCardColorMode(mode){
     <div id="page-risultati" class="page">
 
       <!-- ================================================ -->
-      <!-- EXPORT EXCEL BUTTON - SUPER VISIBILE -->
-      <!-- ================================================ -->
-      <div id="v160ExportBox" style="margin:20px;padding:25px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);border-radius:12px;box-shadow:0 8px 25px rgba(102,126,234,0.4);animation:fadeIn 0.5s;">
-        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
-          <button onclick="window.exportComparisonTableToExcel()" 
-                  style="padding:20px 40px;
-                         background:white;
-                         color:#667eea;
-                         border:none;
-                         border-radius:10px;
-                         cursor:pointer;
-                         font-size:20px;
-                         font-weight:700;
-                         box-shadow:0 5px 15px rgba(0,0,0,0.2);
-                         display:inline-flex;
-                         align-items:center;
-                         gap:15px;
-                         transition:all 0.3s ease;
-                         letter-spacing:0.5px;"
-                  onmouseover="this.style.transform='translateY(-3px) scale(1.05)';this.style.boxShadow='0 8px 25px rgba(0,0,0,0.3)'"
-                  onmouseout="this.style.transform='translateY(0) scale(1)';this.style.boxShadow='0 5px 15px rgba(0,0,0,0.2)'">
-            <span style="font-size:32px;">📊</span>
-            <span>ESPORTA TABELLA EXCEL</span>
-          </button>
-
-          <div style="flex:1;min-width:250px;">
-            <div style="color:white;font-size:17px;font-weight:600;margin-bottom:8px;">
-              📥 Esporta i dati di confronto
-            </div>
-          </div>
-        </div>
-      </div>
-      <!-- ================================================ -->
-
+      <!-- V181: Compact Export Buttons -->
       
       <div class="card" style="height:100%;overflow:hidden;display:flex;flex-direction:column;gap:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -1889,7 +2049,10 @@ function setCardColorMode(mode){
         </div>
 
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <button class="btn" onclick="printResults()">📄 Stampa</button>&nbsp; <label style="font-size:12px;font-weight:950;">Degustazione</label>
+          <button class="btn" onclick="printResults()">📄 Stampa</button>
+          <button class="btn" onclick="window.exportComparisonCSV()" title="Esporta CSV">📊 CSV</button>
+          <button class="btn" onclick="window.exportComparisonMD()" title="Esporta Markdown">📝 MD</button>
+          &nbsp; <label style="font-size:12px;font-weight:950;">Degustazione</label>
           <select id="resultsDegSelect" class="select" onchange="renderResultsTable()"></select>
 
           <label style="font-size:12px;font-weight:950;">Cerca</label>
@@ -4087,8 +4250,7 @@ function clearNotePanelCanvas() {
 
 
 function openCanvasNotePanel() {
-  const panel = document.getElementById('canvasNotePanel');
-  const mainCanvas = document.getElementById('drawingCanvas');
+  var panel = document.getElementById('canvasNotePanel');
   npCanvas = document.getElementById('canvasNotePanelCanvas');
 
   if (!panel || !npCanvas) {
@@ -4104,36 +4266,46 @@ function openCanvasNotePanel() {
 
   npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
 
-  if (mainCanvas) {
-    try {
-      const dataUrl = mainCanvas.toDataURL('image/png');
-      if (dataUrl && dataUrl.length > 100) {
-        const img = new Image();
-        img.onload = function () {
+  // MODIFICA 1: Carica da ev.data.vista.canvasFS del campione selezionato
+  try {
+    var t = getTasting();
+    var tid = (typeof currentTasterId === 'function') ? currentTasterId() : null;
+    var sid = window.selectedSampleId;
+
+    if (t && tid && sid) {
+      var ev = getEval(t, tid, sid);
+      // Prima prova canvasFS (fullscreen), poi fallback a canvas (widget)
+      var canvasData = (ev.data && ev.data.vista && ev.data.vista.canvasFS) || 
+                       (ev.data && ev.data.vista && ev.data.vista.canvas);
+      
+      if (canvasData && canvasData.length > 100) {
+        var img = new Image();
+        img.onload = function() {
           npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
           npCtx.drawImage(img, 0, 0, npCanvas.width, npCanvas.height);
         };
-        img.src = dataUrl;
+        img.src = canvasData;
+        console.log('📝 Canvas FS: caricato da campione', sid);
       }
-    } catch (e) {
-      console.error('Errore caricamento note:', e);
     }
+  } catch (e) {
+    console.error('Errore caricamento canvas FS:', e);
   }
 
-  const titleEl = document.getElementById('canvasNotePanelTitle');
+  var titleEl = document.getElementById('canvasNotePanelTitle');
   if (titleEl) {
     try {
-      const t = getTasting();
-      const sid = window.selectedSampleId;
-      if (t && sid) {
-        const sample = t.samples.find(s => String(s.id) === String(sid));
-        const name = sample && (sample.name || sample.id) || 'Campione';
-        titleEl.textContent = 'Note: ' + name;
+      var t2 = getTasting();
+      var sid2 = window.selectedSampleId;
+      if (t2 && sid2) {
+        var sample = t2.samples.find(function(s) { return String(s.id) === String(sid2); });
+        var name = (sample && (sample.name || sample.id)) || 'Campione';
+        titleEl.textContent = '📝 Note: ' + name;
       } else {
-        titleEl.textContent = 'Note e Appunti';
+        titleEl.textContent = '📝 Note e Appunti';
       }
     } catch (e) {
-      titleEl.textContent = 'Note e Appunti';
+      titleEl.textContent = '📝 Note e Appunti';
     }
   }
 
@@ -4143,56 +4315,59 @@ function openCanvasNotePanel() {
 }
 
 function closeCanvasNotePanel() {
-  const panel = document.getElementById('canvasNotePanel');
-  const mainCanvas = document.getElementById('drawingCanvas');
+  var panel = document.getElementById('canvasNotePanel');
+  var mainCanvas = document.getElementById('drawingCanvas');
 
   if (!panel) return;
 
-  if (mainCanvas && npCanvas && npCtx) {
+  // MODIFICA 1: Salva in ev.data.vista.canvasFS del campione corrente
+  if (npCanvas && npCtx) {
     try {
-      const dataUrl = npCanvas.toDataURL('image/png');
-      const mainCtx = mainCanvas.getContext('2d');
+      var dataUrl = npCanvas.toDataURL('image/png');
+      
+      var t = getTasting();
+      var tid = (typeof currentTasterId === 'function') ? currentTasterId() : null;
+      var sid = window.selectedSampleId;
 
-      if (mainCtx && dataUrl && dataUrl.length > 100) {
-        const img = new Image();
-        img.onload = function () {
-          mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
-          mainCtx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
+      if (t && tid && sid) {
+        var ev = getEval(t, tid, sid);
+        if (!ev.data) ev.data = {};
+        if (!ev.data.vista) ev.data.vista = { intensita: 0, limpidezza: 0, desc: [], canvas: null, canvasFS: null };
 
-          try {
-            const t = getTasting();
-            const tid = typeof currentTasterId === 'function' ? currentTasterId() : null;
-            const sid = window.selectedSampleId;
-
-            if (t && tid && sid) {
-              const ev = getEval(t, tid, sid);
-              if (!ev.data) ev.data = {};
-              if (!ev.data.vista) {
-                ev.data.vista = { intensita: 0, limpidezza: 0, desc: [], canvas: null };
-              }
-
-              ev.data.vista.canvas = dataUrl;
-              ev.updatedAt = nowIso();
-
-              saveState({ skipCloud: true });
-
-              if (typeof window.queueCanvasSync === 'function') {
-                window.queueCanvasSync(t.id, tid, sid, dataUrl);
-              }
-
-              toast('Appunti salvati');
-            } else {
-              toast('Seleziona un campione');
-            }
-          } catch (e) {
-            console.error('Errore salvataggio eval:', e);
-            toast('Errore salvataggio');
+        // Salva in canvasFS (fullscreen)
+        ev.data.vista.canvasFS = dataUrl;
+        
+        // Aggiorna anche il widget canvas
+        if (mainCanvas && dataUrl && dataUrl.length > 100) {
+          var mainCtx = mainCanvas.getContext('2d');
+          if (mainCtx) {
+            var img = new Image();
+            img.onload = function() {
+              mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+              mainCtx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
+              // Salva anche nel canvas widget
+              ev.data.vista.canvas = mainCanvas.toDataURL('image/png');
+              saveState({ skipCloud: false });
+            };
+            img.src = dataUrl;
           }
-        };
-        img.src = dataUrl;
+        }
+
+        ev.updatedAt = nowIso();
+        saveState({ skipCloud: false });
+
+        // Sync al cloud se disponibile
+        if (typeof window.queueCanvasSync === 'function') {
+          window.queueCanvasSync(t.id, tid, sid, dataUrl);
+        }
+
+        console.log('📝 Canvas FS: salvato per campione', sid);
+        toast('Appunti salvati');
+      } else {
+        toast('Seleziona un campione');
       }
     } catch (e) {
-      console.error('Errore chiusura pannello:', e);
+      console.error('Errore salvataggio canvas FS:', e);
       toast('Errore salvataggio');
     }
   }
@@ -4223,11 +4398,11 @@ function setupNotePanelCanvasDrawing() {
 
     if (npTool === 'eraser') {
       npCtx.globalCompositeOperation = 'destination-out';
-      npCtx.lineWidth = 24;
+      npCtx.lineWidth = Math.max(npPenSize * 3, 15); // Gomma più grande del tratto
     } else {
       npCtx.globalCompositeOperation = 'source-over';
       npCtx.strokeStyle = '#000';
-      npCtx.lineWidth = 3;
+      npCtx.lineWidth = npPenSize || 2; // MODIFICA 1: Usa npPenSize dallo slider
     }
 
     npCtx.lineCap = 'round';
@@ -4828,10 +5003,28 @@ function initCanvas(){
       state.currentTastingId = id;
       state.currentTaster = null; 
       saveState();
-      openModal("modalPickTaster");
-      const sel = document.getElementById("modalPickTasterSelect");
+      
       const t = state.tastings.find(x=>x.id===id);
       try{ if(t){ const ch = ensureTastingTaxonomies(t); if(ch) saveState({skipCloud:true}); } }catch(e){}
+      
+      // MODIFICA 1: Se c'è già un degustatore attivo dallo splash, bypassa il modale
+      const activeGlobalTasterId = localStorage.getItem('degustapp-active-taster-id');
+      if (activeGlobalTasterId && t) {
+        const tasterIds = t.tasterIds || [];
+        const activeTasterId = parseInt(activeGlobalTasterId, 10);
+        // Verifica che il degustatore attivo sia tra quelli della degustazione
+        if (tasterIds.includes(activeTasterId)) {
+          state.currentTaster = activeTasterId;
+          saveState();
+          console.log('👤 Bypass modale: degustatore già attivo', activeTasterId);
+          go("degustazione", document.getElementById("btnMenuDeg"));
+          return;
+        }
+      }
+      
+      // Altrimenti mostra il modale normale
+      openModal("modalPickTaster");
+      const sel = document.getElementById("modalPickTasterSelect");
       if(!sel || !t) return;
       const ids = new Set(t.tasterIds || []);
       sel.innerHTML = `<option value="">Seleziona...</option>` +
@@ -5933,14 +6126,8 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
 
     // Init
     window.addEventListener("DOMContentLoaded", ()=>{
-      setTimeout(()=>{
-        const sp = document.getElementById("splashScreen");
-        if(sp){
-          sp.classList.add("hide");
-          setTimeout(()=>{ sp.style.display="none"; }, 500);
-        }
-      }, 3000);
-
+      // MODIFICA 2: Splash gestito dal primo script, non chiudere qui
+      
       const loaded = loadState();
       state = migrate(loaded);
 
@@ -8504,116 +8691,154 @@ setTimeout(function() {
 }, 1000);
 
 // ============================================
-// SPLASH LOGIN DEGUSTATORE
+// V181: SPLASH LOGIN DEGUSTATORE - SESSION BASED
 // ============================================
 (function() {
-  const LOGIN_KEY = 'degustapp-logged-taster-id';
-  const LOGIN_NAME_KEY = 'degustapp-logged-taster-name';
+  var SESSION_KEY_ID = 'degustapp-session-taster-id';
+  var SESSION_KEY_NAME = 'degustapp-session-taster-name';
+  var _splashInitialized = false;
+  var _retryCount = 0;
 
-  function showSplashTasters() {
-    const list = document.getElementById('splash-tasters-list');
-    if (!list) {
-      console.log('⚠️ splash-tasters-list non trovato');
+  // V181: Clear session on page load - each session = new login
+  sessionStorage.removeItem(SESSION_KEY_ID);
+  sessionStorage.removeItem(SESSION_KEY_NAME);
+
+  window.showSplashTastersV181 = function() {
+    console.log('🔍 showSplashTastersV181() chiamato, retry:', _retryCount);
+    
+    var sp = document.getElementById('splashScreen');
+    var list = document.getElementById('splash-tasters-list');
+    if (!sp || !list) {
+      console.log('⚠️ Elementi splash non trovati');
       return;
     }
 
-    const state = loadState();
-    if (!state || !state.tasters || state.tasters.length === 0) {
-      console.log('⚠️ Nessun degustatore in anagrafica');
-      // Chiudi splash comunque
-      const splash = document.getElementById('splashScreen');
-      if (splash) {
-        setTimeout(function() { splash.style.display = 'none'; }, 1000);
+    // Ottieni lista degustatori
+    var tasters = [];
+    try {
+      if (typeof state !== 'undefined' && state && state.tasters && state.tasters.length > 0) {
+        tasters = state.tasters;
       }
+    } catch(e) {}
+
+    var cloudReady = window.__cloudReady || false;
+
+    // Se non ci sono tasters e cloud non pronto, aspetta (max 15 retry)
+    if (tasters.length === 0 && !cloudReady && _retryCount < 15) {
+      _retryCount++;
+      if (_retryCount === 1) {
+        list.innerHTML = '<div style="margin-top:30px;text-align:center;"><p style="color:rgba(255,255,255,0.7);font-size:14px;">⏳ Connessione al server...</p></div>';
+        list.classList.add('visible');
+      }
+      console.log('⏳ Aspetto dati Firebase... retry ' + _retryCount + '/15');
+      setTimeout(window.showSplashTastersV181, 1000);
       return;
     }
 
-    // Popola lista
-    list.innerHTML = '';
+    if (_splashInitialized) return;
+    _splashInitialized = true;
 
-    state.tasters.forEach(function(taster) {
-      const btn = document.createElement('button');
-      btn.className = 'splash-taster-item';
-      btn.textContent = taster.name;
+    // Nessun degustatore trovato
+    if (tasters.length === 0) {
+      list.innerHTML = '<div style="margin-top:30px;text-align:center;">' +
+        '<p style="color:rgba(255,255,255,0.8);margin-bottom:20px;">' +
+        (cloudReady ? 'Nessun degustatore configurato.<br>Vai in Anagrafiche per aggiungere degustatori.' : '⚠️ Connessione non riuscita') +
+        '</p>' +
+        '<button onclick="window.closeSplashV181()" class="splash-taster-btn" style="margin-top:15px;">Continua →</button>' +
+        '</div>';
+      list.classList.add('visible');
+      return;
+    }
 
-      btn.onclick = function() {
-        // Salva login
-        localStorage.setItem(LOGIN_KEY, taster.id);
-        localStorage.setItem(LOGIN_NAME_KEY, taster.name);
-
-        console.log('👤 Login: ' + taster.name + ' (ID: ' + taster.id + ')');
-
-        // Chiudi splash
-        const splash = document.getElementById('splashScreen');
-        if (splash) {
-          splash.style.display = 'none';
-        }
-
-        // Vai a preparazione
-        setTimeout(function() {
-          if (typeof goToView === 'function') {
-            goToView('preparazione');
-          } else if (typeof showPage === 'function') {
-            showPage('preparazione');
-          }
-        }, 300);
-
-        // Pre-imposta degustatore nei dropdown
-        setTimeout(function() {
-          const selects = document.querySelectorAll('select');
-          selects.forEach(function(select) {
-            if (select.id && (select.id.toLowerCase().includes('taster') || 
-                             select.id.toLowerCase().includes('degustator'))) {
-              select.value = taster.id;
-              if (select.onchange) select.onchange();
-              console.log('✅ Degustatore impostato in ' + select.id);
-            }
-          });
-        }, 800);
-      };
-
-      list.appendChild(btn);
-    });
-
+    // Mostra lista degustatori con layout responsive
+    var html = '<div style="margin-top:20px;text-align:center;">';
+    html += '<h3 style="color:#fff;margin-bottom:20px;font-size:18px;font-weight:500;">Seleziona il tuo profilo</h3>';
+    html += '<div class="splash-tasters-container">';
+    
+    for (var i = 0; i < tasters.length; i++) {
+      var t = tasters[i];
+      var name = t.name || ('Degustatore ' + t.id);
+      html += '<button onclick="window.selectSplashTasterV181(' + t.id + ',\'' + name.replace(/'/g, "\\'") + '\')" class="splash-taster-btn">' + name + '</button>';
+    }
+    html += '</div></div>';
+    
+    list.innerHTML = html;
     list.classList.add('visible');
-    console.log('✅ Splash login: ' + state.tasters.length + ' degustatori');
-  }
+    console.log('✅ Splash login V181: ' + tasters.length + ' degustatori mostrati');
+  };
 
-  // Mostra dopo 3 secondi
-  setTimeout(showSplashTasters, 3000);
+  window.selectSplashTasterV181 = function(id, name) {
+    // Salva in session storage
+    sessionStorage.setItem(SESSION_KEY_ID, String(id));
+    sessionStorage.setItem(SESSION_KEY_NAME, name);
+    
+    // Anche in window per accesso rapido
+    window.__sessionTasterId = id;
+    window.__sessionTasterName = name;
+    
+    console.log('👤 V181 Login:', name, '(ID:', id, ')');
+    
+    // Chiudi splash
+    var sp = document.getElementById('splashScreen');
+    if (sp) {
+      sp.classList.add('hide');
+      setTimeout(function() { sp.style.display = 'none'; }, 400);
+    }
+    
+    // Naviga a preparazione
+    setTimeout(function() {
+      if (typeof go === 'function') {
+        go('preparazione', document.getElementById('btnMenuPrep'));
+      }
+      // Sincronizza il select del degustatore se presente
+      setTimeout(function() {
+        var sel = document.getElementById('tasterSelect');
+        if (sel) {
+          sel.value = String(id);
+          if (typeof onSelectTaster === 'function') {
+            onSelectTaster();
+          }
+        }
+      }, 200);
+    }, 500);
+  };
 
-  // Funzioni globali
+  window.closeSplashV181 = function() {
+    var sp = document.getElementById('splashScreen');
+    if (sp) {
+      sp.classList.add('hide');
+      setTimeout(function() { sp.style.display = 'none'; }, 400);
+    }
+    setTimeout(function() {
+      if (typeof go === 'function') {
+        go('preparazione', document.getElementById('btnMenuPrep'));
+      }
+    }, 500);
+  };
+
+  window.getSessionTaster = function() {
+    var id = sessionStorage.getItem(SESSION_KEY_ID);
+    var name = sessionStorage.getItem(SESSION_KEY_NAME);
+    if (id && name) {
+      return { id: id, name: name };
+    }
+    return null;
+  };
+
   window.getLoggedTaster = function() {
-    return {
-      id: localStorage.getItem(LOGIN_KEY),
-      name: localStorage.getItem(LOGIN_NAME_KEY)
-    };
+    var session = window.getSessionTaster();
+    return session || { id: null, name: null };
   };
 
   window.logoutTaster = function() {
-    localStorage.removeItem(LOGIN_KEY);
-    localStorage.removeItem(LOGIN_NAME_KEY);
-    console.log('👤 Logout effettuato');
+    sessionStorage.removeItem(SESSION_KEY_ID);
+    sessionStorage.removeItem(SESSION_KEY_NAME);
+    window.__sessionTasterId = null;
+    window.__sessionTasterName = null;
+    console.log('👤 V181 Logout effettuato');
   };
 
-  // Auto-preseleziona degustatore se loggato
-  document.addEventListener('DOMContentLoaded', function() {
-    const logged = window.getLoggedTaster();
-    if (logged.id) {
-      console.log('👤 Degustatore loggato: ' + logged.name);
-
-      setTimeout(function() {
-        const selects = document.querySelectorAll('select');
-        selects.forEach(function(select) {
-          if (select.id && (select.id.toLowerCase().includes('taster') || 
-                           select.id.toLowerCase().includes('degustator'))) {
-            select.value = logged.id;
-            if (select.onchange) select.onchange();
-          }
-        });
-      }, 1000);
-    }
-  });
+  console.log('✅ V181 Splash Login System loaded');
 })();
 
 // Visibilità pulsanti condizionali
@@ -8678,6 +8903,165 @@ setTimeout(function() {
   });
 })();
 
+// Inizializza menu touch handling
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof initMenuTouchHandling === 'function') {
+    initMenuTouchHandling();
+  }
+});
+
+ // ==== MODIFICHE AGGIUNTE ====
+
+  let npPenSize = 2;
+  function updateNpPenSize(size) {
+    npPenSize = parseInt(size);
+    const label = document.getElementById('npPenSizeLabel');
+    if (label) label.textContent = size + 'px';
+  }
+
+  function syncCanvasWidgetToFullscreen(x, y, isDrawing, tool) {
+    const npCanvas = document.getElementById('canvasNotePanelCanvas');
+    if (!npCanvas) return;
+    const npCtx = npCanvas.getContext('2d');
+    if (tool === 'pen' && isDrawing) {
+      npCtx.strokeStyle = '#000';
+      npCtx.lineWidth = npPenSize || 2;
+      npCtx.lineTo(x, y);
+      npCtx.stroke();
+    } else if (tool === 'eraser') {
+      npCtx.clearRect(x - 10, y - 10, 20, 20);
+    }
+  }
+
+  // MODIFICA 3: Gestione touch migliorata per menu
+  let menuTouchStartX = 0, menuTouchStartY = 0, menuTouchStartTime = 0;
+  let menuTouchMoved = false;
+  
+  function initMenuTouchHandling() {
+    const menuBar = document.querySelector('.menu-bar');
+    if (!menuBar) return;
+    
+    // Traccia inizio touch
+    menuBar.addEventListener('touchstart', function(e) {
+      menuTouchStartX = e.touches[0].clientX;
+      menuTouchStartY = e.touches[0].clientY;
+      menuTouchStartTime = Date.now();
+      menuTouchMoved = false;
+    }, {passive: true});
+    
+    // Traccia movimento - se > 10px è uno scroll
+    menuBar.addEventListener('touchmove', function(e) {
+      const deltaX = Math.abs(e.touches[0].clientX - menuTouchStartX);
+      const deltaY = Math.abs(e.touches[0].clientY - menuTouchStartY);
+      if (deltaX > 10 || deltaY > 10) {
+        menuTouchMoved = true;
+      }
+    }, {passive: true});
+    
+    // Al termine del touch, se era uno scroll blocca l'evento
+    menuBar.addEventListener('touchend', function(e) {
+      const deltaX = Math.abs(e.changedTouches[0].clientX - menuTouchStartX);
+      const deltaY = Math.abs(e.changedTouches[0].clientY - menuTouchStartY);
+      const duration = Date.now() - menuTouchStartTime;
+      
+      // Se è stato uno scroll (movimento > 10px) o tocco lungo (> 300ms)
+      if (menuTouchMoved || deltaX > 10 || deltaY > 10 || duration > 300) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Marca i bottoni per ignorare il click successivo
+        const btns = menuBar.querySelectorAll('.menu-btn');
+        btns.forEach(function(btn) {
+          btn.setAttribute('data-ignore-click', 'true');
+          setTimeout(function() { btn.removeAttribute('data-ignore-click'); }, 100);
+        });
+        
+        return false;
+      }
+    });
+    
+    // Intercetta click sui bottoni e ignora se marcati
+    menuBar.addEventListener('click', function(e) {
+      const btn = e.target.closest('.menu-btn');
+      if (btn && btn.hasAttribute('data-ignore-click')) {
+        e.preventDefault();
+        e.stopPropagation();
+        btn.removeAttribute('data-ignore-click');
+        return false;
+      }
+    }, true); // capture phase
+    
+    console.log('✅ Menu touch handling inizializzato');
+  }
+
+  function updateTopButtonsVisibility() {
+    const currentPage = (typeof getCurrentPage === 'function') ? getCurrentPage() : '';
+    const btnTermina = document.querySelector('[onclick*="finishTasting"]');
+    const btnFiltri = document.getElementById('btnTopFilters');
+    const btnZEN = document.getElementById('btnTopZEN');
+    const isDegtab = (currentPage === 'degustazione' || 
+                     document.body.classList.contains('zen-mode') ||
+                     document.body.classList.contains('zen-plus-mode'));
+    if (btnTermina) btnTermina.style.display = isDegtab ? '' : 'none';
+    if (btnFiltri) btnFiltri.style.display = isDegtab ? '' : 'none';
+    if (btnZEN) btnZEN.style.display = isDegtab ? '' : 'none';
+  }
+
+  (function() {
+    const orig = window.showPage;
+    if (orig) {
+      window.showPage = function(page) {
+        orig(page);
+        setTimeout(updateTopButtonsVisibility, 50);
+      };
+    }
+  })();
+
+  let selectedGlobalTaster = null;
+
+  function showTasterSelection() {
+    const sp = document.getElementById("splashScreen");
+    const list = document.getElementById("splash-tasters-list");
+    if (!sp || !list) return;
+    const tasters = JSON.parse(localStorage.getItem('tasters') || '[]');
+    if (tasters.length === 0) {
+      tasters.push({id: 1, name: 'Degustatore Predefinito', email: ''});
+      localStorage.setItem('tasters', JSON.stringify(tasters));
+    }
+    const isLandscape = window.innerWidth > window.innerHeight;
+    let html = '<div style="margin-top:30px;"><h3 style="color:#fff;text-align:center;margin-bottom:25px;font-weight:normal;">Seleziona Degustatore</h3>';
+    html += '<div style="display:flex;flex-direction:' + (isLandscape ? 'row' : 'column') + ';gap:15px;justify-content:center;flex-wrap:wrap;">';
+    tasters.forEach(function(t) {
+      html += '<button onclick="selectGlobalTaster(' + t.id + ',\''+t.name.replace(/'/g,"\\'")+'\')" ';
+      html += 'style="padding:15px 30px;background:#4CAF50;color:#fff;border:none;border-radius:8px;';
+      html += 'font-size:18px;font-weight:normal;cursor:pointer;min-width:180px;">' + t.name + '</button>';
+    });
+    html += '</div></div>';
+    list.innerHTML = html;
+  }
+
+  function selectGlobalTaster(id, name) {
+    selectedGlobalTaster = {id: id, name: name};
+    localStorage.setItem('selectedGlobalTaster', JSON.stringify(selectedGlobalTaster));
+    const sp = document.getElementById("splashScreen");
+    if (sp) {
+      sp.classList.add("hide");
+      setTimeout(function() { sp.style.display = "none"; }, 500);
+    }
+    const sel = document.getElementById('tasterSelect');
+    if (sel) {
+      sel.value = id;
+      sel.dispatchEvent(new Event('change'));
+    }
+  }
+
+  try {
+    const saved = localStorage.getItem('selectedGlobalTaster');
+    if (saved) selectedGlobalTaster = JSON.parse(saved);
+  } catch(e) {}
+
+  // ==== FINE MODIFICHE ====
+
 </script>
 
 
@@ -8695,17 +9079,23 @@ setTimeout(function() {
       <button class="btn" onclick="closeCanvasNotePanel()" style="background:#fff; color:#7a2938; border:none; padding:8px 16px; font-weight:700;">✕ Chiudi</button>
     </div>
 
+    <!-- MODIFICA 1: Toolbar SOPRA il canvas con stile strip bordeaux -->
+    <div style="display:flex; gap:10px; justify-content:center; align-items:center; padding:12px 20px; background:#7a2938; border-bottom:2px solid #ddd; color:white; flex-wrap:wrap;">
+      <button class="btn tool-btn active" id="npToolPen" onclick="setNpToolPen()" style="padding:10px 20px; background:#4CAF50; color:#fff; border:none; border-radius:6px; font-weight:700;">✏️ Penna</button>
+      <label style="display:flex; align-items:center; gap:8px; color:#fff; font-weight:600;">
+        Tratto: 
+        <input type="range" id="npPenSize" min="1" max="20" value="2" style="width:120px; cursor:pointer;" oninput="updateNpPenSize(this.value)">
+        <span id="npPenSizeLabel" style="min-width:35px; font-weight:700; color:#fff;">2px</span>
+      </label>
+      <button class="btn tool-btn" id="npToolEraser" onclick="setNpToolEraser()" style="padding:10px 20px; background:rgba(255,255,255,0.2); color:#fff; border:none; border-radius:6px; font-weight:700;">🧹 Gomma</button>
+      <button class="btn" onclick="clearNotePanelCanvas()" style="padding:10px 20px; background:#d32f2f; color:#fff; border:none; border-radius:6px; font-weight:700;">🗑️ Pulisci</button>
+      <div style="flex:1;"></div>
+      <button class="btn primary" onclick="closeCanvasNotePanel()" style="padding:12px 30px; font-weight:700; background:#4CAF50; color:#fff; border:none; border-radius:6px;">✅ Salva e Chiudi</button>
+    </div>
+
     <div style="flex:1; min-height:0; background:#fff; overflow:hidden; position:relative;">
       <div style="position:absolute; top:0; left:0; right:0; bottom:0; background-image:repeating-linear-gradient(transparent, transparent 29px, #e0e0e0 29px, #e0e0e0 30px); pointer-events:none; z-index:1;"></div>
       <canvas id="canvasNotePanelCanvas" width="1400" height="1000" style="position:relative; z-index:2; width:100%; height:100%; touch-action:none; cursor:crosshair; background:transparent;"></canvas>
-    </div>
-
-    <div style="display:flex; gap:10px; justify-content:center; align-items:center; padding:15px 20px; border-top:2px solid #ddd; background:#f5f5f5; flex-wrap:wrap;">
-      <button class="btn tool-btn active" id="npToolPen" onclick="setNpToolPen()" style="padding:10px 20px;">✏️ Penna</button>
-      <button class="btn tool-btn" id="npToolEraser" onclick="setNpToolEraser()" style="padding:10px 20px;">🧹 Gomma</button>
-      <button class="btn" onclick="clearNotePanelCanvas()" style="padding:10px 20px; background:#d32f2f; color:#fff;">🗑️ Pulisci</button>
-      <div style="flex:1;"></div>
-      <button class="btn primary" onclick="closeCanvasNotePanel()" style="padding:12px 30px; font-weight:700;">✅ Salva e Chiudi</button>
     </div>
 
   </div>
@@ -8727,6 +9117,823 @@ setTimeout(function() {
     <canvas id="canvasA4Full"></canvas>
   </div>
 </div>
+
+<!-- MODIFICA 2: SPLASH LOGIN SYSTEM V2 -->
+<script>
+(function() {
+  var ACTIVE_TASTER_ID_KEY = 'degustapp-active-taster-id';
+  var ACTIVE_TASTER_NAME_KEY = 'degustapp-active-taster-name';
+  var _splashShown = false;
+  var _splashRetry = 0;
+
+  window.showSplashTastersV2 = function() {
+    var sp = document.getElementById("splashScreen");
+    var list = document.getElementById("splash-tasters-list");
+    if (!sp || !list) return;
+
+    // Aspetta che Firebase carichi i dati (max 10 retry)
+    var tasters = [];
+    try {
+      if (typeof state !== 'undefined' && state && state.tasters && state.tasters.length > 0) {
+        tasters = state.tasters;
+      }
+    } catch(e) {}
+
+    var cloudReady = window.__cloudReady || false;
+
+    // Se non ci sono tasters e cloud non pronto, riprova
+    if (tasters.length === 0 && !cloudReady && _splashRetry < 10) {
+      _splashRetry++;
+      if (_splashRetry === 1) {
+        list.innerHTML = '<div style="margin-top:30px;text-align:center;"><p style="color:rgba(255,255,255,0.8);">⏳ Connessione...</p></div>';
+        list.classList.add('visible');
+      }
+      console.log('⏳ Aspetto Firebase... retry ' + _splashRetry + '/10');
+      setTimeout(window.showSplashTastersV2, 1000);
+      return;
+    }
+
+    if (_splashShown) return;
+    _splashShown = true;
+
+    // Nessun degustatore trovato
+    if (tasters.length === 0) {
+      list.innerHTML = '<div style="margin-top:30px;text-align:center;"><p style="color:rgba(255,255,255,0.8);margin-bottom:20px;">' + 
+        (cloudReady ? 'Nessun degustatore configurato' : '⚠️ Connessione non riuscita') + 
+        '</p><button onclick="window.closeSplashAndProceed()" style="padding:14px 32px;background:rgba(255,255,255,0.15);border:2px solid rgba(255,255,255,0.4);color:#fff;border-radius:10px;font-size:16px;cursor:pointer;">Continua →</button></div>';
+      list.classList.add('visible');
+      return;
+    }
+
+    // Mostra lista degustatori
+    var html = '<div style="margin-top:30px;text-align:center;"><h3 style="color:#fff;margin-bottom:25px;font-size:20px;">Seleziona il tuo profilo</h3><div style="display:flex;flex-direction:column;gap:12px;align-items:center;">';
+    for (var i = 0; i < tasters.length; i++) {
+      var t = tasters[i];
+      var name = t.name || ('Degustatore ' + t.id);
+      html += '<button onclick="window.selectSplashTasterV2(' + t.id + ',\'' + name.replace(/'/g, "\\'") + '\')" style="padding:14px 28px;background:transparent;border:2px solid rgba(255,255,255,0.3);color:#fff;border-radius:10px;font-size:17px;min-width:200px;cursor:pointer;transition:all 0.2s;">' + name + '</button>';
+    }
+    html += '</div></div>';
+    list.innerHTML = html;
+    list.classList.add('visible');
+    console.log('✅ Splash tasters V2: ' + tasters.length + ' degustatori');
+  };
+
+  window.selectSplashTasterV2 = function(id, name) {
+    // Salva degustatore attivo
+    localStorage.setItem(ACTIVE_TASTER_ID_KEY, String(id));
+    localStorage.setItem(ACTIVE_TASTER_NAME_KEY, name);
+    if (typeof selectedGlobalTaster !== 'undefined') {
+      selectedGlobalTaster = { id: id, name: name };
+    }
+    console.log('👤 Degustatore selezionato:', name, '(ID:', id, ')');
+    
+    // Chiudi splash
+    var sp = document.getElementById("splashScreen");
+    if (sp) { 
+      sp.classList.add("hide"); 
+      setTimeout(function(){ sp.style.display = "none"; }, 400); 
+    }
+    
+    // Naviga a preparazione
+    setTimeout(function() {
+      if (typeof go === 'function') {
+        go("preparazione", document.getElementById("btnMenuPrep"));
+      }
+    }, 500);
+  };
+
+  window.closeSplashAndProceed = function() {
+    var sp = document.getElementById("splashScreen");
+    if (sp) { 
+      sp.classList.add("hide"); 
+      setTimeout(function(){ sp.style.display = "none"; }, 400); 
+    }
+    setTimeout(function() {
+      if (typeof go === 'function') {
+        go("preparazione", document.getElementById("btnMenuPrep"));
+      }
+    }, 500);
+  };
+  
+  // Helper per ottenere degustatore attivo
+  window.getActiveTaster = function() {
+    var id = localStorage.getItem(ACTIVE_TASTER_ID_KEY);
+    var name = localStorage.getItem(ACTIVE_TASTER_NAME_KEY);
+    return id ? { id: parseInt(id, 10), name: name } : null;
+  };
+  
+  // Helper per cancellare degustatore attivo
+  window.clearActiveTaster = function() {
+    localStorage.removeItem(ACTIVE_TASTER_ID_KEY);
+    localStorage.removeItem(ACTIVE_TASTER_NAME_KEY);
+  };
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- V181: iOS-Style Notes Fullscreen -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<div id="notesFullscreenV181">
+  <div class="notes-ios-header">
+    <button class="notes-ios-back" onclick="closeNotesFullscreenV181()">
+      <span style="font-size:24px;">‹</span>
+      <span>Note</span>
+    </button>
+    <div style="flex:1;"></div>
+    <div class="notes-ios-actions">
+      <button class="btn" onclick="clearNotesFullscreenV181()" style="background:#fff;color:#666;border:1px solid #ddd;padding:8px 12px;border-radius:8px;">🗑️</button>
+      <button class="notes-ios-done" onclick="closeNotesFullscreenV181()">✓</button>
+    </div>
+  </div>
+  <div class="notes-ios-body">
+    <div class="notes-ios-canvas-wrap">
+      <div class="notes-ios-lines"></div>
+      <canvas id="notesFullscreenCanvas" class="notes-ios-canvas"></canvas>
+    </div>
+  </div>
+  <div class="notes-ios-toolbar">
+    <div class="notes-ios-toolbar-inner">
+      <button class="notes-ios-tool active" id="toolPenV181" onclick="setNotesToolV181('pen')">
+        <div style="width:3px;height:36px;background:#000;border-radius:1px;transform:rotate(-30deg);"></div>
+      </button>
+      <button class="notes-ios-tool" id="toolPencilV181" onclick="setNotesToolV181('pencil')">
+        <div style="width:4px;height:36px;background:linear-gradient(to bottom, #f4d03f, #f39c12);border-radius:1px;transform:rotate(-30deg);"></div>
+      </button>
+      <button class="notes-ios-tool" id="toolHighlightV181" onclick="setNotesToolV181('highlight')">
+        <div style="width:8px;height:30px;background:rgba(255,235,59,0.7);border-radius:2px;transform:rotate(-30deg);"></div>
+      </button>
+      <button class="notes-ios-tool" id="toolEraserV181" onclick="setNotesToolV181('eraser')">
+        <div style="width:12px;height:20px;background:#e8b4b8;border-radius:2px;transform:rotate(-30deg);"></div>
+      </button>
+      <div class="notes-ios-color-btn" onclick="toggleNotesColorPickerV181()" title="Colore"></div>
+    </div>
+  </div>
+</div>
+
+<!-- V181: Notes Color Picker -->
+<div id="notesColorPickerV181" style="display:none;position:fixed;bottom:120px;left:50%;transform:translateX(-50%);background:#fff;padding:15px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.25);z-index:1000000;">
+  <div style="display:flex;gap:10px;">
+    <div onclick="setNotesColorV181('#000000')" style="width:32px;height:32px;background:#000;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+    <div onclick="setNotesColorV181('#e74c3c')" style="width:32px;height:32px;background:#e74c3c;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+    <div onclick="setNotesColorV181('#3498db')" style="width:32px;height:32px;background:#3498db;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+    <div onclick="setNotesColorV181('#27ae60')" style="width:32px;height:32px;background:#27ae60;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+    <div onclick="setNotesColorV181('#f39c12')" style="width:32px;height:32px;background:#f39c12;border-radius:50%;cursor:pointer;border:2px solid #fff;box-shadow:0 2px 4px rgba(0,0,0,0.2);"></div>
+  </div>
+</div>
+
+<!-- V182: Notes Fullscreen JavaScript with Proper Storage -->
+<script>
+(function() {
+  var fsCanvas = null;
+  var fsCtx = null;
+  var fsIsDrawing = false;
+  var fsLastX = 0;
+  var fsLastY = 0;
+  var fsTool = 'pen';
+  var fsColor = '#000000';
+  var fsDpr = 1;
+  var mainCanvas = null;
+  var fsWidth = 0;
+  var fsHeight = 0;
+  
+  window.openNotesFullscreenV181 = function() {
+    console.log('🔍 openNotesFullscreenV181() chiamato');
+    
+    var overlay = document.getElementById('notesFullscreenV181');
+    if (!overlay) {
+      console.error('❌ Overlay notesFullscreenV181 non trovato');
+      if (typeof openA4Overlay === 'function') {
+        return openA4Overlay();
+      }
+      return;
+    }
+    
+    // Get main canvas (widget)
+    mainCanvas = document.getElementById('drawingCanvas');
+    
+    // Mostra overlay
+    overlay.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    // Setup canvas dopo che overlay è visibile
+    setTimeout(function() {
+      fsCanvas = document.getElementById('notesFullscreenCanvas');
+      if (!fsCanvas) {
+        console.error('❌ Canvas notesFullscreenCanvas non trovato');
+        return;
+      }
+      
+      var body = overlay.querySelector('.notes-ios-body');
+      if (!body) {
+        console.error('❌ notes-ios-body non trovato');
+        return;
+      }
+      
+      var rect = body.getBoundingClientRect();
+      fsDpr = window.devicePixelRatio || 1;
+      fsWidth = rect.width;
+      fsHeight = rect.height;
+      
+      fsCanvas.width = Math.max(1, rect.width * fsDpr);
+      fsCanvas.height = Math.max(1, rect.height * fsDpr);
+      fsCanvas.style.width = rect.width + 'px';
+      fsCanvas.style.height = rect.height + 'px';
+      
+      fsCtx = fsCanvas.getContext('2d');
+      fsCtx.setTransform(fsDpr, 0, 0, fsDpr, 0, 0);
+      fsCtx.lineCap = 'round';
+      fsCtx.lineJoin = 'round';
+      
+      // V182: PRIMA carica da storage salvato, POI dal widget se storage è vuoto
+      loadCanvasFromStorage(function(loaded) {
+        if (!loaded) {
+          // Se non c'è nulla in storage, copia dal widget
+          if (mainCanvas && mainCanvas.width > 0 && mainCanvas.height > 0) {
+            try {
+              fsCtx.drawImage(mainCanvas, 0, 0, fsWidth, fsHeight);
+              console.log('✅ Contenuto copiato da widget (nessun dato in storage)');
+            } catch(e) {
+              console.error('Errore copia canvas:', e);
+            }
+          }
+        }
+        
+        // Setup eventi disegno
+        setupFSDrawingV181();
+        
+        console.log('✅ Notes Fullscreen V182 aperto:', fsWidth + 'x' + fsHeight);
+      });
+    }, 100);
+  };
+  
+  // V182: Funzione per caricare canvas da storage
+  function loadCanvasFromStorage(callback) {
+    try {
+      var t = typeof getTasting === 'function' ? getTasting() : null;
+      var tid = typeof currentTasterId === 'function' ? currentTasterId() : null;
+      var sid = typeof selectedSampleId !== 'undefined' ? selectedSampleId : null;
+      
+      if (!t || !tid || !sid) {
+        console.log('⚠️ Nessun contesto tasting/taster/sample');
+        callback(false);
+        return;
+      }
+      
+      var ev = typeof getEval === 'function' ? getEval(t, tid, sid) : null;
+      
+      // V182: Prima prova canvasFS (fullscreen), poi canvas (widget)
+      var canvasData = null;
+      if (ev && ev.data && ev.data.vista) {
+        canvasData = ev.data.vista.canvasFS || ev.data.vista.canvas;
+      }
+      
+      if (canvasData && canvasData.length > 100) {
+        var img = new Image();
+        img.onload = function() {
+          // Disegna immagine salvata sul canvas fullscreen
+          fsCtx.drawImage(img, 0, 0, fsWidth, fsHeight);
+          console.log('✅ Canvas caricato da storage salvato (canvasFS o canvas)');
+          callback(true);
+        };
+        img.onerror = function() {
+          console.error('❌ Errore caricamento immagine da storage');
+          callback(false);
+        };
+        img.src = canvasData;
+      } else {
+        console.log('📭 Nessun canvas salvato in storage');
+        callback(false);
+      }
+    } catch(e) {
+      console.error('Errore loadCanvasFromStorage:', e);
+      callback(false);
+    }
+  }
+  
+  // V182: Funzione per salvare canvas in storage
+  function saveCanvasToStorage() {
+    try {
+      var t = typeof getTasting === 'function' ? getTasting() : null;
+      var tid = typeof currentTasterId === 'function' ? currentTasterId() : null;
+      var sid = typeof selectedSampleId !== 'undefined' ? selectedSampleId : null;
+      
+      if (!t || !tid || !sid) {
+        console.log('⚠️ Impossibile salvare: nessun contesto');
+        return false;
+      }
+      
+      var ev = typeof getEval === 'function' ? getEval(t, tid, sid) : null;
+      if (!ev) {
+        console.log('⚠️ Impossibile salvare: nessuna evaluation');
+        return false;
+      }
+      
+      if (!ev.data) ev.data = {};
+      if (!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null, canvasFS:null};
+      
+      // Salva il canvas fullscreen come PNG base64
+      var dataUrl = fsCanvas.toDataURL('image/png');
+      
+      // V182: Salva in ENTRAMBI i campi per compatibilità
+      ev.data.vista.canvas = dataUrl;
+      ev.data.vista.canvasFS = dataUrl;
+      
+      // Aggiorna timestamp
+      ev.updatedAt = typeof nowIso === 'function' ? nowIso() : new Date().toISOString();
+      
+      // Salva stato
+      if (typeof saveState === 'function') {
+        saveState({skipCloud: false});
+      }
+      
+      // Queue cloud sync se disponibile
+      if (window.queueCanvasSync) {
+        window.queueCanvasSync(t.id, tid, sid, dataUrl);
+      }
+      
+      console.log('💾 Canvas salvato in storage (canvas + canvasFS)');
+      return true;
+    } catch(e) {
+      console.error('Errore saveCanvasToStorage:', e);
+      return false;
+    }
+  }
+  
+  window.closeNotesFullscreenV181 = function() {
+    var overlay = document.getElementById('notesFullscreenV181');
+    if (!overlay) return;
+    
+    // V182: Prima salva in storage
+    saveCanvasToStorage();
+    
+    // Sync to main canvas (widget) per visualizzazione
+    if (fsCanvas && mainCanvas) {
+      try {
+        var mainCtx = mainCanvas.getContext('2d');
+        var mainDpr = window.devicePixelRatio || 1;
+        var mw = mainCanvas.width / mainDpr;
+        var mh = mainCanvas.height / mainDpr;
+        mainCtx.clearRect(0, 0, mw, mh);
+        mainCtx.drawImage(fsCanvas, 0, 0, mw, mh);
+        console.log('✅ Contenuto sync a widget');
+      } catch(e) {
+        console.error('Sync error:', e);
+      }
+    }
+    
+    overlay.style.display = 'none';
+    document.body.style.overflow = '';
+    
+    var picker = document.getElementById('notesColorPickerV181');
+    if (picker) picker.style.display = 'none';
+    
+    console.log('✅ Notes Fullscreen V182 chiuso');
+  };
+  
+  window.clearNotesFullscreenV181 = function() {
+    if (!confirm('Cancellare tutti gli appunti?')) return;
+    if (fsCtx && fsCanvas) {
+      fsCtx.clearRect(0, 0, fsCanvas.width / fsDpr, fsCanvas.height / fsDpr);
+      // Salva immediatamente dopo cancellazione
+      saveCanvasToStorage();
+      // Sync anche al widget
+      if (mainCanvas) {
+        var mainCtx = mainCanvas.getContext('2d');
+        var mainDpr = window.devicePixelRatio || 1;
+        mainCtx.clearRect(0, 0, mainCanvas.width / mainDpr, mainCanvas.height / mainDpr);
+      }
+    }
+  };
+  
+  window.setNotesToolV181 = function(tool) {
+    fsTool = tool;
+    document.querySelectorAll('.notes-ios-tool').forEach(function(btn) {
+      btn.classList.remove('active');
+    });
+    var btn = document.getElementById('tool' + tool.charAt(0).toUpperCase() + tool.slice(1) + 'V181');
+    if (btn) btn.classList.add('active');
+    
+    var picker = document.getElementById('notesColorPickerV181');
+    if (picker) picker.style.display = 'none';
+  };
+  
+  window.setNotesColorV181 = function(color) {
+    fsColor = color;
+    var picker = document.getElementById('notesColorPickerV181');
+    if (picker) picker.style.display = 'none';
+  };
+  
+  window.toggleNotesColorPickerV181 = function() {
+    var picker = document.getElementById('notesColorPickerV181');
+    if (picker) {
+      picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
+    }
+  };
+  
+  function setupFSDrawingV181() {
+    if (!fsCanvas) return;
+    
+    // V182: Salva il contenuto corrente prima del clone
+    var tempCanvas = document.createElement('canvas');
+    tempCanvas.width = fsCanvas.width;
+    tempCanvas.height = fsCanvas.height;
+    var tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(fsCanvas, 0, 0);
+    
+    // Clone per rimuovere vecchi listener
+    var newCanvas = fsCanvas.cloneNode(true);
+    fsCanvas.parentNode.replaceChild(newCanvas, fsCanvas);
+    fsCanvas = newCanvas;
+    fsCtx = fsCanvas.getContext('2d');
+    fsCtx.setTransform(fsDpr, 0, 0, fsDpr, 0, 0);
+    fsCtx.lineCap = 'round';
+    fsCtx.lineJoin = 'round';
+    
+    // V182: Ripristina il contenuto salvato
+    fsCtx.drawImage(tempCanvas, 0, 0);
+    
+    fsCanvas.addEventListener('pointerdown', onFsDown, {passive: false});
+    fsCanvas.addEventListener('pointermove', onFsMove, {passive: false});
+    fsCanvas.addEventListener('pointerup', onFsUp, {passive: false});
+    fsCanvas.addEventListener('pointercancel', onFsUp, {passive: false});
+    fsCanvas.addEventListener('pointerleave', onFsUp, {passive: false});
+    
+    console.log('✅ Drawing events V182 setup (contenuto preservato)');
+  }
+  
+  function onFsDown(e) {
+    e.preventDefault();
+    fsIsDrawing = true;
+    var rect = fsCanvas.getBoundingClientRect();
+    fsLastX = e.clientX - rect.left;
+    fsLastY = e.clientY - rect.top;
+    fsCtx.beginPath();
+    fsCtx.moveTo(fsLastX, fsLastY);
+  }
+  
+  function onFsMove(e) {
+    if (!fsIsDrawing) return;
+    e.preventDefault();
+    
+    var rect = fsCanvas.getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var y = e.clientY - rect.top;
+    
+    fsCtx.beginPath();
+    fsCtx.moveTo(fsLastX, fsLastY);
+    fsCtx.lineTo(x, y);
+    
+    switch(fsTool) {
+      case 'eraser':
+        fsCtx.globalCompositeOperation = 'destination-out';
+        fsCtx.lineWidth = 20;
+        fsCtx.strokeStyle = 'rgba(0,0,0,1)';
+        break;
+      case 'highlight':
+        fsCtx.globalCompositeOperation = 'multiply';
+        fsCtx.lineWidth = 20;
+        fsCtx.strokeStyle = 'rgba(255,235,59,0.4)';
+        break;
+      case 'pencil':
+        fsCtx.globalCompositeOperation = 'source-over';
+        fsCtx.lineWidth = 1;
+        fsCtx.strokeStyle = fsColor;
+        break;
+      default:
+        fsCtx.globalCompositeOperation = 'source-over';
+        fsCtx.lineWidth = 2;
+        fsCtx.strokeStyle = fsColor;
+    }
+    
+    fsCtx.stroke();
+    fsLastX = x;
+    fsLastY = y;
+  }
+  
+  function onFsUp(e) {
+    if (!fsIsDrawing) return;
+    fsIsDrawing = false;
+    fsCtx.closePath();
+    fsCtx.globalCompositeOperation = 'source-over';
+    
+    // V182: Sync immediato al widget E salva in storage
+    syncToWidgetAndSave();
+  }
+  
+  function syncToWidgetAndSave() {
+    // Sync al widget per preview
+    if (fsCanvas && mainCanvas) {
+      try {
+        var mainCtx = mainCanvas.getContext('2d');
+        var mainDpr = window.devicePixelRatio || 1;
+        var mw = mainCanvas.width / mainDpr;
+        var mh = mainCanvas.height / mainDpr;
+        mainCtx.clearRect(0, 0, mw, mh);
+        mainCtx.drawImage(fsCanvas, 0, 0, mw, mh);
+      } catch(e) {}
+    }
+    
+    // Salva in storage (debounced per performance)
+    if (window._saveNotesTimeout) clearTimeout(window._saveNotesTimeout);
+    window._saveNotesTimeout = setTimeout(function() {
+      saveCanvasToStorage();
+    }, 500);
+  }
+  
+  // ESC per chiudere
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var overlay = document.getElementById('notesFullscreenV181');
+      if (overlay && overlay.style.display !== 'none') {
+        closeNotesFullscreenV181();
+      }
+    }
+  });
+  
+  // V182: Quando il widget viene modificato, salva anche quello
+  setTimeout(function() {
+    var widget = document.getElementById('drawingCanvas');
+    if (widget) {
+      var saveWidgetToStorage = function() {
+        try {
+          var t = typeof getTasting === 'function' ? getTasting() : null;
+          var tid = typeof currentTasterId === 'function' ? currentTasterId() : null;
+          var sid = typeof selectedSampleId !== 'undefined' ? selectedSampleId : null;
+          
+          if (!t || !tid || !sid) return;
+          
+          var ev = typeof getEval === 'function' ? getEval(t, tid, sid) : null;
+          if (!ev) return;
+          
+          if (!ev.data) ev.data = {};
+          if (!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null, canvasFS:null};
+          
+          var dataUrl = widget.toDataURL('image/png');
+          
+          // V182: Salva in ENTRAMBI i campi
+          ev.data.vista.canvas = dataUrl;
+          ev.data.vista.canvasFS = dataUrl;
+          
+          // Aggiorna timestamp
+          ev.updatedAt = typeof nowIso === 'function' ? nowIso() : new Date().toISOString();
+          
+          if (typeof saveState === 'function') {
+            saveState({skipCloud: false});
+          }
+          
+          // Queue cloud sync se disponibile
+          if (window.queueCanvasSync) {
+            window.queueCanvasSync(t.id, tid, sid, dataUrl);
+          }
+          
+          console.log('💾 Widget canvas salvato (canvas + canvasFS)');
+        } catch(e) {
+          console.error('Widget save error:', e);
+        }
+      };
+      
+      // Salva quando si finisce di disegnare sul widget
+      widget.addEventListener('pointerup', function() {
+        if (window._saveWidgetTimeout) clearTimeout(window._saveWidgetTimeout);
+        window._saveWidgetTimeout = setTimeout(saveWidgetToStorage, 500);
+      });
+      widget.addEventListener('touchend', function() {
+        if (window._saveWidgetTimeout) clearTimeout(window._saveWidgetTimeout);
+        window._saveWidgetTimeout = setTimeout(saveWidgetToStorage, 500);
+      });
+      
+      console.log('✅ Widget auto-save V182 attivato');
+    }
+  }, 2000);
+  
+  console.log('✅ Notes V182 module loaded');
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- V181: CSV & MD EXPORT -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<script>
+(function() {
+  // V181: CSV Export
+  window.exportComparisonCSV = function() {
+    var sel = document.getElementById('resultsDegSelect');
+    var tid = sel ? sel.value : (state.ui.resultsTastingId || '');
+    var tasting = state.tastings.find(function(t) { return t.id === tid; });
+    
+    if(!tasting || !tasting.samples || tasting.samples.length === 0) {
+      alert('Seleziona una degustazione con campioni da esportare');
+      return;
+    }
+
+    console.log('📊 Export CSV V181');
+
+    var rows = [];
+    var header = ['Campione', 'Degustatore', 'Profilo', 'Gruppo', 'Preferito', 'Descrittori_Vista', 'Descrittori_Olfatto'];
+    rows.push(header.join(';'));
+
+    var tasterIds = tasting.tasterIds || [];
+    if(tasterIds.length === 0 && tasting.evaluations) {
+      tasterIds = Object.keys(tasting.evaluations).map(function(k) { return parseInt(k, 10); });
+    }
+
+    tasting.samples.forEach(function(sample) {
+      var sampleId = String(sample.id || '');
+      var sampleName = '';
+      
+      if(tasting.mode === 'cieca') {
+        sampleName = 'Campione ' + sampleId.padStart(2, '0');
+      } else {
+        var c = (sample.cols || []).slice(0, 4);
+        sampleName = (c[0] + ' ' + (c[1] || '')).trim() || ('Campione ' + sampleId.padStart(2, '0'));
+      }
+
+      tasterIds.forEach(function(tasterId) {
+        var taster = state.tasters.find(function(x) { return String(x.id) === String(tasterId); });
+        var tasterName = taster ? taster.name : ('Degustatore ' + tasterId);
+
+        var ev = null;
+        if(tasting.evaluations && tasting.evaluations[String(tasterId)]) {
+          ev = tasting.evaluations[String(tasterId)][String(sampleId)];
+        }
+
+        var profileName = '';
+        if(ev && ev.profileKey) {
+          var prof = state.profiles.find(function(x) { return x.key === ev.profileKey; });
+          profileName = prof ? prof.label : ev.profileKey;
+        }
+
+        var groupName = '';
+        if(sample.groupKey) {
+          var g = (tasting.groups || []).find(function(x) { return x.key === sample.groupKey; });
+          groupName = g ? g.label : sample.groupKey;
+        }
+
+        var favourite = (ev && ev.favourite) ? 'Sì' : '';
+        var descVista = (ev && ev.data && ev.data.vista && ev.data.vista.desc) ? ev.data.vista.desc.join(', ') : '';
+        var descOlfatto = (ev && ev.data && ev.data.olfatto && ev.data.olfatto.desc) ? ev.data.olfatto.desc.join(', ') : '';
+
+        var row = [sampleName, tasterName, profileName, groupName, favourite, descVista, descOlfatto];
+        rows.push(row.map(function(c) { return '"' + String(c || '').replace(/"/g, '""') + '"'; }).join(';'));
+      });
+    });
+
+    var csvContent = '\uFEFF' + rows.join('\n');
+    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    var link = document.createElement('a');
+    var url = URL.createObjectURL(blob);
+    var fileName = 'export_' + (tasting.title || 'degustazione').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    console.log('✅ CSV esportato: ' + fileName);
+    if(typeof toast === 'function') toast('Esportato: ' + fileName);
+  };
+
+  // Backward compatibility
+  window.exportComparisonTableToExcel = window.exportComparisonCSV;
+
+  // V181: MD Export con struttura gerarchica
+  window.exportComparisonMD = function() {
+    var sel = document.getElementById('resultsDegSelect');
+    var tid = sel ? sel.value : (state.ui.resultsTastingId || '');
+    var tasting = state.tastings.find(function(t) { return t.id === tid; });
+    
+    if(!tasting || !tasting.samples || tasting.samples.length === 0) {
+      alert('Seleziona una degustazione con campioni da esportare');
+      return;
+    }
+
+    console.log('📝 Export MD V181');
+
+    var md = [];
+    
+    // Titolo
+    md.push('# ' + (tasting.title || 'Degustazione'));
+    md.push('');
+    md.push('**Data:** ' + (tasting.finishedAt ? new Date(tasting.finishedAt).toLocaleDateString('it-IT') : new Date().toLocaleDateString('it-IT')));
+    md.push('**Modalità:** ' + (tasting.mode === 'cieca' ? 'Alla cieca' : 'Scoperta'));
+    md.push('**Campioni:** ' + tasting.samples.length);
+    md.push('');
+    md.push('---');
+    md.push('');
+
+    var tasterIds = tasting.tasterIds || [];
+    if(tasterIds.length === 0 && tasting.evaluations) {
+      tasterIds = Object.keys(tasting.evaluations).map(function(k) { return parseInt(k, 10); });
+    }
+
+    // Per ogni campione
+    tasting.samples.forEach(function(sample) {
+      var sampleId = String(sample.id || '');
+      var sampleName = '';
+      
+      if(tasting.mode === 'cieca') {
+        sampleName = 'Campione ' + sampleId.padStart(2, '0');
+        var pid = (tasting.blindMap || {})[sampleId];
+        if(pid) {
+          var p = (tasting.products || []).find(function(x) { return String(x.id) === String(pid); });
+          if(p && p.cols) {
+            var pc = p.cols.slice(0, 4);
+            var pname = (pc[0] + ' ' + (pc[1] || '')).trim();
+            if(pname) sampleName += ' (' + pname + ')';
+          }
+        }
+      } else {
+        var c = (sample.cols || []).slice(0, 4);
+        sampleName = (c[0] + ' ' + (c[1] || '')).trim() || ('Campione ' + sampleId.padStart(2, '0'));
+      }
+
+      md.push('* **' + sampleName + '**');
+
+      // Per ogni degustatore
+      tasterIds.forEach(function(tasterId) {
+        var taster = state.tasters.find(function(x) { return String(x.id) === String(tasterId); });
+        var tasterName = taster ? taster.name : ('Degustatore ' + tasterId);
+
+        var ev = null;
+        if(tasting.evaluations && tasting.evaluations[String(tasterId)]) {
+          ev = tasting.evaluations[String(tasterId)][String(sampleId)];
+        }
+
+        md.push('  * **' + tasterName + '**');
+        
+        // Profilo
+        if(ev && ev.profileKey) {
+          var prof = state.profiles.find(function(x) { return x.key === ev.profileKey; });
+          var profileName = prof ? prof.label : ev.profileKey;
+          md.push('    * Profilo: ' + profileName);
+        }
+
+        // Gruppo
+        if(sample.groupKey) {
+          var g = (tasting.groups || []).find(function(x) { return x.key === sample.groupKey; });
+          var groupName = g ? g.label : sample.groupKey;
+          md.push('    * Gruppo: ' + groupName);
+        }
+
+        // Preferito
+        if(ev && ev.favourite) {
+          md.push('    * Preferito: ⭐ Sì');
+        }
+
+        // Descrittori per famiglia
+        if(ev && ev.data) {
+          // Vista
+          if(ev.data.vista && ev.data.vista.desc && ev.data.vista.desc.length > 0) {
+            md.push('    * Vista');
+            ev.data.vista.desc.forEach(function(d) {
+              md.push('      * ' + d);
+            });
+          }
+          
+          // Olfatto
+          if(ev.data.olfatto && ev.data.olfatto.desc && ev.data.olfatto.desc.length > 0) {
+            md.push('    * Olfatto');
+            ev.data.olfatto.desc.forEach(function(d) {
+              md.push('      * ' + d);
+            });
+          }
+          
+          // Gusto
+          if(ev.data.gusto && ev.data.gusto.desc && ev.data.gusto.desc.length > 0) {
+            md.push('    * Gusto');
+            ev.data.gusto.desc.forEach(function(d) {
+              md.push('      * ' + d);
+            });
+          }
+        }
+      });
+      
+      md.push('');
+    });
+
+    var mdContent = md.join('\n');
+
+    var blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8;' });
+    var link = document.createElement('a');
+    var url = URL.createObjectURL(blob);
+    var fileName = 'export_' + (tasting.title || 'degustazione').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().slice(0,10) + '.md';
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    console.log('✅ MD esportato: ' + fileName);
+    if(typeof toast === 'function') toast('Esportato: ' + fileName);
+  };
+
+  console.log('✅ V181 Export module loaded');
+})();
+</script>
 
 </body>
 </html>
