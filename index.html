@@ -5,9 +5,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
+<!-- V186: Date->CreatedAt + Notes Paper Options + Splash Center -->
 <!-- V185: Edit Date + Sample Active Flag + MD Export Fix -->
 <!-- V184: Notes Fullpage + Multi-Compare Fix + BlindMap Fix -->
-<!-- V183: Login Persist + ZEN+ Fix + Notes Aspect Ratio + Multi Compare -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -1223,6 +1223,10 @@ button.zenplus-btn:hover:not(:disabled) {
   max-width: 600px;
   width: 90%;
   align-items: center;
+  /* V186: Ensure proper centering */
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
 }
 
 #splash-tasters-list.visible {
@@ -1235,6 +1239,8 @@ button.zenplus-btn:hover:not(:disabled) {
   gap: 12px;
   align-items: center;
   width: 100%;
+  /* V186: Center container */
+  justify-content: center;
 }
 
 .splash-taster-btn {
@@ -1380,21 +1386,146 @@ button.zenplus-btn:hover:not(:disabled) {
   box-shadow: 0 2px 10px rgba(0,0,0,0.15);
 }
 
-/* V184: Linee di quaderno opzionali */
+/* V186: Paper patterns - Lined by default */
 .notes-ios-lines {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* V186: Paper types */
+.notes-ios-lines.paper-lined {
   background: repeating-linear-gradient(
     transparent,
     transparent 39px,
-    #e8e8e8 39px,
-    #e8e8e8 40px
+    #d0d0d0 39px,
+    #d0d0d0 40px
   );
-  pointer-events: none;
-  display: none; /* Nascoste di default */
+}
+
+.notes-ios-lines.paper-grid {
+  background: 
+    repeating-linear-gradient(transparent, transparent 39px, #d0d0d0 39px, #d0d0d0 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, #d0d0d0 39px, #d0d0d0 40px);
+}
+
+.notes-ios-lines.paper-blank {
+  background: transparent;
+}
+
+/* V186: Notes settings menu */
+.notes-settings-btn {
+  width: 40px;
+  height: 40px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notes-settings-menu {
+  display: none;
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  z-index: 1000000;
+  min-width: 240px;
+}
+
+.notes-settings-menu.visible {
+  display: block;
+}
+
+.notes-settings-section {
+  margin-bottom: 15px;
+}
+
+.notes-settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.notes-settings-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.notes-settings-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.notes-paper-btn {
+  flex: 1;
+  padding: 10px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.notes-paper-btn.active {
+  border-color: #722F37;
+  background: #fff8f8;
+  color: #722F37;
+}
+
+.notes-stroke-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notes-stroke-btn.active {
+  border-color: #722F37;
+  background: #fff8f8;
+}
+
+.notes-stroke-btn .stroke-preview {
+  background: #333;
+  border-radius: 50%;
+}
+
+/* V186: Highlighter color picker */
+.notes-highlighter-colors {
+  display: flex;
+  gap: 8px;
+}
+
+.notes-highlighter-color {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.notes-highlighter-color.active {
+  border-color: #333;
 }
 
 .notes-ios-canvas {
@@ -1468,9 +1599,9 @@ button.zenplus-btn:hover:not(:disabled) {
   <div id="splashScreen">
   <div id="splashInner">
     <img id="splashLogo" src="logo.png" alt="Logo" />
-    <div id="splashTitle">DegustAPP
+    <div id="splashTitle">DegustAPP</div>
+    <!-- V186: Moved outside splashTitle for proper centering -->
     <div id="splash-tasters-list"></div>
-  </div>
   </div>
 </div>
   <script>
@@ -6300,7 +6431,7 @@ function onResultsSearch(val){
         status: status,
         mode: mode,
         tastingDate: tastingDate, // V185: Tasting date
-        createdAt: existing ? existing.createdAt : nowIso(),
+        createdAt: tastingDate + 'T12:00:00.000Z', // V186: createdAt syncs with tastingDate
         finishedAt: existing ? existing.finishedAt : null,
         columns: ["Col1","Col2","Col3","Col4"],
         groups: existing ? existing.groups : clone(state.groups),
@@ -9467,12 +9598,15 @@ document.addEventListener('DOMContentLoaded', function() {
     <div style="flex:1;"></div>
     <div class="notes-ios-actions">
       <button class="btn" onclick="clearNotesFullscreenV181()" style="background:#fff;color:#666;border:1px solid #ddd;padding:8px 12px;border-radius:8px;">🗑️</button>
+      <!-- V186: Settings button -->
+      <button class="notes-settings-btn" onclick="toggleNotesSettingsV186()">⚙️</button>
       <button class="notes-ios-done" onclick="closeNotesFullscreenV181()">✓</button>
     </div>
   </div>
   <div class="notes-ios-body">
     <div class="notes-ios-canvas-wrap">
-      <div class="notes-ios-lines"></div>
+      <!-- V186: Lined paper by default -->
+      <div class="notes-ios-lines paper-lined" id="notesPaperOverlay"></div>
       <canvas id="notesFullscreenCanvas" class="notes-ios-canvas"></canvas>
     </div>
   </div>
@@ -9485,7 +9619,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div style="width:4px;height:36px;background:linear-gradient(to bottom, #f4d03f, #f39c12);border-radius:1px;transform:rotate(-30deg);"></div>
       </button>
       <button class="notes-ios-tool" id="toolHighlightV181" onclick="setNotesToolV181('highlight')">
-        <div style="width:8px;height:30px;background:rgba(255,235,59,0.7);border-radius:2px;transform:rotate(-30deg);"></div>
+        <div id="highlighterPreview" style="width:8px;height:30px;background:rgba(255,235,59,0.7);border-radius:2px;transform:rotate(-30deg);"></div>
       </button>
       <button class="notes-ios-tool" id="toolEraserV181" onclick="setNotesToolV181('eraser')">
         <div style="width:12px;height:20px;background:#e8b4b8;border-radius:2px;transform:rotate(-30deg);"></div>
@@ -9506,6 +9640,42 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
+<!-- V186: Notes Settings Menu -->
+<div id="notesSettingsMenuV186" class="notes-settings-menu">
+  <div class="notes-settings-section">
+    <div class="notes-settings-label">Tipo foglio</div>
+    <div class="notes-settings-row">
+      <button class="notes-paper-btn" onclick="setNotesPaperV186('blank')">Bianco</button>
+      <button class="notes-paper-btn active" onclick="setNotesPaperV186('lined')">A righe</button>
+      <button class="notes-paper-btn" onclick="setNotesPaperV186('grid')">Quadretti</button>
+    </div>
+  </div>
+  <div class="notes-settings-section">
+    <div class="notes-settings-label">Spessore tratto</div>
+    <div class="notes-settings-row">
+      <button class="notes-stroke-btn active" onclick="setNotesStrokeV186(1)" data-stroke="1">
+        <div class="stroke-preview" style="width:4px;height:4px;"></div>
+      </button>
+      <button class="notes-stroke-btn" onclick="setNotesStrokeV186(2)" data-stroke="2">
+        <div class="stroke-preview" style="width:8px;height:8px;"></div>
+      </button>
+      <button class="notes-stroke-btn" onclick="setNotesStrokeV186(3)" data-stroke="3">
+        <div class="stroke-preview" style="width:12px;height:12px;"></div>
+      </button>
+    </div>
+  </div>
+  <div class="notes-settings-section">
+    <div class="notes-settings-label">Colore evidenziatore</div>
+    <div class="notes-highlighter-colors">
+      <div class="notes-highlighter-color active" style="background:rgba(255,235,59,0.7);" onclick="setHighlighterColorV186('#ffeb3b')"></div>
+      <div class="notes-highlighter-color" style="background:rgba(76,175,80,0.5);" onclick="setHighlighterColorV186('#4caf50')"></div>
+      <div class="notes-highlighter-color" style="background:rgba(33,150,243,0.5);" onclick="setHighlighterColorV186('#2196f3')"></div>
+      <div class="notes-highlighter-color" style="background:rgba(233,30,99,0.5);" onclick="setHighlighterColorV186('#e91e63')"></div>
+      <div class="notes-highlighter-color" style="background:rgba(255,152,0,0.5);" onclick="setHighlighterColorV186('#ff9800')"></div>
+    </div>
+  </div>
+</div>
+
 <!-- V184: Notes Fullscreen JavaScript - Fullpage Edition -->
 <script>
 (function() {
@@ -9523,8 +9693,79 @@ document.addEventListener('DOMContentLoaded', function() {
   var INTERNAL_WIDTH = 2000;  // Risoluzione interna alta per qualità
   var INTERNAL_HEIGHT = 2828; // Ratio A4 (1:1.414)
   
+  // V186: Stroke size multiplier (1=fine, 2=medium, 3=thick)
+  var fsStrokeMultiplier = 1;
+  // V186: Highlighter color
+  var fsHighlighterColor = '#ffeb3b';
+  
+  // V186: Toggle settings menu
+  window.toggleNotesSettingsV186 = function() {
+    var menu = document.getElementById('notesSettingsMenuV186');
+    if (menu) {
+      menu.classList.toggle('visible');
+    }
+    // Hide color picker if open
+    var picker = document.getElementById('notesColorPickerV181');
+    if (picker) picker.style.display = 'none';
+  };
+  
+  // V186: Set paper type
+  window.setNotesPaperV186 = function(type) {
+    var overlay = document.getElementById('notesPaperOverlay');
+    if (!overlay) return;
+    
+    overlay.className = 'notes-ios-lines';
+    if (type === 'lined') overlay.classList.add('paper-lined');
+    else if (type === 'grid') overlay.classList.add('paper-grid');
+    else overlay.classList.add('paper-blank');
+    
+    // Update button states
+    document.querySelectorAll('.notes-paper-btn').forEach(function(btn) {
+      btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+  };
+  
+  // V186: Set stroke size
+  window.setNotesStrokeV186 = function(multiplier) {
+    fsStrokeMultiplier = multiplier;
+    
+    // Update button states
+    document.querySelectorAll('.notes-stroke-btn').forEach(function(btn) {
+      btn.classList.remove('active');
+      if (parseInt(btn.dataset.stroke) === multiplier) {
+        btn.classList.add('active');
+      }
+    });
+  };
+  
+  // V186: Set highlighter color
+  window.setHighlighterColorV186 = function(color) {
+    fsHighlighterColor = color;
+    
+    // Update preview
+    var preview = document.getElementById('highlighterPreview');
+    if (preview) {
+      preview.style.background = hexToRgbaHL(color, 0.7);
+    }
+    
+    // Update color selection
+    document.querySelectorAll('.notes-highlighter-color').forEach(function(el) {
+      el.classList.remove('active');
+    });
+    event.target.classList.add('active');
+  };
+  
+  // V186: Helper to convert hex to rgba for highlighter
+  function hexToRgbaHL(hex, alpha) {
+    var r = parseInt(hex.slice(1, 3), 16);
+    var g = parseInt(hex.slice(3, 5), 16);
+    var b = parseInt(hex.slice(5, 7), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+  
   window.openNotesFullscreenV181 = function() {
-    console.log('🔍 openNotesFullscreenV181() V184 Fullpage');
+    console.log('🔍 openNotesFullscreenV181() V186 Fullpage');
     
     var overlay = document.getElementById('notesFullscreenV181');
     if (!overlay) {
@@ -9698,7 +9939,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var picker = document.getElementById('notesColorPickerV181');
     if (picker) picker.style.display = 'none';
     
-    console.log('✅ Notes Fullscreen V184 chiuso');
+    // V186: Hide settings menu
+    var settings = document.getElementById('notesSettingsMenuV186');
+    if (settings) settings.classList.remove('visible');
+    
+    console.log('✅ Notes Fullscreen V186 chiuso');
   };
   
   // V184: Sync fullscreen to widget
@@ -9748,6 +9993,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (picker) {
       picker.style.display = picker.style.display === 'none' ? 'block' : 'none';
     }
+    // V186: Hide settings menu when opening color picker
+    var settings = document.getElementById('notesSettingsMenuV186');
+    if (settings) settings.classList.remove('visible');
   };
   
   // V184: Converti coordinate schermo in coordinate canvas interne
@@ -9814,24 +10062,25 @@ document.addEventListener('DOMContentLoaded', function() {
     fsCtx.moveTo(fsLastX, fsLastY);
     fsCtx.lineTo(x, y);
     
-    // V184: Line width scalato per risoluzione interna
-    var baseWidth = 3;
+    // V186: Line width scalato per risoluzione interna con moltiplicatore
+    var baseWidth = 3 * fsStrokeMultiplier; // V186: Apply stroke multiplier
     var scaleFactor = INTERNAL_WIDTH / 1000; // Scala rispetto a 1000px di riferimento
     
     switch(fsTool) {
       case 'eraser':
         fsCtx.globalCompositeOperation = 'destination-out';
-        fsCtx.lineWidth = 40 * scaleFactor;
+        fsCtx.lineWidth = 40 * scaleFactor * fsStrokeMultiplier;
         fsCtx.strokeStyle = 'rgba(0,0,0,1)';
         break;
       case 'highlight':
         fsCtx.globalCompositeOperation = 'multiply';
-        fsCtx.lineWidth = 40 * scaleFactor;
-        fsCtx.strokeStyle = 'rgba(255,235,59,0.4)';
+        fsCtx.lineWidth = 40 * scaleFactor * fsStrokeMultiplier;
+        // V186: Use configurable highlighter color
+        fsCtx.strokeStyle = hexToRgbaHL(fsHighlighterColor, 0.4);
         break;
       case 'pencil':
         fsCtx.globalCompositeOperation = 'source-over';
-        fsCtx.lineWidth = 2 * scaleFactor;
+        fsCtx.lineWidth = 2 * scaleFactor * fsStrokeMultiplier;
         fsCtx.strokeStyle = fsColor;
         break;
       default:
