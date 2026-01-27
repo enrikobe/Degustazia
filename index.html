@@ -5,9 +5,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
+<!-- V185: Edit Date + Sample Active Flag + MD Export Fix -->
 <!-- V184: Notes Fullpage + Multi-Compare Fix + BlindMap Fix -->
 <!-- V183: Login Persist + ZEN+ Fix + Notes Aspect Ratio + Multi Compare -->
-<!-- V182: Notes Storage Persistence Fix + Session Login + CSV/MD Export -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -2164,6 +2164,12 @@ function setCardColorMode(mode){
               <input class="input" id="degTitle" placeholder="es. Franciacorta panel interno" />
             </div>
 
+            <!-- V185: Campo data degustazione -->
+            <div class="form-group">
+              <label>Data degustazione</label>
+              <input class="input" type="date" id="degDate" />
+            </div>
+
             <div class="form-group">
               <label>Modalità</label>
               <select class="select" id="degMode" onchange="onModeChanged()">
@@ -3905,6 +3911,8 @@ function renderProductsStrip(){
       const ui = currentTasterId() ? getTasterUI(currentTasterId()) : { filterProfile:'tutti', filterGroup:'tutti', sort:'custom' }; const filterProfile = ui.filterProfile || "tutti";
       const filterGroup = ui.filterGroup || "tutti";
       let list = t.samples.slice();
+      // V185: Filter only active samples
+      list = list.filter(s => s.active !== false);
       try{ list = list.filter(s=>!isSampleHidden(t.id, s.id)); }catch(e){}
       if(ui.sort === 'custom') {
          if(tId) {
@@ -5970,6 +5978,8 @@ function onResultsSearch(val){
       document.getElementById("degTitle").value = "";
       document.getElementById("degStatus").value = "attiva";
       document.getElementById("degMode").value = "scoperta";
+      // V185: Set default date to today
+      document.getElementById("degDate").value = new Date().toISOString().split('T')[0];
 
       renderDraftTasters(state.tasters.map(t=>t.id));
       renderDraftTable();
@@ -5989,11 +5999,11 @@ function onResultsSearch(val){
       if(isBlind){
         const n = Math.max((t.samples||[]).length, (t.products||[]).length);
         for(let i=0;i<n;i++){
-          const s = (t.samples||[])[i] || { id:"", cols:["","","",""] };
+          const s = (t.samples||[])[i] || { id:"", cols:["","","",""], active: true };
           const p = (t.products||[])[i] || { id:null, cols:["","","",""] };
           const pc = cols4(p.cols);
           draft.items.push({
-            use: true,
+            use: s.active !== false, // V185: Use active flag from sample
             id: s.id || "",
             pid: p.id || null,
             groupKey: (s && ("groupKey" in s)) ? s.groupKey : null,
@@ -6001,10 +6011,10 @@ function onResultsSearch(val){
           });
         }
       } else {
-        // Load samples
+        // Load samples - V185: preserve active flag
         t.samples.forEach(s=>{
           draft.items.push({
-            use: true,
+            use: s.active !== false, // V185: Use active flag
             id: s.id,
             pid: null,
             groupKey: (s && ("groupKey" in s)) ? s.groupKey : null,
@@ -6020,6 +6030,9 @@ function onResultsSearch(val){
       document.getElementById("degTitle").value = t.title;
       document.getElementById("degStatus").value = t.status;
       document.getElementById("degMode").value = t.mode;
+      // V185: Load date (createdAt or tastingDate)
+      const dateVal = t.tastingDate || (t.createdAt ? t.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]);
+      document.getElementById("degDate").value = dateVal;
 
       renderDraftTasters(t.tasterIds);
       renderDraftTable();
@@ -6186,31 +6199,33 @@ function onResultsSearch(val){
       const mode = document.getElementById("degMode").value;
       const status = document.getElementById("degStatus").value;
       const isBlind = (mode === "cieca");
+      // V185: Get tasting date
+      const tastingDate = document.getElementById("degDate").value || new Date().toISOString().split('T')[0];
 
       // Get tasters
       const tIds = [];
       document.querySelectorAll("#draftTasters input:checked").forEach(cb=>tIds.push(parseInt(cb.value)));
       if(!tIds.length){ toast("Seleziona almeno un degustatore"); return; }
 
-      // FILTER:
-      // - Scoperta: mantiene righe con dati (o ID)
-      // - Cieca: mantiene righe con ID e/o dati prodotto (MAI “spariscono” i campioni inseriti)
-      const validItems = draft.items.filter(it => {
-        if(!it.use) return false;
+      // V185: Keep ALL items with data, but mark active/inactive
+      const allItemsWithData = draft.items.filter(it => {
         const hasId = String(it.id||"").trim();
         const hasCols = (it.c1||"").trim() || (it.c2||"").trim() || (it.c3||"").trim() || (it.c4||"").trim();
         return !!(hasId || hasCols);
       });
+      
+      // V185: Active items (flagged with use=true)
+      const validItems = allItemsWithData.filter(it => it.use);
 
       if(!validItems.length){
-        toast(isBlind ? "Nessun campione/prodotto valido inserito" : "Nessun campione valido inserito");
+        toast(isBlind ? "Nessun campione/prodotto attivo" : "Nessun campione attivo");
         return;
       }
 
-      // Auto-assign IDs 01..XX to items with no ID (vale anche in cieca)
-      const usedIds = new Set(validItems.map(x=>String(x.id||"").trim()).filter(Boolean));
+      // Auto-assign IDs 01..XX to items with no ID
+      const usedIds = new Set(allItemsWithData.map(x=>String(x.id||"").trim()).filter(Boolean));
       let nextId = 1;
-      validItems.forEach(it=>{
+      allItemsWithData.forEach(it=>{
         if(String(it.id||"").trim()) return;
         let cand = String(nextId).padStart(2,"0");
         while(usedIds.has(cand)){ nextId++; cand = String(nextId).padStart(2,"0"); }
@@ -6243,14 +6258,16 @@ function onResultsSearch(val){
         // In cieca:
         // - ID colonna = ID campione (anonimo) -> NON si rinumera/azzera
         // - Col1..Col4 = descrizione prodotto -> salvata in t.products
-        finalSamples = validItems.map(it=>({
+        // V185: Save ALL items with active flag
+        finalSamples = allItemsWithData.map(it=>({
           id: it.id ? it.id : uid(),
           cols: ["","","",""],
-          groupKey: (("groupKey" in it) ? it.groupKey : (existingGroupById[String(it.id)] ?? null))
+          groupKey: (("groupKey" in it) ? it.groupKey : (existingGroupById[String(it.id)] ?? null)),
+          active: it.use !== false
         }));
 
         const prevProducts = (existing && Array.isArray(existing.products)) ? existing.products : [];
-        finalProducts = validItems.map((it,i)=>({
+        finalProducts = allItemsWithData.map((it,i)=>({
           id: it.pid || (prevProducts[i] ? prevProducts[i].id : uid()),
           cols: [it.c1, it.c2, it.c3, it.c4]
         }));
@@ -6266,10 +6283,12 @@ function onResultsSearch(val){
         blindMap = cleaned;
 
       } else {
-        finalSamples = validItems.map(it=>({
+        // V185: Save ALL items with active flag
+        finalSamples = allItemsWithData.map(it=>({
           id: it.id ? it.id : uid(),
           cols: [it.c1, it.c2, it.c3, it.c4],
-          groupKey: (("groupKey" in it) ? it.groupKey : (existingGroupById[String(it.id)] ?? null))
+          groupKey: (("groupKey" in it) ? it.groupKey : (existingGroupById[String(it.id)] ?? null)),
+          active: it.use !== false
         }));
         finalProducts = null;
         blindMap = {};
@@ -6280,6 +6299,7 @@ function onResultsSearch(val){
         title: title,
         status: status,
         mode: mode,
+        tastingDate: tastingDate, // V185: Tasting date
         createdAt: existing ? existing.createdAt : nowIso(),
         finishedAt: existing ? existing.finishedAt : null,
         columns: ["Col1","Col2","Col3","Col4"],
@@ -10019,16 +10039,20 @@ document.addEventListener('DOMContentLoaded', function() {
     downloadMD(md, tasting.title || 'degustazione');
   };
 
-  // V183: Export single tasting to MD array
+  // V185: Export single tasting to MD with correct structure
   function exportSingleTastingMD(tasting) {
     var md = [];
     
     // Titolo
     md.push('# ' + (tasting.title || 'Degustazione'));
     md.push('');
-    md.push('**Data:** ' + (tasting.finishedAt ? new Date(tasting.finishedAt).toLocaleDateString('it-IT') : new Date().toLocaleDateString('it-IT')));
+    // V185: Use tastingDate if available
+    var dateStr = tasting.tastingDate || (tasting.finishedAt ? tasting.finishedAt.split('T')[0] : new Date().toISOString().split('T')[0]);
+    md.push('**Data:** ' + formatDateIT(dateStr));
     md.push('**Modalità:** ' + (tasting.mode === 'cieca' ? 'Alla cieca' : 'Scoperta'));
-    md.push('**Campioni:** ' + tasting.samples.length);
+    // V185: Count only active samples
+    var activeSamples = (tasting.samples || []).filter(function(s) { return s.active !== false; });
+    md.push('**Campioni:** ' + activeSamples.length);
     md.push('');
     md.push('---');
     md.push('');
@@ -10038,28 +10062,55 @@ document.addEventListener('DOMContentLoaded', function() {
       tasterIds = Object.keys(tasting.evaluations).map(function(k) { return parseInt(k, 10); });
     }
 
-    // Per ogni campione
-    tasting.samples.forEach(function(sample) {
+    // V185: Group samples by groupKey
+    var groups = tasting.groups || [];
+    var samplesByGroup = {};
+    var noGroupSamples = [];
+    
+    activeSamples.forEach(function(sample) {
+      if(sample.groupKey) {
+        if(!samplesByGroup[sample.groupKey]) samplesByGroup[sample.groupKey] = [];
+        samplesByGroup[sample.groupKey].push(sample);
+      } else {
+        noGroupSamples.push(sample);
+      }
+    });
+
+    // V185: Helper to get sample name
+    function getSampleName(sample) {
       var sampleId = String(sample.id || '');
-      var sampleName = '';
-      
       if(tasting.mode === 'cieca') {
-        sampleName = 'Campione ' + sampleId.padStart(2, '0');
+        var name = 'Campione ' + sampleId.padStart(2, '0');
         var pid = (tasting.blindMap || {})[sampleId];
         if(pid) {
           var p = (tasting.products || []).find(function(x) { return String(x.id) === String(pid); });
           if(p && p.cols) {
             var pc = p.cols.slice(0, 4);
             var pname = (pc[0] + ' ' + (pc[1] || '')).trim();
-            if(pname) sampleName += ' (' + pname + ')';
+            if(pname) name += ' (' + pname + ')';
           }
         }
+        return name;
       } else {
         var c = (sample.cols || []).slice(0, 4);
-        sampleName = (c[0] + ' ' + (c[1] || '')).trim() || ('Campione ' + sampleId.padStart(2, '0'));
+        return c.filter(Boolean).join(' - ') || ('Campione ' + sampleId.padStart(2, '0'));
       }
+    }
 
-      md.push('* **' + sampleName + '**');
+    // V185: Helper to get profile label (search in tasting.profiles first, then state.profiles)
+    function getProfileLabel(profileKey) {
+      if(!profileKey) return null;
+      var prof = (tasting.profiles || []).find(function(x) { return x.key === profileKey; });
+      if(!prof) prof = (state.profiles || []).find(function(x) { return x.key === profileKey; });
+      return prof ? prof.label : null;
+    }
+
+    // V185: Render sample with all tasters
+    function renderSampleMD(sample, indent) {
+      var sampleId = String(sample.id || '');
+      var sampleName = getSampleName(sample);
+      
+      md.push(indent + '* **' + sampleName + '**');
 
       // Per ogni degustatore
       tasterIds.forEach(function(tasterId) {
@@ -10071,59 +10122,87 @@ document.addEventListener('DOMContentLoaded', function() {
           ev = tasting.evaluations[String(tasterId)][String(sampleId)];
         }
 
-        md.push('  * **' + tasterName + '**');
+        md.push(indent + '  * **' + tasterName + '**');
         
-        // Profilo
-        if(ev && ev.profileKey) {
-          var prof = state.profiles.find(function(x) { return x.key === ev.profileKey; });
-          var profileName = prof ? prof.label : ev.profileKey;
-          md.push('    * Profilo: ' + profileName);
-        }
-
-        // Gruppo
-        if(sample.groupKey) {
-          var g = (tasting.groups || []).find(function(x) { return x.key === sample.groupKey; });
-          var groupName = g ? g.label : sample.groupKey;
-          md.push('    * Gruppo: ' + groupName);
-        }
-
         // Preferito
         if(ev && ev.favourite) {
-          md.push('    * Preferito: ⭐ Sì');
+          md.push(indent + '    * Preferito: ⭐');
+        }
+
+        // Profilo - V185: Fixed to use label instead of key
+        if(ev && ev.profileKey) {
+          var profileLabel = getProfileLabel(ev.profileKey);
+          if(profileLabel) {
+            md.push(indent + '    * Profilo: ' + profileLabel);
+          }
         }
 
         // Descrittori per famiglia
         if(ev && ev.data) {
           // Vista
           if(ev.data.vista && ev.data.vista.desc && ev.data.vista.desc.length > 0) {
-            md.push('    * Vista');
+            md.push(indent + '    * Vista');
             ev.data.vista.desc.forEach(function(d) {
-              md.push('      * ' + d);
+              md.push(indent + '      * ' + d);
             });
           }
           
           // Olfatto
           if(ev.data.olfatto && ev.data.olfatto.desc && ev.data.olfatto.desc.length > 0) {
-            md.push('    * Olfatto');
+            md.push(indent + '    * Olfatto');
             ev.data.olfatto.desc.forEach(function(d) {
-              md.push('      * ' + d);
+              md.push(indent + '      * ' + d);
             });
           }
           
           // Gusto
           if(ev.data.gusto && ev.data.gusto.desc && ev.data.gusto.desc.length > 0) {
-            md.push('    * Gusto');
+            md.push(indent + '    * Gusto');
             ev.data.gusto.desc.forEach(function(d) {
-              md.push('      * ' + d);
+              md.push(indent + '      * ' + d);
             });
           }
         }
+      });
+    }
+
+    // V185: Output structure grouped by GROUP then SAMPLE
+    groups.forEach(function(group) {
+      var samplesInGroup = samplesByGroup[group.key] || [];
+      if(samplesInGroup.length === 0) return;
+      
+      md.push('* **' + (group.label || group.key) + '**');
+      
+      samplesInGroup.forEach(function(sample) {
+        renderSampleMD(sample, '  ');
       });
       
       md.push('');
     });
 
+    // Samples without group
+    if(noGroupSamples.length > 0) {
+      noGroupSamples.forEach(function(sample) {
+        renderSampleMD(sample, '');
+        md.push('');
+      });
+    }
+
     return md;
+  }
+
+  // V185: Helper to format date in Italian
+  function formatDateIT(dateStr) {
+    if(!dateStr) return '';
+    try {
+      var parts = dateStr.split('-');
+      if(parts.length === 3) {
+        return parts[2] + '/' + parts[1] + '/' + parts[0];
+      }
+      return dateStr;
+    } catch(e) {
+      return dateStr;
+    }
   }
 
   // V183: Export multiple tastings to MD
