@@ -5,11 +5,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
+<!-- V184: Notes Fullpage + Multi-Compare Fix + BlindMap Fix -->
+<!-- V183: Login Persist + ZEN+ Fix + Notes Aspect Ratio + Multi Compare -->
 <!-- V182: Notes Storage Persistence Fix + Session Login + CSV/MD Export -->
-<!-- V181-FULL-FIX: Session Login + Notes Fullscreen + CSV/MD Export -->
-<!-- V160-WORKING: Drawing Fix + Export Excel Visibile + Touch + Sync -->
-<!-- V160-FINALE: Touch + Excel Export + Fullscreen HD Canvas + Sync -->
-<!-- V151-UX: V150 sync + iOS switches + ZEN+ opacity + smooth scroll inerzia -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -1302,7 +1300,7 @@ button.zenplus-btn:hover:not(:disabled) {
   }
 }
 
-/* V181: iOS Notes Style Fullscreen */
+/* V184: Notes Fullscreen - Fullpage with Scroll */
 #notesFullscreenV181 {
   display: none;
   position: fixed;
@@ -1313,7 +1311,7 @@ button.zenplus-btn:hover:not(:disabled) {
   width: 100vw;
   height: 100vh;
   z-index: 999999;
-  background: #fff;
+  background: #f5f5f5;
   flex-direction: column;
 }
 
@@ -1326,6 +1324,7 @@ button.zenplus-btn:hover:not(:disabled) {
   justify-content: space-between;
   align-items: center;
   gap: 15px;
+  z-index: 10;
 }
 
 .notes-ios-back {
@@ -1365,20 +1364,23 @@ button.zenplus-btn:hover:not(:disabled) {
   align-items: center;
 }
 
+/* V184: Body con scroll */
 .notes-ios-body {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
+  background: #e8e8e8;
 }
 
+/* V184: Canvas wrapper con dimensione A4 */
 .notes-ios-canvas-wrap {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
 }
 
+/* V184: Linee di quaderno opzionali */
 .notes-ios-lines {
   position: absolute;
   top: 0;
@@ -1392,16 +1394,24 @@ button.zenplus-btn:hover:not(:disabled) {
     #e8e8e8 40px
   );
   pointer-events: none;
+  display: none; /* Nascoste di default */
 }
 
 .notes-ios-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  display: block;
   touch-action: none;
   cursor: crosshair;
+  background: #fff;
+}
+
+/* V184: Prevent text selection in notes fullscreen */
+#notesFullscreenV181,
+#notesFullscreenV181 * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .notes-ios-toolbar {
@@ -2026,6 +2036,16 @@ function setCardColorMode(mode){
             <button class="btn" onclick="triggerImportJson()">Import</button>
             <label style="font-size:12px;font-weight:950;">Cerca</label>
             <input class="input" style="padding:8px 10px;" placeholder="testo libero..." oninput="onArchiveSearch(this.value)" />
+          </div>
+        </div>
+        
+        <!-- V183: Multi-compare controls -->
+        <div id="multiCompareControls" style="display:none;padding:10px;background:#f5f5f5;border-radius:8px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap;">
+            <span style="font-weight:bold;">📊 Confronto multiplo:</span>
+            <span id="multiCompareCount">0 selezionate</span>
+            <button class="btn primary" onclick="openMultiComparison()">Apri Confronto Multiplo</button>
+            <button class="btn" onclick="clearMultiSelection()">Annulla selezione</button>
           </div>
         </div>
 
@@ -3179,7 +3199,18 @@ function renderZenPlusDescriptors(){
       if(!overlay) return;
       const enable = (on===undefined) ? !document.body.classList.contains('zenplus') : !!on;
 
+      // V183: Previeni uscita immediata se attivato via longpress
+      if(enable && window.__zenPlusActivating) return;
+      if(!enable && window.__zenPlusJustActivated) {
+        console.log('⚠️ V183: Blocco uscita immediata ZEN+ (longpress protection)');
+        return;
+      }
+
       if(enable){
+        // V183: Imposta flag di protezione
+        window.__zenPlusActivating = true;
+        window.__zenPlusJustActivated = true;
+        
         document.body.classList.add('zenplus');
         overlay.classList.add('active');
         overlay.setAttribute('aria-hidden','false');
@@ -3193,6 +3224,15 @@ function renderZenPlusDescriptors(){
 
         try{ syncCardColorModeUI(); }catch(e){} // V143
         renderZenPlusDescriptors();
+        
+        // V183: Rimuovi protezione dopo 800ms (tempo sufficiente per rilasciare il dito)
+        setTimeout(function() {
+          window.__zenPlusActivating = false;
+        }, 100);
+        setTimeout(function() {
+          window.__zenPlusJustActivated = false;
+          console.log('✅ V183: ZEN+ protection disattivata');
+        }, 800);
       }else{
         document.body.classList.remove('zenplus');
         overlay.classList.remove('active');
@@ -5007,19 +5047,21 @@ function initCanvas(){
       const t = state.tastings.find(x=>x.id===id);
       try{ if(t){ const ch = ensureTastingTaxonomies(t); if(ch) saveState({skipCloud:true}); } }catch(e){}
       
-      // MODIFICA 1: Se c'è già un degustatore attivo dallo splash, bypassa il modale
-      const activeGlobalTasterId = localStorage.getItem('degustapp-active-taster-id');
-      if (activeGlobalTasterId && t) {
+      // V183: Usa sessionStorage per il degustatore loggato dalla splash
+      const activeSessionTasterId = sessionStorage.getItem('degustapp-session-taster-id');
+      if (activeSessionTasterId && t) {
         const tasterIds = t.tasterIds || [];
-        const activeTasterId = parseInt(activeGlobalTasterId, 10);
+        const activeTasterId = parseInt(activeSessionTasterId, 10);
         // Verifica che il degustatore attivo sia tra quelli della degustazione
         if (tasterIds.includes(activeTasterId)) {
           state.currentTaster = activeTasterId;
           saveState();
-          console.log('👤 Bypass modale: degustatore già attivo', activeTasterId);
+          console.log('👤 V183 Bypass modale: degustatore sessione attivo', activeTasterId);
           go("degustazione", document.getElementById("btnMenuDeg"));
           return;
         }
+        // Se il degustatore non è nella lista, mostra comunque il modale
+        console.log('⚠️ Degustatore sessione non nella lista degustazione, mostro modale');
       }
       
       // Altrimenti mostra il modale normale
@@ -5417,23 +5459,118 @@ function renderArchive(){
       const arch = state.tastings.filter(t=>t.status==="archiviata");
       const filtered = !q ? arch : arch.filter(t=>buildArchiveHaystack(t).includes(q));
 
-      list.innerHTML = filtered.length ? filtered.map(t=>`
-        <div class="list-card">
-          <h3>${esc(t.title)}</h3>
-          <div class="meta">
-            <span>${esc(t.samples.length)} campioni</span>
-            <span>${esc(t.mode)}</span>
-            <span>Terminata: ${esc(fmtDateIT(t.finishedAt))}</span>
-          </div>
-          <div class="row-actions" style="gap:6px; flex-wrap:wrap">
-            <button class="btn primary" onclick="viewArchived('${esc(t.id)}')">Visualizza</button>
-            <button class="btn" onclick="reopenTasting('${esc(t.id)}')">Riapri</button>
-            <button class="btn" onclick="copyTasting('${esc(t.id)}')">Copia</button>
-            <button class="btn" onclick="openComparison('${esc(t.id)}')">Confronto</button>
-            <button class="btn" onclick="deleteTasting('${esc(t.id)}')">Elimina</button>
+      // V183: Multi-select state
+      if(!window._multiSelectTastings) window._multiSelectTastings = new Set();
+
+      list.innerHTML = filtered.length ? filtered.map(t=>{
+        const isSelected = window._multiSelectTastings.has(t.id);
+        return `
+        <div class="list-card" style="${isSelected ? 'border:2px solid var(--bordeaux);background:#fff8f8;' : ''}">
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <input type="checkbox" 
+                   id="chk_${esc(t.id)}" 
+                   ${isSelected ? 'checked' : ''} 
+                   onchange="toggleMultiSelect('${esc(t.id)}')"
+                   style="width:20px;height:20px;margin-top:5px;cursor:pointer;" />
+            <div style="flex:1;">
+              <h3>${esc(t.title)}</h3>
+              <div class="meta">
+                <span>${esc(t.samples.length)} campioni</span>
+                <span>${esc(t.mode)}</span>
+                <span>Terminata: ${esc(fmtDateIT(t.finishedAt))}</span>
+              </div>
+              <div class="row-actions" style="gap:6px; flex-wrap:wrap">
+                <button class="btn primary" onclick="viewArchived('${esc(t.id)}')">Visualizza</button>
+                <button class="btn" onclick="reopenTasting('${esc(t.id)}')">Riapri</button>
+                <button class="btn" onclick="copyTasting('${esc(t.id)}')">Copia</button>
+                <button class="btn" onclick="openComparison('${esc(t.id)}')">Confronto</button>
+                <button class="btn" onclick="deleteTasting('${esc(t.id)}')">Elimina</button>
+              </div>
+            </div>
           </div>
         </div>
-      `).join("") : `<div class="muted">Nessuna degustazione in archivio.</div>`;
+      `}).join("") : `<div class="muted">Nessuna degustazione in archivio.</div>`;
+      
+      // V183: Aggiorna UI multi-select
+      updateMultiSelectUI();
+    }
+
+    // V183: Toggle selezione per confronto multiplo
+    function toggleMultiSelect(id){
+      if(!window._multiSelectTastings) window._multiSelectTastings = new Set();
+      if(window._multiSelectTastings.has(id)){
+        window._multiSelectTastings.delete(id);
+      } else {
+        window._multiSelectTastings.add(id);
+      }
+      updateMultiSelectUI();
+      renderArchive();
+    }
+
+    function updateMultiSelectUI(){
+      const controls = document.getElementById('multiCompareControls');
+      const countEl = document.getElementById('multiCompareCount');
+      if(!controls || !countEl) return;
+      
+      const count = window._multiSelectTastings ? window._multiSelectTastings.size : 0;
+      controls.style.display = count > 0 ? 'block' : 'none';
+      countEl.textContent = count + ' selezionat' + (count === 1 ? 'a' : 'e');
+    }
+
+    function clearMultiSelection(){
+      window._multiSelectTastings = new Set();
+      updateMultiSelectUI();
+      renderArchive();
+    }
+
+    // V184: Fixed multi-comparison to load all data properly
+    async function openMultiComparison(){
+      if(!window._multiSelectTastings || window._multiSelectTastings.size === 0){
+        toast('Seleziona almeno una degustazione');
+        return;
+      }
+      
+      const tastingIds = Array.from(window._multiSelectTastings);
+      console.log('📊 V184 openMultiComparison:', tastingIds.length, 'degustazioni');
+      
+      // Vai alla pagina risultati
+      go('risultati', document.getElementById('btnMenuRes'));
+      
+      const wrap = document.getElementById('resultsTableWrap');
+      if(wrap) wrap.innerHTML = '<div class="muted">Caricamento dati per ' + tastingIds.length + ' degustazioni...</div>';
+      
+      // V184: Carica i dati per TUTTE le degustazioni selezionate
+      for(const tid of tastingIds) {
+        try {
+          // Forza refresh metadati
+          if(typeof pollTastings === 'function') await pollTastings();
+          
+          // Attendi che la degustazione sia presente
+          let t = state.tastings.find(x=>String(x.id)===String(tid));
+          for(let i=0; i<10 && (!t || !t.samples || !t.samples.length); i++){
+            await new Promise(r=>setTimeout(r,100));
+            if(typeof pollTastings === 'function') await pollTastings();
+            t = state.tastings.find(x=>String(x.id)===String(tid));
+          }
+          
+          // Carica valutazioni archiviate
+          if(typeof fetchArchivedEvaluations === 'function') {
+            await fetchArchivedEvaluations(tid);
+          }
+          
+          console.log('✅ Dati caricati per:', tid, t ? t.title : 'N/A');
+        } catch(e) {
+          console.error('Errore caricamento dati per', tid, e);
+        }
+      }
+      
+      // Salva gli ID selezionati e renderizza
+      state.ui.multiCompareTastingIds = tastingIds;
+      saveState({skipCloud: true});
+      
+      // Renderizza tutte le tabelle
+      renderResultsTable();
+      console.log('✅ V184 Multi-compare completato');
     }
 
     function onArchiveSearch(val){
@@ -5575,7 +5712,7 @@ function onResultsSearch(val){
       return (c[0] + (c[1]?" "+c[1]:"")).trim();
     }
     function getSampleNameForResults(t, s){
-      // Solo per tabella confronto: nome completo (4 colonne) in formato col1 - col2 - col3 - col4
+      // V184: Fixed for blind tasting with robust key matching
       function join4(cols){
         const c = cols4(cols);
         return c.map(x=>String(x||'').trim()).filter(Boolean).join(' - ');
@@ -5584,17 +5721,55 @@ function onResultsSearch(val){
       if(t.mode!=="cieca"){
          return join4(s.cols) || ("Campione "+s.id);
       }
-      const pid = (t.blindMap||{})[String(s.id)];
-      if(!pid) return "Campione "+s.id+" (Non svelato)";
-      const p = (t.products||[]).find(x=>String(x.id)===String(pid));
-      if(!p) return "Campione "+s.id+" (Prod?)";
-      return join4(p.cols) || ("Campione "+s.id);
+      
+      // V184: Try multiple key formats for blindMap lookup
+      const blindMap = t.blindMap || {};
+      const sampleId = String(s.id);
+      
+      // Try: "1", "01", 1 (as stored)
+      let pid = blindMap[sampleId] || 
+                blindMap[sampleId.replace(/^0+/, '')] || // without leading zeros
+                blindMap[String(parseInt(sampleId, 10))] || // as integer string
+                blindMap[parseInt(sampleId, 10)]; // as actual integer key
+      
+      // Also try with leading zero
+      if(!pid && sampleId.length === 1) {
+        pid = blindMap['0' + sampleId];
+      }
+      
+      console.log('🔍 V184 BlindMap lookup:', {sampleId, pid, blindMapKeys: Object.keys(blindMap)});
+      
+      if(!pid) return "Campione "+sampleId+" (Non svelato)";
+      
+      // V184: Find product with robust matching
+      const products = t.products || [];
+      const p = products.find(x => 
+        String(x.id) === String(pid) || 
+        String(x.id) === String(parseInt(pid, 10)) ||
+        parseInt(x.id, 10) === parseInt(pid, 10)
+      );
+      
+      if(!p) {
+        console.log('⚠️ V184 Product not found for pid:', pid, 'products:', products.map(x=>x.id));
+        return "Campione "+sampleId+" (Prod?)";
+      }
+      
+      const name = join4(p.cols);
+      console.log('✅ V184 Found product name:', name, 'for sample', sampleId);
+      return name || ("Campione "+sampleId);
     }
 
     function renderResultsTable(){
       const wrap = document.getElementById("resultsTableWrap");
       const sel = document.getElementById("resultsDegSelect");
       if(!wrap || !sel) return;
+
+      // V183: Check for multi-compare mode
+      const multiIds = state.ui.multiCompareTastingIds || [];
+      if(multiIds.length > 1){
+        renderMultiCompareTable(wrap, multiIds);
+        return;
+      }
 
       const tid = sel.value || String((state.ui && state.ui.resultsTastingId) || '');
       if(!sel.value && tid) sel.value = tid;
@@ -5603,12 +5778,20 @@ function onResultsSearch(val){
         return;
       }
 
+      // V183: Clear multi-compare mode when using single select
+      state.ui.multiCompareTastingIds = [];
+
       const t = state.tastings.find(x=>x.id===tid);
       if(!t){
         wrap.innerHTML = `<div class="muted">Degustazione non trovata.</div>`;
         return;
       }
 
+      wrap.innerHTML = renderSingleTastingTable(t);
+    }
+
+    // V183: Render a single tasting table (extracted for reuse)
+    function renderSingleTastingTable(t){
       const activeTasters = state.tasters.filter(tas => {
          if(!(t.tasterIds||[]).includes(tas.id)) return false;
          const evs = t.evaluations && t.evaluations[String(tas.id)];
@@ -5616,12 +5799,10 @@ function onResultsSearch(val){
       });
 
       if(activeTasters.length === 0){
-          wrap.innerHTML = `<div class="muted">Nessuna valutazione presente.</div>`;
-          return;
+          return `<div class="muted">Nessuna valutazione presente per "${esc(t.title)}".</div>`;
       }
 
       const q = (state.ui.resultsSearch||"").toLowerCase().trim();
-
       const resultsSort = state.ui.resultsSort || 'id';
 
       const cols = [
@@ -5691,33 +5872,27 @@ function onResultsSearch(val){
                  if(p) profHtml = `<span style="display:inline-block; padding:2px 8px; border-radius:10px; background:#${p.color}40; border:1px solid #${p.color}; font-size:11px; font-weight:bold;">${esc(p.label)}</span>`;
                }
 
-               
-               // Gruppo (tag colorato) in colonna dedicata
                let groupHtml = "-";
                const gDefRow = groupDef(t, s.groupKey);
                if(gDefRow){
                  groupHtml = '<span style=\"display:inline-block; padding:2px 8px; border-radius:10px; ' + 'background:#' + esc(gDefRow.color) + '40; border:1px solid #' + esc(gDefRow.color) + '; font-size:11px; font-weight:bold;\">' + esc(gDefRow.label) + '</span>';
                }
-const fav = ev.favourite ? '<span style="color:red; font-size:14px;">❤</span>' : "-";
+               const fav = ev.favourite ? '<span style="color:red; font-size:14px;">❤</span>' : "-";
 
                const v_int = ev.data?.vista?.intensita || 0;
                const v_lim = ev.data?.vista?.limpidezza || 0;
-
                const o_int = ev.data?.olfatto?.intensita || 0;
                const o_cmp = ev.data?.olfatto?.complessita || 0;
-
                const g_cor = ev.data?.gusto?.corpo || 0;
                const g_aci = ev.data?.gusto?.acidita || 0;
                const g_per = ev.data?.gusto?.persistenza || 0;
-
                const overall = ev.overall > 0 ? ev.overall.toFixed(1) : "-";
 
-               
                const noteCanvas = (ev.data && ev.data.vista && ev.data.vista.canvas) || null;
                const tasterName = (typeof tas!=='undefined' && tas && tas.name) ? String(tas.name) : '';
                const noteTitle = encodeURIComponent((name||'') + ' / ' + (tasterName||''));
                const noteBtn = (!isCanvasEmptyDataUrl(noteCanvas)) ? ('<button class=\"btn\" style=\"padding:3px 8px;font-size:11px;\" title=\"Apri note\" onclick=\"openResultsCanvas(\'' + encodeURIComponent(noteCanvas) + '\',\'' + noteTitle + '\')\">✎</button>') : '';
-const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div style="width:8px;height:8px;border-radius:50%;background:${i<=evo?'#7a2938':'#eee'};border:1px solid #999;"></div>`).join('')}</div>`;
+               const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div style="width:8px;height:8px;border-radius:50%;background:${i<=evo?'#7a2938':'#eee'};border:1px solid #999;"></div>`).join('')}</div>`;
 
                tasterRowsHtml += `<tr data-rowtype="taster" data-sampleid="${esc(s.id)}" data-search="${esc(rowText)}" style="background:#fff; border-bottom:1px solid #eee;">
                   <td style="padding:8px; color:#666;">${esc(tas.name)}</td>
@@ -5739,7 +5914,7 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
 
         if(visibleTasterRows > 0){
            anyRowShown = true;
-        html += `<tr data-rowtype="sample" data-sampleid="${esc(s.id)}" data-search="${esc(sampleText + " " + name + " " + (groupDef(t,s.groupKey)?.label||""))}" style="background:#f9f5f0; border-top:2px solid #ccc;">
+           html += `<tr data-rowtype="sample" data-sampleid="${esc(s.id)}" data-search="${esc(sampleText + " " + name + " " + (groupDef(t,s.groupKey)?.label||""))}" style="background:#f9f5f0; border-top:2px solid #ccc;">
                    <td colspan="${cols.length}" style="padding:10px; font-weight:bold; font-size:14px; color:#333; border-bottom:1px solid #ddd;">
                      <span style="color:#7a2938; margin-right:8px;">${esc(s.id)}</span> ${esc(name)}
                    </td>
@@ -5749,7 +5924,37 @@ const evoHtml = `<div style="display:flex;gap:2px;">${[1,2,3,4,5].map(i=>`<div s
       });
       html += `</tbody></table></div>`;
       if(!anyRowShown) html = `<div class="muted">Nessun risultato per la ricerca.</div>`;
+      return html;
+    }
+
+    // V183: Render multiple tasting tables
+    function renderMultiCompareTable(wrap, tastingIds){
+      let html = '<div style="margin-bottom:15px;padding:10px;background:#f5f5f5;border-radius:8px;">';
+      html += '<strong>📊 Confronto multiplo:</strong> ' + tastingIds.length + ' degustazioni';
+      html += ' <button class="btn" onclick="clearMultiCompare()" style="margin-left:15px;">Chiudi confronto multiplo</button>';
+      html += '</div>';
+
+      tastingIds.forEach((tid, idx) => {
+        const t = state.tastings.find(x=>x.id===tid);
+        if(!t) return;
+
+        html += '<div style="margin-bottom:30px;">';
+        html += '<h3 style="color:var(--bordeaux);margin-bottom:10px;padding:10px;background:#f9f5f0;border-radius:8px;">';
+        html += (idx + 1) + '. ' + esc(t.title);
+        html += ' <span style="font-size:12px;font-weight:normal;color:#666;">(' + t.samples.length + ' campioni, ' + esc(t.mode) + ')</span>';
+        html += '</h3>';
+        html += renderSingleTastingTable(t);
+        html += '</div>';
+      });
+
       wrap.innerHTML = html;
+    }
+
+    function clearMultiCompare(){
+      state.ui.multiCompareTastingIds = [];
+      window._multiSelectTastings = new Set();
+      saveState({skipCloud: true});
+      renderResultsTable();
     }
 
 
@@ -9281,7 +9486,7 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
-<!-- V182: Notes Fullscreen JavaScript with Proper Storage -->
+<!-- V184: Notes Fullscreen JavaScript - Fullpage Edition -->
 <script>
 (function() {
   var fsCanvas = null;
@@ -9291,20 +9496,19 @@ document.addEventListener('DOMContentLoaded', function() {
   var fsLastY = 0;
   var fsTool = 'pen';
   var fsColor = '#000000';
-  var fsDpr = 1;
   var mainCanvas = null;
-  var fsWidth = 0;
-  var fsHeight = 0;
+  
+  // V184: Risoluzione fissa interna per consistenza cross-device
+  // Questo garantisce che i disegni NON vengano distorti tra dispositivi diversi
+  var INTERNAL_WIDTH = 2000;  // Risoluzione interna alta per qualità
+  var INTERNAL_HEIGHT = 2828; // Ratio A4 (1:1.414)
   
   window.openNotesFullscreenV181 = function() {
-    console.log('🔍 openNotesFullscreenV181() chiamato');
+    console.log('🔍 openNotesFullscreenV181() V184 Fullpage');
     
     var overlay = document.getElementById('notesFullscreenV181');
     if (!overlay) {
       console.error('❌ Overlay notesFullscreenV181 non trovato');
-      if (typeof openA4Overlay === 'function') {
-        return openA4Overlay();
-      }
       return;
     }
     
@@ -9324,49 +9528,57 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       var body = overlay.querySelector('.notes-ios-body');
-      if (!body) {
-        console.error('❌ notes-ios-body non trovato');
+      var wrap = overlay.querySelector('.notes-ios-canvas-wrap');
+      if (!body || !wrap) {
+        console.error('❌ notes-ios-body o wrap non trovato');
         return;
       }
       
-      var rect = body.getBoundingClientRect();
-      fsDpr = window.devicePixelRatio || 1;
-      fsWidth = rect.width;
-      fsHeight = rect.height;
+      // V184: Il canvas usa tutta l'area disponibile nel body
+      var bodyRect = body.getBoundingClientRect();
+      var displayW = bodyRect.width;
+      var displayH = bodyRect.height;
       
-      fsCanvas.width = Math.max(1, rect.width * fsDpr);
-      fsCanvas.height = Math.max(1, rect.height * fsDpr);
-      fsCanvas.style.width = rect.width + 'px';
-      fsCanvas.style.height = rect.height + 'px';
+      // V184: Canvas interno a risoluzione fissa (per consistenza)
+      fsCanvas.width = INTERNAL_WIDTH;
+      fsCanvas.height = INTERNAL_HEIGHT;
+      
+      // V184: Il wrapper e canvas riempiono tutto lo spazio disponibile
+      wrap.style.width = displayW + 'px';
+      wrap.style.height = displayH + 'px';
+      
+      fsCanvas.style.width = displayW + 'px';
+      fsCanvas.style.height = displayH + 'px';
       
       fsCtx = fsCanvas.getContext('2d');
-      fsCtx.setTransform(fsDpr, 0, 0, fsDpr, 0, 0);
       fsCtx.lineCap = 'round';
       fsCtx.lineJoin = 'round';
       
-      // V182: PRIMA carica da storage salvato, POI dal widget se storage è vuoto
+      // V184: Sfondo bianco
+      fsCtx.fillStyle = '#ffffff';
+      fsCtx.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+      
+      // V184: PRIMA carica da storage salvato
       loadCanvasFromStorage(function(loaded) {
-        if (!loaded) {
-          // Se non c'è nulla in storage, copia dal widget
-          if (mainCanvas && mainCanvas.width > 0 && mainCanvas.height > 0) {
-            try {
-              fsCtx.drawImage(mainCanvas, 0, 0, fsWidth, fsHeight);
-              console.log('✅ Contenuto copiato da widget (nessun dato in storage)');
-            } catch(e) {
-              console.error('Errore copia canvas:', e);
-            }
+        if (!loaded && mainCanvas && mainCanvas.width > 0) {
+          // Se non c'è nulla in storage, copia dal widget (stretch to fill)
+          try {
+            fsCtx.drawImage(mainCanvas, 0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+            console.log('✅ Contenuto copiato da widget');
+          } catch(e) {
+            console.error('Errore copia canvas:', e);
           }
         }
         
         // Setup eventi disegno
-        setupFSDrawingV181();
+        setupFSDrawingV184();
         
-        console.log('✅ Notes Fullscreen V182 aperto:', fsWidth + 'x' + fsHeight);
+        console.log('✅ Notes Fullscreen V184 aperto (fullpage: ' + displayW + 'x' + displayH + ', internal: ' + INTERNAL_WIDTH + 'x' + INTERNAL_HEIGHT + ')');
       });
     }, 100);
   };
   
-  // V182: Funzione per caricare canvas da storage
+  // V184: Funzione per caricare canvas da storage
   function loadCanvasFromStorage(callback) {
     try {
       var t = typeof getTasting === 'function' ? getTasting() : null;
@@ -9381,7 +9593,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       var ev = typeof getEval === 'function' ? getEval(t, tid, sid) : null;
       
-      // V182: Prima prova canvasFS (fullscreen), poi canvas (widget)
+      // V184: Cerca canvas salvato
       var canvasData = null;
       if (ev && ev.data && ev.data.vista) {
         canvasData = ev.data.vista.canvasFS || ev.data.vista.canvas;
@@ -9390,18 +9602,20 @@ document.addEventListener('DOMContentLoaded', function() {
       if (canvasData && canvasData.length > 100) {
         var img = new Image();
         img.onload = function() {
-          // Disegna immagine salvata sul canvas fullscreen
-          fsCtx.drawImage(img, 0, 0, fsWidth, fsHeight);
-          console.log('✅ Canvas caricato da storage salvato (canvasFS o canvas)');
+          // V184: Disegna l'immagine salvata riempiendo tutto il canvas
+          fsCtx.fillStyle = '#ffffff';
+          fsCtx.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+          fsCtx.drawImage(img, 0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+          console.log('✅ Canvas V184 caricato da storage');
           callback(true);
         };
         img.onerror = function() {
-          console.error('❌ Errore caricamento immagine da storage');
+          console.error('❌ Errore caricamento immagine');
           callback(false);
         };
         img.src = canvasData;
       } else {
-        console.log('📭 Nessun canvas salvato in storage');
+        console.log('📭 Nessun canvas salvato');
         callback(false);
       }
     } catch(e) {
@@ -9410,48 +9624,37 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
-  // V182: Funzione per salvare canvas in storage
+  // V184: Funzione per salvare canvas in storage
   function saveCanvasToStorage() {
     try {
       var t = typeof getTasting === 'function' ? getTasting() : null;
       var tid = typeof currentTasterId === 'function' ? currentTasterId() : null;
       var sid = typeof selectedSampleId !== 'undefined' ? selectedSampleId : null;
       
-      if (!t || !tid || !sid) {
-        console.log('⚠️ Impossibile salvare: nessun contesto');
-        return false;
-      }
+      if (!t || !tid || !sid) return false;
       
       var ev = typeof getEval === 'function' ? getEval(t, tid, sid) : null;
-      if (!ev) {
-        console.log('⚠️ Impossibile salvare: nessuna evaluation');
-        return false;
-      }
+      if (!ev) return false;
       
       if (!ev.data) ev.data = {};
       if (!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null, canvasFS:null};
       
-      // Salva il canvas fullscreen come PNG base64
       var dataUrl = fsCanvas.toDataURL('image/png');
       
-      // V182: Salva in ENTRAMBI i campi per compatibilità
+      // V184: Salva in ENTRAMBI i campi
       ev.data.vista.canvas = dataUrl;
       ev.data.vista.canvasFS = dataUrl;
-      
-      // Aggiorna timestamp
       ev.updatedAt = typeof nowIso === 'function' ? nowIso() : new Date().toISOString();
       
-      // Salva stato
       if (typeof saveState === 'function') {
         saveState({skipCloud: false});
       }
       
-      // Queue cloud sync se disponibile
       if (window.queueCanvasSync) {
         window.queueCanvasSync(t.id, tid, sid, dataUrl);
       }
       
-      console.log('💾 Canvas salvato in storage (canvas + canvasFS)');
+      console.log('💾 Canvas V184 salvato');
       return true;
     } catch(e) {
       console.error('Errore saveCanvasToStorage:', e);
@@ -9463,23 +9666,11 @@ document.addEventListener('DOMContentLoaded', function() {
     var overlay = document.getElementById('notesFullscreenV181');
     if (!overlay) return;
     
-    // V182: Prima salva in storage
+    // V184: Prima salva in storage
     saveCanvasToStorage();
     
-    // Sync to main canvas (widget) per visualizzazione
-    if (fsCanvas && mainCanvas) {
-      try {
-        var mainCtx = mainCanvas.getContext('2d');
-        var mainDpr = window.devicePixelRatio || 1;
-        var mw = mainCanvas.width / mainDpr;
-        var mh = mainCanvas.height / mainDpr;
-        mainCtx.clearRect(0, 0, mw, mh);
-        mainCtx.drawImage(fsCanvas, 0, 0, mw, mh);
-        console.log('✅ Contenuto sync a widget');
-      } catch(e) {
-        console.error('Sync error:', e);
-      }
-    }
+    // Sync to main canvas (widget)
+    syncToWidget();
     
     overlay.style.display = 'none';
     document.body.style.overflow = '';
@@ -9487,21 +9678,30 @@ document.addEventListener('DOMContentLoaded', function() {
     var picker = document.getElementById('notesColorPickerV181');
     if (picker) picker.style.display = 'none';
     
-    console.log('✅ Notes Fullscreen V182 chiuso');
+    console.log('✅ Notes Fullscreen V184 chiuso');
   };
+  
+  // V184: Sync fullscreen to widget
+  function syncToWidget() {
+    if (fsCanvas && mainCanvas) {
+      try {
+        var mainCtx = mainCanvas.getContext('2d');
+        mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+        mainCtx.drawImage(fsCanvas, 0, 0, mainCanvas.width, mainCanvas.height);
+        console.log('✅ Sync a widget completato');
+      } catch(e) {
+        console.error('Sync error:', e);
+      }
+    }
+  }
   
   window.clearNotesFullscreenV181 = function() {
     if (!confirm('Cancellare tutti gli appunti?')) return;
     if (fsCtx && fsCanvas) {
-      fsCtx.clearRect(0, 0, fsCanvas.width / fsDpr, fsCanvas.height / fsDpr);
-      // Salva immediatamente dopo cancellazione
+      fsCtx.fillStyle = '#ffffff';
+      fsCtx.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
       saveCanvasToStorage();
-      // Sync anche al widget
-      if (mainCanvas) {
-        var mainCtx = mainCanvas.getContext('2d');
-        var mainDpr = window.devicePixelRatio || 1;
-        mainCtx.clearRect(0, 0, mainCanvas.width / mainDpr, mainCanvas.height / mainDpr);
-      }
+      syncToWidget();
     }
   };
   
@@ -9530,13 +9730,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
   
-  function setupFSDrawingV181() {
+  // V184: Converti coordinate schermo in coordinate canvas interne
+  function screenToCanvas(clientX, clientY) {
+    var rect = fsCanvas.getBoundingClientRect();
+    var scaleX = INTERNAL_WIDTH / rect.width;
+    var scaleY = INTERNAL_HEIGHT / rect.height;
+    var x = (clientX - rect.left) * scaleX;
+    var y = (clientY - rect.top) * scaleY;
+    return { x: x, y: y };
+  }
+  
+  function setupFSDrawingV184() {
     if (!fsCanvas) return;
     
-    // V182: Salva il contenuto corrente prima del clone
+    // Salva il contenuto corrente prima del clone
     var tempCanvas = document.createElement('canvas');
-    tempCanvas.width = fsCanvas.width;
-    tempCanvas.height = fsCanvas.height;
+    tempCanvas.width = INTERNAL_WIDTH;
+    tempCanvas.height = INTERNAL_HEIGHT;
     var tempCtx = tempCanvas.getContext('2d');
     tempCtx.drawImage(fsCanvas, 0, 0);
     
@@ -9545,11 +9755,10 @@ document.addEventListener('DOMContentLoaded', function() {
     fsCanvas.parentNode.replaceChild(newCanvas, fsCanvas);
     fsCanvas = newCanvas;
     fsCtx = fsCanvas.getContext('2d');
-    fsCtx.setTransform(fsDpr, 0, 0, fsDpr, 0, 0);
     fsCtx.lineCap = 'round';
     fsCtx.lineJoin = 'round';
     
-    // V182: Ripristina il contenuto salvato
+    // Ripristina il contenuto
     fsCtx.drawImage(tempCanvas, 0, 0);
     
     fsCanvas.addEventListener('pointerdown', onFsDown, {passive: false});
@@ -9558,15 +9767,16 @@ document.addEventListener('DOMContentLoaded', function() {
     fsCanvas.addEventListener('pointercancel', onFsUp, {passive: false});
     fsCanvas.addEventListener('pointerleave', onFsUp, {passive: false});
     
-    console.log('✅ Drawing events V182 setup (contenuto preservato)');
+    console.log('✅ Drawing events V184 setup');
   }
   
   function onFsDown(e) {
     e.preventDefault();
+    e.stopPropagation();
     fsIsDrawing = true;
-    var rect = fsCanvas.getBoundingClientRect();
-    fsLastX = e.clientX - rect.left;
-    fsLastY = e.clientY - rect.top;
+    var pt = screenToCanvas(e.clientX, e.clientY);
+    fsLastX = pt.x;
+    fsLastY = pt.y;
     fsCtx.beginPath();
     fsCtx.moveTo(fsLastX, fsLastY);
   }
@@ -9574,34 +9784,39 @@ document.addEventListener('DOMContentLoaded', function() {
   function onFsMove(e) {
     if (!fsIsDrawing) return;
     e.preventDefault();
+    e.stopPropagation();
     
-    var rect = fsCanvas.getBoundingClientRect();
-    var x = e.clientX - rect.left;
-    var y = e.clientY - rect.top;
+    var pt = screenToCanvas(e.clientX, e.clientY);
+    var x = pt.x;
+    var y = pt.y;
     
     fsCtx.beginPath();
     fsCtx.moveTo(fsLastX, fsLastY);
     fsCtx.lineTo(x, y);
     
+    // V184: Line width scalato per risoluzione interna
+    var baseWidth = 3;
+    var scaleFactor = INTERNAL_WIDTH / 1000; // Scala rispetto a 1000px di riferimento
+    
     switch(fsTool) {
       case 'eraser':
         fsCtx.globalCompositeOperation = 'destination-out';
-        fsCtx.lineWidth = 20;
+        fsCtx.lineWidth = 40 * scaleFactor;
         fsCtx.strokeStyle = 'rgba(0,0,0,1)';
         break;
       case 'highlight':
         fsCtx.globalCompositeOperation = 'multiply';
-        fsCtx.lineWidth = 20;
+        fsCtx.lineWidth = 40 * scaleFactor;
         fsCtx.strokeStyle = 'rgba(255,235,59,0.4)';
         break;
       case 'pencil':
         fsCtx.globalCompositeOperation = 'source-over';
-        fsCtx.lineWidth = 1;
+        fsCtx.lineWidth = 2 * scaleFactor;
         fsCtx.strokeStyle = fsColor;
         break;
       default:
         fsCtx.globalCompositeOperation = 'source-over';
-        fsCtx.lineWidth = 2;
+        fsCtx.lineWidth = baseWidth * scaleFactor;
         fsCtx.strokeStyle = fsColor;
     }
     
@@ -9616,24 +9831,9 @@ document.addEventListener('DOMContentLoaded', function() {
     fsCtx.closePath();
     fsCtx.globalCompositeOperation = 'source-over';
     
-    // V182: Sync immediato al widget E salva in storage
-    syncToWidgetAndSave();
-  }
-  
-  function syncToWidgetAndSave() {
-    // Sync al widget per preview
-    if (fsCanvas && mainCanvas) {
-      try {
-        var mainCtx = mainCanvas.getContext('2d');
-        var mainDpr = window.devicePixelRatio || 1;
-        var mw = mainCanvas.width / mainDpr;
-        var mh = mainCanvas.height / mainDpr;
-        mainCtx.clearRect(0, 0, mw, mh);
-        mainCtx.drawImage(fsCanvas, 0, 0, mw, mh);
-      } catch(e) {}
-    }
+    // V184: Sync immediato al widget + save debounced
+    syncToWidget();
     
-    // Salva in storage (debounced per performance)
     if (window._saveNotesTimeout) clearTimeout(window._saveNotesTimeout);
     window._saveNotesTimeout = setTimeout(function() {
       saveCanvasToStorage();
@@ -9650,7 +9850,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
   
-  // V182: Quando il widget viene modificato, salva anche quello
+  // V184: Widget auto-save con sync bidirezionale
   setTimeout(function() {
     var widget = document.getElementById('drawingCanvas');
     if (widget) {
@@ -9670,29 +9870,24 @@ document.addEventListener('DOMContentLoaded', function() {
           
           var dataUrl = widget.toDataURL('image/png');
           
-          // V182: Salva in ENTRAMBI i campi
           ev.data.vista.canvas = dataUrl;
           ev.data.vista.canvasFS = dataUrl;
-          
-          // Aggiorna timestamp
           ev.updatedAt = typeof nowIso === 'function' ? nowIso() : new Date().toISOString();
           
           if (typeof saveState === 'function') {
             saveState({skipCloud: false});
           }
           
-          // Queue cloud sync se disponibile
           if (window.queueCanvasSync) {
             window.queueCanvasSync(t.id, tid, sid, dataUrl);
           }
           
-          console.log('💾 Widget canvas salvato (canvas + canvasFS)');
+          console.log('💾 Widget canvas V184 salvato');
         } catch(e) {
           console.error('Widget save error:', e);
         }
       };
       
-      // Salva quando si finisce di disegnare sul widget
       widget.addEventListener('pointerup', function() {
         if (window._saveWidgetTimeout) clearTimeout(window._saveWidgetTimeout);
         window._saveWidgetTimeout = setTimeout(saveWidgetToStorage, 500);
@@ -9702,11 +9897,11 @@ document.addEventListener('DOMContentLoaded', function() {
         window._saveWidgetTimeout = setTimeout(saveWidgetToStorage, 500);
       });
       
-      console.log('✅ Widget auto-save V182 attivato');
+      console.log('✅ Widget auto-save V184 attivato');
     }
   }, 2000);
   
-  console.log('✅ Notes V182 module loaded');
+  console.log('✅ Notes V184 Fullpage module loaded');
 })();
 </script>
 
@@ -9798,8 +9993,17 @@ document.addEventListener('DOMContentLoaded', function() {
   // Backward compatibility
   window.exportComparisonTableToExcel = window.exportComparisonCSV;
 
-  // V181: MD Export con struttura gerarchica
+  // V183: MD Export con struttura gerarchica (supporta multi-compare)
   window.exportComparisonMD = function() {
+    // V183: Check for multi-compare mode
+    var multiIds = (state.ui && state.ui.multiCompareTastingIds) || [];
+    
+    if(multiIds.length > 1) {
+      // Multi-compare export
+      exportMultiCompareMD(multiIds);
+      return;
+    }
+
     var sel = document.getElementById('resultsDegSelect');
     var tid = sel ? sel.value : (state.ui.resultsTastingId || '');
     var tasting = state.tastings.find(function(t) { return t.id === tid; });
@@ -9809,8 +10013,14 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    console.log('📝 Export MD V181');
+    console.log('📝 Export MD V183');
 
+    var md = exportSingleTastingMD(tasting);
+    downloadMD(md, tasting.title || 'degustazione');
+  };
+
+  // V183: Export single tasting to MD array
+  function exportSingleTastingMD(tasting) {
     var md = [];
     
     // Titolo
@@ -9913,12 +10123,48 @@ document.addEventListener('DOMContentLoaded', function() {
       md.push('');
     });
 
-    var mdContent = md.join('\n');
+    return md;
+  }
 
+  // V183: Export multiple tastings to MD
+  function exportMultiCompareMD(tastingIds) {
+    console.log('📝 Export Multi-Compare MD V183:', tastingIds.length, 'degustazioni');
+    
+    var md = [];
+    md.push('# Confronto Multiplo Degustazioni');
+    md.push('');
+    md.push('**Data export:** ' + new Date().toLocaleDateString('it-IT'));
+    md.push('**Degustazioni:** ' + tastingIds.length);
+    md.push('');
+    md.push('---');
+    md.push('');
+
+    tastingIds.forEach(function(tid, idx) {
+      var tasting = state.tastings.find(function(t) { return t.id === tid; });
+      if(!tasting) return;
+
+      md.push('');
+      md.push('---');
+      md.push('');
+      md.push('## ' + (idx + 1) + '. ' + (tasting.title || 'Degustazione'));
+      md.push('');
+
+      var singleMd = exportSingleTastingMD(tasting);
+      // Remove the first line (title) since we already have it
+      singleMd.shift(); // Remove '# Title'
+      md = md.concat(singleMd);
+    });
+
+    downloadMD(md, 'confronto_multiplo_' + tastingIds.length + '_degustazioni');
+  }
+
+  // V183: Download MD helper
+  function downloadMD(mdArray, title) {
+    var mdContent = mdArray.join('\n');
     var blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8;' });
     var link = document.createElement('a');
     var url = URL.createObjectURL(blob);
-    var fileName = 'export_' + (tasting.title || 'degustazione').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().slice(0,10) + '.md';
+    var fileName = 'export_' + (title || 'degustazione').replace(/[^a-z0-9]/gi, '_') + '_' + new Date().toISOString().slice(0,10) + '.md';
     link.setAttribute('href', url);
     link.setAttribute('download', fileName);
     link.style.visibility = 'hidden';
@@ -9929,9 +10175,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     console.log('✅ MD esportato: ' + fileName);
     if(typeof toast === 'function') toast('Esportato: ' + fileName);
-  };
+  }
 
-  console.log('✅ V181 Export module loaded');
+  console.log('✅ V183 Export module loaded');
 })();
 </script>
 
