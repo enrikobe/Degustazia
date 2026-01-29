@@ -5,9 +5,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>DegustAPP by EB </title>
-<!-- V192: Grid Fix + 80% Zoom + Sample Selection Refresh -->
+<!-- V194: Scrollable Headers + Grid Fix + Widget Sync + Legacy Cleanup -->
+<!-- V193: Firebase Notes Sync Fix + Responsive Fullscreen + Splash Scroll -->
 <!-- V191: Unified Widget/Fullscreen 70% Scale + Grid Fix + Larger Canvas -->
-<!-- V190: Widget Switch+Scroll 70% + Sample Info Strip + Splash Column -->
   <style>
 #resultsDegSelect{display:none !important;}
 
@@ -571,12 +571,22 @@
   background:var(--bordeaux); color:#fff;
   display:flex; align-items:center; justify-content:center;
   z-index:9999;
+  /* V193: Allow scrolling */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
+/* V193: Hide scrollbar but allow scrolling */
+#splashScreen::-webkit-scrollbar { display: none; }
+#splashScreen { -ms-overflow-style: none; scrollbar-width: none; }
+
 #splashInner{
-  width:100%; height:100%;
+  width:100%; 
+  min-height:100%;
   display:flex; flex-direction:column;
   align-items:center; justify-content:center;
   gap:14px;
+  padding: 30px 20px;
+  box-sizing: border-box;
 }
 #splashLogo{ width:var(--splash-w); height:auto; display:block; }
 #splashTitle{
@@ -1278,43 +1288,15 @@ button.zenplus-btn:hover:not(:disabled) {
   box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
 }
 
-/* Canvas FS - larghezza finestra + scroll */
-#canvasA4Overlay {
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}
+/* V194: Legacy canvasA4 CSS removed */
 
-#canvasA4Full {
-  width: calc(100vw - 40px) !important;
-  height: auto !important;
-  max-width: none !important;
-  cursor: crosshair;
-  background: white !important;
-  background-image: 
-    repeating-linear-gradient(
-      transparent 0px,
-      transparent 31px,
-      #d0d0d0 31px,
-      #d0d0d0 33px
-    ),
-    linear-gradient(
-      to right,
-      #ffe0e0 0px,
-      #fff0f0 50px,
-      white 50px
-    ) !important;
-  background-size: 100% 33px, 100% 100% !important;
-  background-position: 0 0 !important;
-  background-repeat: repeat, no-repeat !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4) !important;
-}
-
-/* Splash degustatori - V181 */
+/* Splash degustatori - V194: Scrollable without visible scrollbar */
 #splash-tasters-list {
   display: none;
   flex-direction: column;
   gap: 12px;
-  margin-top: 40px;
+  margin-top: 30px;
+  margin-bottom: 30px;
   max-width: 320px;
   width: 90%;
   align-items: center;
@@ -1327,7 +1309,7 @@ button.zenplus-btn:hover:not(:disabled) {
   display: flex;
 }
 
-/* V190: Always single column for tasters */
+/* V193: Always single column for tasters */
 .splash-tasters-container {
   display: flex;
   flex-direction: column;
@@ -1436,13 +1418,21 @@ button.zenplus-btn:hover:not(:disabled) {
   font-weight: 500;
 }
 
-/* V190: Header main row */
+/* V194: Header main row - horizontally scrollable */
 .fabric-notes-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 10px 16px;
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
 }
+/* V194: Hide scrollbar but allow scrolling */
+.fabric-notes-header-row::-webkit-scrollbar { display: none; }
+.fabric-notes-header-row { -ms-overflow-style: none; scrollbar-width: none; }
 
 .fabric-notes-title {
   font-size: 16px;
@@ -1450,12 +1440,14 @@ button.zenplus-btn:hover:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .fabric-notes-actions {
   display: flex;
   gap: 6px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .fabric-notes-btn {
@@ -1467,6 +1459,8 @@ button.zenplus-btn:hover:not(:disabled) {
   font-size: 13px;
   cursor: pointer;
   transition: all 0.2s;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .fabric-notes-btn:hover {
@@ -1482,12 +1476,12 @@ button.zenplus-btn:hover:not(:disabled) {
   background: #f5d85c;
 }
 
-/* V189: iOS-style Switch in header */
+/* V194: iOS-style Switch - flex-shrink: 0 */
 .fabric-notes-switch-container {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  flex-shrink: 0;
 }
 
 .fabric-notes-switch {
@@ -1507,6 +1501,7 @@ button.zenplus-btn:hover:not(:disabled) {
   font-weight: 500;
   cursor: pointer;
   border-radius: 17px;
+  white-space: nowrap;
   transition: all 0.25s ease;
   display: flex;
   align-items: center;
@@ -1661,18 +1656,24 @@ button.zenplus-btn:hover:not(:disabled) {
   background: transparent !important;
 }
 
-/* Drawing Toolbar */
+/* V194: Drawing Toolbar - horizontally scrollable */
 .fabric-toolbar {
   flex: 0 0 auto;
   background: #fff;
   border-top: 1px solid #ddd;
   padding: 12px 16px;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
+/* V194: Hide scrollbar but allow scrolling */
+.fabric-toolbar::-webkit-scrollbar { display: none; }
+.fabric-toolbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 .fabric-toolbar-group {
   display: flex;
@@ -1680,6 +1681,7 @@ button.zenplus-btn:hover:not(:disabled) {
   align-items: center;
   padding: 0 8px;
   border-right: 1px solid #eee;
+  flex-shrink: 0;
 }
 
 .fabric-toolbar-group:last-child {
@@ -1778,38 +1780,135 @@ button.zenplus-btn:hover:not(:disabled) {
   border-color: #722F37;
 }
 
-/* Mobile Responsive */
-@media (max-width: 600px) {
+/* V193: Improved Mobile Responsive */
+@media (max-width: 768px) {
   .fabric-notes-header {
-    padding: 10px 12px;
+    padding: 0;
+  }
+  
+  .fabric-notes-header-row {
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .fabric-notes-sample-strip {
+    padding: 4px 12px;
+    font-size: 11px;
   }
   
   .fabric-notes-title {
-    font-size: 16px;
+    font-size: 14px;
+  }
+  
+  .fabric-notes-switch-container {
+    order: 3;
+    width: 100%;
+    margin-top: 4px;
+  }
+  
+  .fabric-notes-switch-btn {
+    padding: 6px 16px;
+    font-size: 12px;
   }
   
   .fabric-notes-btn {
-    padding: 6px 12px;
-    font-size: 13px;
+    padding: 5px 10px;
+    font-size: 12px;
   }
   
+  .fabric-notes-undo {
+    width: 32px;
+    height: 32px;
+  }
+  
+  /* V193: Scrollable toolbar */
   .fabric-toolbar {
     padding: 8px;
-    gap: 4px;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .fabric-toolbar-group {
+    flex-shrink: 0;
   }
   
   .fabric-tool-btn {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
   }
   
   .fabric-color-btn {
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
+  }
+  
+  .fabric-paper-btn {
+    padding: 4px 8px;
+    font-size: 11px;
   }
   
   .fabric-canvas-container {
-    padding: 10px;
+    padding: 8px;
+  }
+  
+  .fabric-canvas-wrap {
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100%;
+  }
+  
+  #fabricDrawCanvas {
+    max-width: 100%;
+    height: auto !important;
+  }
+}
+
+/* V193: Very small screens */
+@media (max-width: 480px) {
+  .fabric-notes-actions {
+    gap: 4px;
+  }
+  
+  .fabric-notes-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  
+  .fabric-tool-btn {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .fabric-color-btn {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+/* V193: Short screens (landscape phones) */
+@media (max-height: 500px) {
+  .fabric-notes-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .fabric-toolbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    padding: 6px 8px;
+  }
+  
+  .fabric-canvas-container {
+    padding: 5px;
+    max-height: calc(100vh - 180px);
+    overflow: auto;
   }
 }
 
@@ -2700,61 +2799,7 @@ body.zenplus .sample-id-row{ justify-content:center; }
 body.zenplus .zenplus-overlay{ height:100vh; }
 body.zenplus .zenplus-top{ flex:1 1 auto; min-height:0; }
 
-/* V177 Canvas A4 Overlay */
-#canvasA4Overlay {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 999999;
-  background: #e5e5e5;
-  flex-direction: column;
-}
-
-#canvasA4Overlay.active {
-  display: flex !important;
-}
-
-.canvas-a4-header {
-  flex: 0 0 auto;
-  background: var(--bordeaux);
-  color: #fff;
-  padding: 14px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-}
-
-.canvas-a4-title {
-  font-size: 18px;
-  font-weight: 950;
-}
-
-.canvas-a4-tools {
-  display: flex;
-  gap: 8px;
-}
-
-.canvas-a4-body {
-  flex: 1;
-  overflow: auto;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 20px;
-}
-
-#canvasA4Full {
-  background: #fff;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  cursor: crosshair;
-  max-width: 100%;
-}
+/* V194: Legacy canvasA4 CSS removed */
 </style>
       </head><body>`;
 
@@ -4638,253 +4683,22 @@ if(blind && !isArchived()) {
     
 
 // ═══════════════════════════════════════════════════════════════
-// V165: FUNZIONI PANNELLO NOTE ESPANSO
+// V194: Legacy panel functions removed - using Fabric.js notes
+// Stub functions for backward compatibility
 // ═══════════════════════════════════════════════════════════════
 
-var npTool = 'pen';
-var npCtx = null;
-var npCanvas = null;
-var npDrawing = false;
-var npLastPt = null;
-
-function setNpToolPen() {
-  npTool = 'pen';
-  const penBtn = document.getElementById('npToolPen');
-  const eraserBtn = document.getElementById('npToolEraser');
-  if (penBtn) penBtn.classList.add('active');
-  if (eraserBtn) eraserBtn.classList.remove('active');
+function setNpToolPen() { /* V194: Legacy - use Fabric.js */ }
+function setNpToolEraser() { /* V194: Legacy - use Fabric.js */ }
+function clearNotePanelCanvas() { /* V194: Legacy - use Fabric.js */ }
+function openCanvasNotePanel() { 
+  // V194: Redirect to Fabric.js notes
+  if (typeof openFabricNotes === 'function') openFabricNotes();
 }
-
-function setNpToolEraser() {
-  npTool = 'eraser';
-  const penBtn = document.getElementById('npToolPen');
-  const eraserBtn = document.getElementById('npToolEraser');
-  if (eraserBtn) eraserBtn.classList.add('active');
-  if (penBtn) penBtn.classList.remove('active');
-}
-
-
-
-
-
-function clearNotePanelCanvas() {
-  if (!npCanvas || !npCtx) {
-    toast('Canvas non disponibile');
-    return;
-  }
-
-  if (!confirm('Cancellare TUTTI gli appunti?\n\nQuesta azione non può essere annullata.')) {
-    return;
-  }
-
-  npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
-  toast('🗑️ Canvas pulito');
-}
-
-
-function openCanvasNotePanel() {
-  var panel = document.getElementById('canvasNotePanel');
-  npCanvas = document.getElementById('canvasNotePanelCanvas');
-
-  if (!panel || !npCanvas) {
-    toast('Errore apertura pannello');
-    return;
-  }
-
-  npCtx = npCanvas.getContext('2d');
-  if (!npCtx) {
-    toast('Errore context');
-    return;
-  }
-
-  npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
-
-  // MODIFICA 1: Carica da ev.data.vista.canvasFS del campione selezionato
-  try {
-    var t = getTasting();
-    var tid = (typeof currentTasterId === 'function') ? currentTasterId() : null;
-    var sid = window.selectedSampleId;
-
-    if (t && tid && sid) {
-      var ev = getEval(t, tid, sid);
-      // Prima prova canvasFS (fullscreen), poi fallback a canvas (widget)
-      var canvasData = (ev.data && ev.data.vista && ev.data.vista.canvasFS) || 
-                       (ev.data && ev.data.vista && ev.data.vista.canvas);
-      
-      if (canvasData && canvasData.length > 100) {
-        var img = new Image();
-        img.onload = function() {
-          npCtx.clearRect(0, 0, npCanvas.width, npCanvas.height);
-          npCtx.drawImage(img, 0, 0, npCanvas.width, npCanvas.height);
-        };
-        img.src = canvasData;
-        console.log('📝 Canvas FS: caricato da campione', sid);
-      }
-    }
-  } catch (e) {
-    console.error('Errore caricamento canvas FS:', e);
-  }
-
-  var titleEl = document.getElementById('canvasNotePanelTitle');
-  if (titleEl) {
-    try {
-      var t2 = getTasting();
-      var sid2 = window.selectedSampleId;
-      if (t2 && sid2) {
-        var sample = t2.samples.find(function(s) { return String(s.id) === String(sid2); });
-        var name = (sample && (sample.name || sample.id)) || 'Campione';
-        titleEl.textContent = '📝 Note: ' + name;
-      } else {
-        titleEl.textContent = '📝 Note e Appunti';
-      }
-    } catch (e) {
-      titleEl.textContent = '📝 Note e Appunti';
-    }
-  }
-
-  panel.style.display = 'block';
-  setupNotePanelCanvasDrawing();
-  setNpToolPen();
-}
-
-function closeCanvasNotePanel() {
-  var panel = document.getElementById('canvasNotePanel');
-  var mainCanvas = document.getElementById('drawingCanvas');
-
-  if (!panel) return;
-
-  // MODIFICA 1: Salva in ev.data.vista.canvasFS del campione corrente
-  if (npCanvas && npCtx) {
-    try {
-      var dataUrl = npCanvas.toDataURL('image/png');
-      
-      var t = getTasting();
-      var tid = (typeof currentTasterId === 'function') ? currentTasterId() : null;
-      var sid = window.selectedSampleId;
-
-      if (t && tid && sid) {
-        var ev = getEval(t, tid, sid);
-        if (!ev.data) ev.data = {};
-        if (!ev.data.vista) ev.data.vista = { intensita: 0, limpidezza: 0, desc: [], canvas: null, canvasFS: null };
-
-        // Salva in canvasFS (fullscreen)
-        ev.data.vista.canvasFS = dataUrl;
-        
-        // Aggiorna anche il widget canvas
-        if (mainCanvas && dataUrl && dataUrl.length > 100) {
-          var mainCtx = mainCanvas.getContext('2d');
-          if (mainCtx) {
-            var img = new Image();
-            img.onload = function() {
-              mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
-              mainCtx.drawImage(img, 0, 0, mainCanvas.width, mainCanvas.height);
-              // Salva anche nel canvas widget
-              ev.data.vista.canvas = mainCanvas.toDataURL('image/png');
-              saveState({ skipCloud: false });
-            };
-            img.src = dataUrl;
-          }
-        }
-
-        ev.updatedAt = nowIso();
-        saveState({ skipCloud: false });
-
-        // Sync al cloud se disponibile
-        if (typeof window.queueCanvasSync === 'function') {
-          window.queueCanvasSync(t.id, tid, sid, dataUrl);
-        }
-
-        console.log('📝 Canvas FS: salvato per campione', sid);
-        toast('Appunti salvati');
-      } else {
-        toast('Seleziona un campione');
-      }
-    } catch (e) {
-      console.error('Errore salvataggio canvas FS:', e);
-      toast('Errore salvataggio');
-    }
-  }
-
-  panel.style.display = 'none';
-}
-function setupNotePanelCanvasDrawing() {
-  if (!npCanvas || !npCtx) return;
-
-  if (npCanvas.dataset.drawSetup === '1') return;
-  npCanvas.dataset.drawSetup = '1';
-
-  const getPos = function(e) {
-    const rect = npCanvas.getBoundingClientRect();
-    const touch = e.touches ? e.touches[0] : e;
-    return {
-      x: (touch.clientX - rect.left) * (npCanvas.width / rect.width),
-      y: (touch.clientY - rect.top) * (npCanvas.height / rect.height)
-    };
-  };
-
-  const onDown = function(e) {
-    try { e.preventDefault(); } catch (err) {}
-    npDrawing = true;
-
-    const pos = getPos(e);
-    npLastPt = pos;
-
-    if (npTool === 'eraser') {
-      npCtx.globalCompositeOperation = 'destination-out';
-      npCtx.lineWidth = Math.max(npPenSize * 3, 15); // Gomma più grande del tratto
-    } else {
-      npCtx.globalCompositeOperation = 'source-over';
-      npCtx.strokeStyle = '#000';
-      npCtx.lineWidth = npPenSize || 2; // MODIFICA 1: Usa npPenSize dallo slider
-    }
-
-    npCtx.lineCap = 'round';
-    npCtx.lineJoin = 'round';
-    npCtx.beginPath();
-    npCtx.moveTo(pos.x, pos.y);
-  };
-
-  const onMove = function(e) {
-    if (!npDrawing) return;
-    try { e.preventDefault(); } catch (err) {}
-
-    const pos = getPos(e);
-
-    if (npLastPt) {
-      const mid = {
-        x: (npLastPt.x + pos.x) / 2,
-        y: (npLastPt.y + pos.y) / 2
-      };
-      npCtx.quadraticCurveTo(npLastPt.x, npLastPt.y, mid.x, mid.y);
-      npCtx.stroke();
-      npCtx.beginPath();
-      npCtx.moveTo(mid.x, mid.y);
-    }
-
-    npLastPt = pos;
-  };
-
-  const onUp = function(e) {
-    if (!npDrawing) return;
-    try { e.preventDefault(); } catch (err) {}
-    npDrawing = false;
-    npLastPt = null;
-    npCtx.closePath();
-  };
-
-  npCanvas.addEventListener('pointerdown', onDown);
-  npCanvas.addEventListener('pointermove', onMove);
-  npCanvas.addEventListener('pointerup', onUp);
-  npCanvas.addEventListener('pointercancel', onUp);
-  npCanvas.addEventListener('pointerleave', onUp);
-
-  npCanvas.addEventListener('touchstart', onDown, {passive: false});
-  npCanvas.addEventListener('touchmove', onMove, {passive: false});
-  npCanvas.addEventListener('touchend', onUp, {passive: false});
-  npCanvas.addEventListener('touchcancel', onUp, {passive: false});
-
-  console.log('✅ Drawing setup completato');
-}
+function closeCanvasNotePanel() { /* V194: Legacy - use Fabric.js */ }
+function setupNotePanelCanvasDrawing() { /* V194: Legacy - use Fabric.js */ }
+function setA4Tool() { /* V194: Legacy */ }
+function clearA4Canvas() { /* V194: Legacy */ }
+function closeA4Overlay() { /* V194: Legacy */ }
 
 
 function initCanvas(){
@@ -7128,10 +6942,83 @@ const pushAnagrafiche = async () => {
   };
   window.queueCanvasSync = queueCanvasSync;
 
+  // ====== V193: ISOLATED FABRIC NOTES SYNC ======
+  let __notesSyncTimer = null;
+  let __notesDirtyUntil = 0;
+
+  const queueNotesSync = (tid, tasterId, sampleId, notesData) => {
+    if(!db || !tid || !tasterId || !sampleId) return;
+    __notesDirtyUntil = Date.now() + 2000;
+    if(__notesSyncTimer) clearTimeout(__notesSyncTimer);
+    __notesSyncTimer = setTimeout(async ()=>{
+      const payload = {
+        tastingId: String(tid),
+        tasterId: Number(tasterId),
+        sampleId: String(sampleId),
+        notesData: notesData || null,
+        updatedAt: new Date().toISOString()
+      };
+      beginWrite();
+      try{
+        console.log('☁️ V193: Syncing notes to Firebase...', tid, tasterId, sampleId);
+        await setDoc(doc(db,'tastings', String(tid), 'fabricNotes', String(tasterId) + '_' + String(sampleId)), payload, {merge:true});
+        console.log('✅ V193: Notes synced to Firebase');
+      } catch(e) {
+        console.error('❌ V193: Notes sync error:', e);
+      } finally { endWrite(); }
+    }, 1000);
+  };
+  window.queueNotesSync = queueNotesSync;
+
+  let unsubNotesDeg = null;
+  function ensureNotesSubDeg(tid){
+    if(unsubNotesDeg){ unsubNotesDeg(); unsubNotesDeg=null; }
+    if(!db || !tid) return;
+    unsubNotesDeg = onSnapshot(collection(db,'tastings', String(tid), 'fabricNotes'), (snap)=>{
+      const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
+      if(!t) return;
+      snap.forEach(ds=>{
+        const d = ds.data() || {};
+        const key = ds.id;
+        const parts = String(key).split('_');
+        const ta = parts[0];
+        const sa = parts.slice(1).join('_');
+        if(!ta || !sa) return;
+
+        try{
+          if(Date.now() < __notesDirtyUntil && String(ta)===String(currentTasterId()) && String(sa)===String(selectedSampleId)) return;
+        }catch(e){}
+
+        if(!t.evaluations) t.evaluations = {};
+        if(!t.evaluations[String(ta)]) t.evaluations[String(ta)] = {};
+        if(!t.evaluations[String(ta)][String(sa)]) t.evaluations[String(ta)][String(sa)] = blankEval();
+        const ev = t.evaluations[String(ta)][String(sa)];
+        if(!ev.data) ev.data = blankEval().data;
+        if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
+        
+        // V193: Load notes data from Firebase
+        if(d.notesData) {
+          ev.data.vista.notesV187 = d.notesData;
+          console.log('📥 V193: Notes loaded from Firebase for', ta, sa);
+          
+          // Refresh widget if this is current sample
+          try{
+            if(String(ta)===String(currentTasterId()) && String(sa)===String(selectedSampleId)){
+              if(typeof refreshWidgetNotes === 'function') refreshWidgetNotes();
+            }
+          }catch(e){}
+        }
+      });
+    }, (err)=>{ console.error('fabricNotes snapshot error', err); });
+  }
+
   let unsubCanvasDeg = null;
   function ensureCanvasSubDeg(tid){
     if(unsubCanvasDeg){ unsubCanvasDeg(); unsubCanvasDeg=null; }
     if(!db || !tid) return;
+    // V193: Also subscribe to notes
+    ensureNotesSubDeg(tid);
+    
     unsubCanvasDeg = onSnapshot(collection(db,'tastings', String(tid), 'canvases'), (snap)=>{
       const t = (state.tastings||[]).find(x=>String(x.id)===String(tid));
       if(!t) return;
@@ -9683,57 +9570,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 <!-- ═══════════════════════════════════════════════════════════════ -->
-<!-- V165: PANNELLO NOTE ESPANSO -->
+<!-- V194: Legacy canvas panels removed - using Fabric.js notes -->
 <!-- ═══════════════════════════════════════════════════════════════ -->
-
-<div id="canvasNotePanel" style="display:none; position:fixed; top:60px; left:0; right:0; bottom:0; background:rgba(0,0,0,0.92); z-index:8888; overflow:hidden;">
-  <div style="width:100%; height:100%; background:#fff; display:flex; flex-direction:column;">
-
-    <div style="display:flex; justify-content:space-between; align-items:center; background:#7a2938; color:#fff; padding:15px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.3);">
-      <div style="font-size:18px; font-weight:700;">
-        <span id="canvasNotePanelTitle">📝 Note e Appunti</span>
-      </div>
-      <button class="btn" onclick="closeCanvasNotePanel()" style="background:#fff; color:#7a2938; border:none; padding:8px 16px; font-weight:700;">✕ Chiudi</button>
-    </div>
-
-    <!-- MODIFICA 1: Toolbar SOPRA il canvas con stile strip bordeaux -->
-    <div style="display:flex; gap:10px; justify-content:center; align-items:center; padding:12px 20px; background:#7a2938; border-bottom:2px solid #ddd; color:white; flex-wrap:wrap;">
-      <button class="btn tool-btn active" id="npToolPen" onclick="setNpToolPen()" style="padding:10px 20px; background:#4CAF50; color:#fff; border:none; border-radius:6px; font-weight:700;">✏️ Penna</button>
-      <label style="display:flex; align-items:center; gap:8px; color:#fff; font-weight:600;">
-        Tratto: 
-        <input type="range" id="npPenSize" min="1" max="20" value="2" style="width:120px; cursor:pointer;" oninput="updateNpPenSize(this.value)">
-        <span id="npPenSizeLabel" style="min-width:35px; font-weight:700; color:#fff;">2px</span>
-      </label>
-      <button class="btn tool-btn" id="npToolEraser" onclick="setNpToolEraser()" style="padding:10px 20px; background:rgba(255,255,255,0.2); color:#fff; border:none; border-radius:6px; font-weight:700;">🧹 Gomma</button>
-      <button class="btn" onclick="clearNotePanelCanvas()" style="padding:10px 20px; background:#d32f2f; color:#fff; border:none; border-radius:6px; font-weight:700;">🗑️ Pulisci</button>
-      <div style="flex:1;"></div>
-      <button class="btn primary" onclick="closeCanvasNotePanel()" style="padding:12px 30px; font-weight:700; background:#4CAF50; color:#fff; border:none; border-radius:6px;">✅ Salva e Chiudi</button>
-    </div>
-
-    <div style="flex:1; min-height:0; background:#fff; overflow:hidden; position:relative;">
-      <div style="position:absolute; top:0; left:0; right:0; bottom:0; background-image:repeating-linear-gradient(transparent, transparent 29px, #e0e0e0 29px, #e0e0e0 30px); pointer-events:none; z-index:1;"></div>
-      <canvas id="canvasNotePanelCanvas" width="1400" height="1000" style="position:relative; z-index:2; width:100%; height:100%; touch-action:none; cursor:crosshair; background:transparent;"></canvas>
-    </div>
-
-  </div>
-</div>
-
-
-<!-- V177 Canvas A4 Overlay -->
-<div id="canvasA4Overlay">
-  <div class="canvas-a4-header">
-    <div class="canvas-a4-title">📝 Note e Appunti</div>
-    <div class="canvas-a4-tools">
-      <button class="btn" onclick="setA4Tool('pen')">✏️ Penna</button>
-      <button class="btn" onclick="setA4Tool('eraser')">🧹 Gomma</button>
-      <button class="btn" onclick="clearA4Canvas()">🗑️ Pulisci</button>
-      <button class="btn primary" onclick="closeA4Overlay()">✅ Salva e Chiudi</button>
-    </div>
-  </div>
-  <div class="canvas-a4-body">
-    <canvas id="canvasA4Full"></canvas>
-  </div>
-</div>
 
 <!-- MODIFICA 2: SPLASH LOGIN SYSTEM V2 -->
 <script>
@@ -10233,15 +10071,28 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   function clearEditorsContent() {
+    // V194: Clear content but keep transparent background for grid/lines
     if (quillEditor) {
       try { quillEditor.setText(''); } catch(e) {}
     }
     if (fabricCanvas) {
       try {
         fabricCanvas.clear();
-        fabricCanvas.backgroundColor = '#ffffff';
+        fabricCanvas.backgroundColor = 'transparent'; // V194: Keep transparent for grid
         fabricCanvas.renderAll();
       } catch(e) {}
+    }
+    // V194: Also clear widget
+    if (widgetCanvas) {
+      try {
+        widgetCanvas.clear();
+        widgetCanvas.backgroundColor = 'transparent';
+        widgetCanvas.renderAll();
+      } catch(e) {}
+    }
+    var widgetText = document.getElementById('widgetTextEditor');
+    if (widgetText) {
+      widgetText.innerHTML = '';
     }
     undoHistory = [];
   }
@@ -10256,7 +10107,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   window.openFabricNotes = function() {
     var ctx = getNoteContext();
-    console.log('📝 V190: Opening notes for:', ctx ? ctx.key : 'no context');
+    console.log('📝 V194: Opening notes for:', ctx ? ctx.key : 'no context');
     
     var modal = document.getElementById('fabricNotesModal');
     if (!modal) {
@@ -10267,29 +10118,56 @@ document.addEventListener('DOMContentLoaded', function() {
     currentNoteContext = ctx;
     undoHistory = [];
     
-    // V190: Update sample info strip
+    // V194: Update sample info strip
     updateSampleInfoStrip();
     
     modal.classList.add('visible');
     document.body.style.overflow = 'hidden';
     
-    // V190: Initialize and start on DRAW mode by default
+    // V194: Initialize and sync widget content to fullscreen
     setTimeout(function() {
+      // Initialize Quill if needed
       if (!quillInitialized) {
         initQuillEditor();
       }
       
-      clearEditorsContent();
-      loadNotesFromStorage();
+      // V194: Initialize fullscreen canvas fresh
+      initFabricCanvas();
       
-      // V190: Start on DRAW mode (default)
+      // V194: Load notes from storage first
+      loadNotesFromStorage();
+      loadDrawingFromStorage();
+      
+      // V194: Sync widget text to fullscreen Quill
+      var widgetText = document.getElementById('widgetTextEditor');
+      if (widgetText && quillEditor) {
+        var widgetContent = widgetText.innerHTML.trim();
+        if (widgetContent && widgetContent !== '<br>' && widgetContent.length > 0) {
+          console.log('📝 V194: Syncing widget text to fullscreen');
+          quillEditor.root.innerHTML = widgetContent;
+        }
+      }
+      
+      // V194: Sync widget canvas to fullscreen canvas
+      if (widgetCanvas && fabricCanvas) {
+        var json = widgetCanvas.toJSON(['selectable', 'evented']);
+        if (json && json.objects && json.objects.length > 0) {
+          console.log('📝 V194: Syncing widget canvas to fullscreen, objects:', json.objects.length);
+          fabricCanvas.loadFromJSON(json, function() {
+            fabricCanvas.backgroundColor = 'transparent';
+            fabricCanvas.renderAll();
+          });
+        }
+      }
+      
+      // V194: Start on DRAW mode (default)
       switchFabricMode('draw');
       
-    }, 200);
+    }, 250);
   };
   
   window.closeFabricNotes = function() {
-    // V192: Use immediate save when closing
+    // V194: Use immediate save when closing
     immediateSaveNotes();
     
     var modal = document.getElementById('fabricNotesModal');
@@ -10298,10 +10176,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     document.body.style.overflow = '';
     
-    // V192: Sync to widget
+    // V194: Sync fullscreen to widget
     syncToWidgetCanvas();
     
-    console.log('✅ V192: Notes closed and saved to cloud');
+    console.log('✅ V194: Notes closed and saved to cloud');
   };
   
   window.saveFabricNotes = function() {
@@ -10589,14 +10467,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!ev.data) ev.data = {};
       if (!ev.data.vista) ev.data.vista = {};
       
-      // V192: Use whichever canvas/editor is available
+      // V193: Use whichever canvas/editor is available
       var activeCanvas = fabricCanvas || widgetCanvas;
       var widgetText = document.getElementById('widgetTextEditor');
       var textContent = quillEditor ? quillEditor.root.innerHTML : (widgetText ? widgetText.innerHTML : '');
       var textDelta = quillEditor ? quillEditor.getContents() : null;
       
       var notesData = {
-        version: 192,
+        version: 193,
         text: textContent,
         textDelta: textDelta,
         fabricJson: activeCanvas ? activeCanvas.toJSON(['selectable', 'evented']) : null,
@@ -10604,12 +10482,14 @@ document.addEventListener('DOMContentLoaded', function() {
         updatedAt: new Date().toISOString()
       };
       
+      // Save locally in evaluation
       ev.data.vista.notesV187 = notesData;
       
-      // Legacy compatibility
+      // Legacy compatibility - save canvas dataUrl
+      var dataUrl = null;
       if (activeCanvas) {
         try {
-          var dataUrl = activeCanvas.toDataURL({format: 'png', quality: 0.7, multiplier: 0.7});
+          dataUrl = activeCanvas.toDataURL({format: 'png', quality: 0.7, multiplier: 0.7});
           ev.data.vista.canvas = dataUrl;
           ev.data.vista.canvasFS = dataUrl;
         } catch(e) {}
@@ -10617,13 +10497,23 @@ document.addEventListener('DOMContentLoaded', function() {
       
       ev.updatedAt = typeof nowIso === 'function' ? nowIso() : new Date().toISOString();
       
-      // V192: Force cloud sync
+      // V193: Use isolated sync like canvas system
+      // 1. Save local state (skipCloud to avoid conflicts)
       if (typeof saveState === 'function') {
-        console.log('☁️ V192: Triggering cloud sync for notes...');
-        saveState({skipCloud: false});
+        saveState({skipCloud: true});
       }
       
-      console.log('💾 V192: Notes saved for sample', ctx.sampleId);
+      // 2. Queue notes sync to Firebase (dedicated collection)
+      if (typeof window.queueNotesSync === 'function') {
+        window.queueNotesSync(t.id, ctx.tasterId, ctx.sampleId, notesData);
+      }
+      
+      // 3. Also sync legacy canvas dataUrl
+      if (dataUrl && typeof window.queueCanvasSync === 'function') {
+        window.queueCanvasSync(t.id, ctx.tasterId, ctx.sampleId, dataUrl);
+      }
+      
+      console.log('💾 V193: Notes saved for sample', ctx.sampleId);
       return true;
       
     } catch(e) {
