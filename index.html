@@ -10717,8 +10717,9 @@ document.addEventListener('DOMContentLoaded', function() {
     var editor = document.getElementById('widgetTextEditor');
     if (!editor) return;
     
-    // V192: Use debounced save for text input
+    // V197: Debounced save for text input - skip during sync refresh
     editor.addEventListener('input', function() {
+      if (__isRefreshing) return; // V197: Don't auto-save during sync refresh
       debouncedSaveNotes();
       // Sync to fullscreen Quill if open
       if (quillEditor && document.getElementById('fabricNotesModal').classList.contains('visible')) {
@@ -10762,14 +10763,22 @@ document.addEventListener('DOMContentLoaded', function() {
   // ═══════════════════════════════════════════════════════════════
   
   var saveDebounceTimer = null;
-  var SAVE_DEBOUNCE_MS = 800; // V196: Reduced to 800ms for faster sync
+  var SAVE_DEBOUNCE_MS = 800;
   
-  // V196: Queue auto-save with short debounce for real-time sync
+  // V197: Flag to prevent auto-save during sync refresh
+  var __isRefreshing = false;
+  
+  // V197: Queue auto-save - blocked during refresh
   function queueNotesAutoSave() {
+    if (__isRefreshing) {
+      console.log('⏭️ V197: Auto-save blocked during refresh');
+      return;
+    }
     if (saveDebounceTimer) {
       clearTimeout(saveDebounceTimer);
     }
     saveDebounceTimer = setTimeout(function() {
+      if (__isRefreshing) return; // Double-check
       saveNotesToStorage();
       saveDebounceTimer = null;
     }, SAVE_DEBOUNCE_MS);
@@ -10795,6 +10804,12 @@ document.addEventListener('DOMContentLoaded', function() {
       return false;
     }
     
+    // V197: Don't save during refresh (would overwrite incoming data)
+    if (__isRefreshing) {
+      console.log('⏭️ V197: Save blocked during refresh');
+      return false;
+    }
+    
     try {
       var t = typeof getTasting === 'function' ? getTasting() : null;
       if (!t) {
@@ -10811,10 +10826,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!ev.data) ev.data = {};
       if (!ev.data.vista) ev.data.vista = {};
       
-      // V197: Get existing data first to preserve both text and drawing
-      var existingNotes = ev.data.vista.notesV187 || {};
-      
-      // V197: Get text from Quill or widget
+      // V197: Get text from Quill (fullscreen) or widget
       var widgetText = document.getElementById('widgetTextEditor');
       var textContent = '';
       var textDelta = null;
@@ -10826,7 +10838,7 @@ document.addEventListener('DOMContentLoaded', function() {
         textContent = widgetText.innerHTML;
       }
       
-      // V197: Get canvas from fullscreen or widget - prefer the one with content
+      // V197: Get canvas JSON from whichever canvas has content
       var fabricJson = null;
       if (fabricCanvas) {
         var json = fabricCanvas.toJSON(['selectable', 'evented']);
@@ -10840,16 +10852,27 @@ document.addEventListener('DOMContentLoaded', function() {
           fabricJson = json;
         }
       }
-      // Fallback to existing if current is empty
-      if (!fabricJson && existingNotes.fabricJson) {
-        fabricJson = existingNotes.fabricJson;
+      
+      // V197: If BOTH text and drawing are empty, check storage for fallback
+      // (This handles the case where editors aren't initialized yet)
+      var existingNotes = ev.data.vista.notesV187 || {};
+      var emptyCheck = '<' + 'p><br><' + '/p>';
+      var textIsEmpty = !textContent || textContent === emptyCheck || textContent === '<br>' || textContent.trim() === '';
+      var drawIsEmpty = !fabricJson;
+      
+      if (textIsEmpty && drawIsEmpty && (existingNotes.text || existingNotes.fabricJson)) {
+        // Both editors empty but storage has data - likely editors not loaded yet, skip save
+        console.log('⏭️ V197: Skipping save - editors empty but storage has data');
+        return false;
       }
       
-      // V197: Preserve text if current is empty but existing has content
-      var emptyCheck = '<' + 'p><br><' + '/p>';
-      if ((!textContent || textContent === emptyCheck || textContent === '<br>') && existingNotes.text) {
+      // V197: If only text is empty but drawing exists (or vice versa), preserve the other from storage
+      if (textIsEmpty && existingNotes.text && existingNotes.text.trim()) {
         textContent = existingNotes.text;
         textDelta = existingNotes.textDelta;
+      }
+      if (drawIsEmpty && existingNotes.fabricJson) {
+        fabricJson = existingNotes.fabricJson;
       }
       
       var notesData = {
@@ -10878,12 +10901,12 @@ document.addEventListener('DOMContentLoaded', function() {
       
       ev.updatedAt = typeof nowIso === 'function' ? nowIso() : new Date().toISOString();
       
-      // V197: Save local state (skipCloud to avoid conflicts)
+      // Save local state (skipCloud to avoid conflicts)
       if (typeof saveState === 'function') {
         saveState({skipCloud: true});
       }
       
-      // V197: Queue notes sync to Firebase (dedicated collection)
+      // Queue notes sync to Firebase (dedicated collection)
       if (typeof window.queueNotesSync === 'function') {
         window.queueNotesSync(t.id, ctx.tasterId, ctx.sampleId, notesData);
       }
@@ -10893,7 +10916,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.queueCanvasSync(t.id, ctx.tasterId, ctx.sampleId, dataUrl);
       }
       
-      console.log('💾 V197: Notes saved for sample', ctx.sampleId, '- text:', !!textContent, '- drawing:', !!(fabricJson && fabricJson.objects));
+      console.log('💾 V197: Notes saved for sample', ctx.sampleId, '- text:', !textIsEmpty, '- drawing:', !drawIsEmpty);
       return true;
       
     } catch(e) {
@@ -11081,9 +11104,18 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // V196: Update widget when sample changes or remote sync - instant loading
   window.refreshWidgetNotes = function() {
-    console.log('🔄 V196: Refreshing widget notes');
+    console.log('🔄 V197: Refreshing widget notes');
     
-    // V196: Always clear and reload for clean state
+    // V197: Block auto-save during refresh to prevent overwriting remote data
+    __isRefreshing = true;
+    
+    // Cancel any pending auto-save
+    if (saveDebounceTimer) {
+      clearTimeout(saveDebounceTimer);
+      saveDebounceTimer = null;
+    }
+    
+    // Clear widget canvas
     if (widgetCanvas) {
       widgetCanvas.clear();
       widgetCanvas.backgroundColor = 'transparent';
@@ -11096,39 +11128,50 @@ document.addEventListener('DOMContentLoaded', function() {
       widgetText.innerHTML = '';
     }
     
-    // V196: Immediately load new sample data
+    // Load new data from storage (which was already updated by Firebase listener)
     loadNotesFromStorage();
     loadDrawingFromStorage();
+    
+    // V197: Re-enable auto-save after a delay (let all events settle)
+    setTimeout(function() {
+      __isRefreshing = false;
+      console.log('✅ V197: Refresh complete, auto-save re-enabled');
+    }, 300);
   };
   
-  // V196: Refresh fullscreen notes from storage (for real-time sync)
+  // V197: Refresh fullscreen notes from storage (for real-time sync)
   window.refreshFullscreenNotes = function() {
     var modal = document.getElementById('fabricNotesModal');
     if (!modal || !modal.classList.contains('visible')) {
       return; // Don't refresh if fullscreen isn't open
     }
     
-    console.log('🔄 V196: Refreshing fullscreen notes');
+    console.log('🔄 V197: Refreshing fullscreen notes');
+    
+    // V197: Block auto-save during refresh
+    __isRefreshing = true;
+    
+    // Cancel any pending auto-save
+    if (saveDebounceTimer) {
+      clearTimeout(saveDebounceTimer);
+      saveDebounceTimer = null;
+    }
     
     // Load from storage into fullscreen editors
     var ctx = getNoteContext();
-    if (!ctx) return;
+    if (!ctx) { __isRefreshing = false; return; }
     
     try {
       var t = typeof getTasting === 'function' ? getTasting() : null;
       var ev = typeof getEval === 'function' ? getEval(t, ctx.tasterId, ctx.sampleId) : null;
       
-      if (!ev || !ev.data || !ev.data.vista) return;
+      if (!ev || !ev.data || !ev.data.vista) { __isRefreshing = false; return; }
       
       var notesData = ev.data.vista.notesV187;
       
       if (notesData && notesData.version >= 187) {
-        // Update Quill text (only if user not actively typing)
-        var quillContainer = document.querySelector('#fabricTextPanel .ql-editor');
-        var isTyping = document.activeElement === quillContainer || 
-                       (quillEditor && quillEditor.hasFocus && quillEditor.hasFocus());
-        
-        if (quillEditor && !isTyping) {
+        // V197: Always update text (user isn't the author of this change)
+        if (quillEditor) {
           if (notesData.textDelta) {
             try { quillEditor.setContents(notesData.textDelta); } catch(e) {}
           } else if (notesData.text) {
@@ -11136,9 +11179,8 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
         
-        // Update Fabric canvas (only if not actively drawing)
-        var isDrawing = fabricCanvas && (fabricCanvas._isDrawing || fabricCanvas._isEraserMode && fabricCanvas.__eraserActive);
-        if (fabricCanvas && !isDrawing && notesData.fabricJson) {
+        // V197: Always update canvas
+        if (fabricCanvas && notesData.fabricJson) {
           fabricCanvas.loadFromJSON(notesData.fabricJson, function() {
             fabricCanvas.backgroundColor = 'transparent';
             fabricCanvas.renderAll();
@@ -11149,10 +11191,28 @@ document.addEventListener('DOMContentLoaded', function() {
         if (notesData.paperType && notesData.paperType !== currentPaper) {
           setFabricPaper(notesData.paperType);
         }
+        
+        // V197: Also update widget
+        var widgetText = document.getElementById('widgetTextEditor');
+        if (widgetText && notesData.text) {
+          widgetText.innerHTML = notesData.text;
+        }
+        if (widgetCanvas && notesData.fabricJson) {
+          widgetCanvas.loadFromJSON(notesData.fabricJson, function() {
+            widgetCanvas.backgroundColor = 'transparent';
+            widgetCanvas.renderAll();
+          });
+        }
       }
     } catch(e) {
-      console.error('V196: Error refreshing fullscreen notes:', e);
+      console.error('V197: Error refreshing fullscreen notes:', e);
     }
+    
+    // V197: Re-enable auto-save after events settle
+    setTimeout(function() {
+      __isRefreshing = false;
+      console.log('✅ V197: Fullscreen refresh complete, auto-save re-enabled');
+    }, 300);
   };
   
   // V192: Update sample info in fullscreen header
