@@ -10653,8 +10653,13 @@ document.addEventListener('DOMContentLoaded', function() {
       document.getElementById('fabricDrawPanel').classList.add('active');
       
       setTimeout(function() {
-        var success = initFabricCanvas();
-        if (success) {
+        // V198fix: non reinizializzare se il canvas esiste già (evita doppio init)
+        if (!fabricCanvas) {
+          var success = initFabricCanvas();
+          if (success) {
+            loadDrawingFromStorage();
+          }
+        } else {
           loadDrawingFromStorage();
         }
       }, 100);
