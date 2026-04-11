@@ -7044,11 +7044,15 @@ const pushAnagrafiche = async () => {
     
     __notesSyncTimers[key] = setTimeout(async ()=>{
       delete __notesSyncTimers[key];
+      // V198fix: serializza fabricJson come stringa per evitare nested arrays
+      const notesDataSafe = notesData ? Object.assign({}, notesData, {
+        fabricJson: notesData.fabricJson ? JSON.stringify(notesData.fabricJson) : null
+      }) : null;
       const payload = {
         tastingId: String(tid),
         tasterId: Number(tasterId),
         sampleId: String(sampleId),
-        notesData: notesData || null,
+        notesData: notesDataSafe,
         updatedAt: new Date().toISOString(),
         instanceId: window.__notesInstanceId
       };
@@ -7122,7 +7126,11 @@ const pushAnagrafiche = async () => {
         
         // V195: Load notes data from Firebase
         if(d.notesData) {
-          ev.data.vista.notesV187 = d.notesData;
+          const nd = Object.assign({}, d.notesData);
+          if(nd.fabricJson && typeof nd.fabricJson === 'string') {
+            try { nd.fabricJson = JSON.parse(nd.fabricJson); } catch(e) {}
+          }
+          ev.data.vista.notesV187 = nd;
           console.log('📥 V195: Notes received from Firebase for', ta, sa, '- current sample:', isCurrentSample);
           
           // V195: Refresh UI if this is current sample
