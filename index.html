@@ -10219,7 +10219,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (currentTool === 'eraser') {
         // V197: Eraser mode - stay in drawing mode but track eraser state
         fabricCanvas._isEraserMode = true;
-        fabricCanvas._eraserRadius = strokeWidth * 20;
+        fabricCanvas._eraserRadius = strokeWidth * 8;
         fabricCanvas.isDrawingMode = false; // Disable drawing to allow mouse events
         fabricCanvas.selection = false;
         fabricCanvas.defaultCursor = 'crosshair';
@@ -10328,12 +10328,41 @@ document.addEventListener('DOMContentLoaded', function() {
   
   function isPointNearPath(pointer, pathObj, radius) {
     try {
+      // Check bounding rect prima (veloce)
       var bounds = pathObj.getBoundingRect(true, true);
-      return pointer.x >= bounds.left - radius && 
-             pointer.x <= bounds.left + bounds.width + radius &&
-             pointer.y >= bounds.top - radius && 
-             pointer.y <= bounds.top + bounds.height + radius;
-    } catch(e) { return false; }
+      var pad = radius * 2;
+      if (pointer.x < bounds.left - pad || pointer.x > bounds.left + bounds.width + pad ||
+          pointer.y < bounds.top - pad || pointer.y > bounds.top + bounds.height + pad) {
+        return false; // fuori dal bounding rect allargato
+      }
+      
+      // Check preciso: trasforma pointer in spazio locale e campiona i punti del path
+      if (!pathObj.path || !pathObj.path.length) return true;
+      
+      var matrix = pathObj.calcTransformMatrix();
+      var inv = fabric.util.invertTransform(matrix);
+      var lp = fabric.util.transformPoint({x: pointer.x, y: pointer.y}, inv);
+      var r2 = radius * radius;
+      
+      for (var i = 0; i < pathObj.path.length; i++) {
+        var cmd = pathObj.path[i];
+        var x, y;
+        if (cmd[0] === 'M' || cmd[0] === 'L') { x = cmd[1]; y = cmd[2]; }
+        else if (cmd[0] === 'Q') { x = cmd[3]; y = cmd[4]; }
+        else if (cmd[0] === 'C') { x = cmd[5]; y = cmd[6]; }
+        else continue;
+        var dx = lp.x - x, dy = lp.y - y;
+        if (dx*dx + dy*dy < r2) return true;
+      }
+      return false;
+    } catch(e) {
+      // Fallback bounding rect
+      try {
+        var b = pathObj.getBoundingRect(true, true);
+        return pointer.x >= b.left - radius && pointer.x <= b.left + b.width + radius &&
+               pointer.y >= b.top - radius && pointer.y <= b.top + b.height + radius;
+      } catch(e2) { return false; }
+    }
   }
   
   function hexToRgba(hex, alpha) {
