@@ -229,7 +229,22 @@
   function v202Brush(tool, c) {
     if (!c) return; var sw; try{sw=(typeof STROKE_SIZES!=='undefined'&&typeof currentStroke!=='undefined')?(STROKE_SIZES[currentStroke]||2):2;}catch(e){sw=2;}
     try {
-      if (tool==='eraser') { c._isEraserMode=true; c._eraserRadius=Math.max(15,sw*5); c.isDrawingMode=false; c.selection=false; c.defaultCursor='cell'; c.hoverCursor='cell'; c.forEachObject(function(o){o.selectable=false;o.evented=false;}); }
+      if (tool==='eraser') {
+        // V202-ERASER FIX: Keep isDrawingMode=TRUE so touch events fire on mobile.
+        // Use a fully transparent brush (draws invisible paths that we immediately discard).
+        c._isEraserMode=true;
+        c._eraserRadius=Math.max(20,sw*6);
+        c.isDrawingMode=true;  // MUST be true for touch to work
+        c.selection=false;
+        c.defaultCursor='cell';
+        c.hoverCursor='cell';
+        // Transparent brush — visible drawing is prevented
+        c.freeDrawingBrush=new fabric.PencilBrush(c);
+        c.freeDrawingBrush.color='rgba(0,0,0,0)';
+        c.freeDrawingBrush.width=1;
+        c.freeDrawingBrush.limitedToCanvasSize=true;
+        c.forEachObject(function(o){o.selectable=false;o.evented=false;});
+      }
       else { c._isEraserMode=false; c.isDrawingMode=true; c.defaultCursor='crosshair'; c.hoverCursor='crosshair';
         c.freeDrawingBrush=new fabric.PencilBrush(c); var col; try{col=currentColor||'#000';}catch(e){col='#000';}
         if(tool==='highlighter'){var hc;try{hc=currentHighlighterColor||'#ffeb3b';}catch(e){hc='#ffeb3b';} c.freeDrawingBrush.color=v202Rgba(hc,0.4); c.freeDrawingBrush.width=sw*8;}
@@ -238,10 +253,17 @@
     } catch(e) {}
   }
   function v202SetupEraser(c) {
-    if(!c||c.__v202E) return; c.__v202E=true; var erasing=false;
-    c.on('mouse:down',function(o){if(!c._isEraserMode)return;erasing=true;v202Erase(c,o.pointer||o.absolutePointer);});
-    c.on('mouse:move',function(o){if(!c._isEraserMode||!erasing)return;v202Erase(c,o.pointer||o.absolutePointer);});
-    c.on('mouse:up',function(){if(!c._isEraserMode)return;if(erasing){erasing=false;try{if(typeof saveUndoState==='function')saveUndoState();}catch(e){}v202QueueAutoSave();}});
+    if(!c||c.__v202E) return; c.__v202E=true; var erasing=false; var eraserPoints=[];
+    // Track pointer for continuous erase during drawing
+    c.on('mouse:down',function(o){if(!c._isEraserMode)return;erasing=true;eraserPoints=[];var p=o.pointer||o.absolutePointer;if(p){eraserPoints.push(p);v202Erase(c,p);}});
+    c.on('mouse:move',function(o){if(!c._isEraserMode||!erasing)return;var p=o.pointer||o.absolutePointer;if(p){eraserPoints.push(p);v202Erase(c,p);}});
+    c.on('mouse:up',function(){if(!c._isEraserMode)return;if(erasing){erasing=false;eraserPoints=[];try{if(typeof saveUndoState==='function')saveUndoState();}catch(e){}v202QueueAutoSave();}});
+    // Remove invisible paths created by the transparent brush
+    c.on('path:created',function(e){
+      if(!c._isEraserMode)return;
+      // The transparent brush creates a path — remove it immediately
+      if(e&&e.path){try{c.remove(e.path);c.renderAll();}catch(ex){}}
+    });
   }
   function v202Erase(c,p) {
     if(!c||!p)return; var r=c._eraserRadius||20, rm=[];
