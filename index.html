@@ -10293,10 +10293,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     var radius = canvas._eraserRadius || 25;
     var objectsToRemove = [];
+    var totalPaths = 0;
     
     canvas.forEachObject(function(obj) {
       // Only erase path objects (drawings), not other shapes
       if (obj.type !== 'path') return;
+      totalPaths++;
+      var bounds = obj.getBoundingRect(true, true);
+      console.log('🔍 path bounds:', JSON.stringify(bounds), 'pointer:', pointer.x, pointer.y, 'radius:', radius);
       
       var objBounds = obj.getBoundingRect();
       
