@@ -7056,9 +7056,10 @@ const pushAnagrafiche = async () => {
     
     __notesSyncTimers[key] = setTimeout(async ()=>{
       delete __notesSyncTimers[key];
-      // V198fix: serializza fabricJson come stringa per evitare nested arrays
+      // V198fix: serializza fabricJson e textDelta come stringa per evitare oggetti custom Firestore
       const notesDataSafe = notesData ? Object.assign({}, notesData, {
-        fabricJson: notesData.fabricJson ? JSON.stringify(notesData.fabricJson) : null
+        fabricJson: notesData.fabricJson ? JSON.stringify(notesData.fabricJson) : null,
+        textDelta: notesData.textDelta ? JSON.stringify(notesData.textDelta) : null
       }) : null;
       const payload = {
         tastingId: String(tid),
