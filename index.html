@@ -10219,7 +10219,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (currentTool === 'eraser') {
         // V197: Eraser mode - stay in drawing mode but track eraser state
         fabricCanvas._isEraserMode = true;
-        fabricCanvas._eraserRadius = strokeWidth * 6;
+        fabricCanvas._eraserRadius = strokeWidth * 20;
         fabricCanvas.isDrawingMode = false; // Disable drawing to allow mouse events
         fabricCanvas.selection = false;
         fabricCanvas.defaultCursor = 'crosshair';
@@ -10328,47 +10328,12 @@ document.addEventListener('DOMContentLoaded', function() {
   
   function isPointNearPath(pointer, pathObj, radius) {
     try {
-      // Metodo 1: usa getBoundingRect con padding (veloce)
       var bounds = pathObj.getBoundingRect(true, true);
-      var pad = radius;
-      if (pointer.x >= bounds.left - pad && pointer.x <= bounds.left + bounds.width + pad &&
-          pointer.y >= bounds.top - pad && pointer.y <= bounds.top + bounds.height + pad) {
-        
-        // Metodo 2: trasforma il pointer nello spazio locale dell'oggetto
-        if (!pathObj.path) return true; // se non ha path, usa solo bounds
-        
-        var matrix = pathObj.calcTransformMatrix();
-        var invertedMatrix = fabric.util.invertTransform(matrix);
-        var localPointer = fabric.util.transformPoint(
-          {x: pointer.x, y: pointer.y}, invertedMatrix
-        );
-        
-        var path = pathObj.path;
-        for (var i = 0; i < path.length; i++) {
-          var cmd = path[i];
-          var x, y;
-          if (cmd[0] === 'M' || cmd[0] === 'L') {
-            x = cmd[1]; y = cmd[2];
-          } else if (cmd[0] === 'Q') {
-            x = cmd[3]; y = cmd[4];
-          } else if (cmd[0] === 'C') {
-            x = cmd[5]; y = cmd[6];
-          } else continue;
-          
-          var dx = localPointer.x - x;
-          var dy = localPointer.y - y;
-          if (Math.sqrt(dx*dx + dy*dy) < radius) return true;
-        }
-      }
-    } catch(e) {
-      // Fallback: usa solo bounding rect
-      try {
-        var b = pathObj.getBoundingRect(true, true);
-        return pointer.x >= b.left - radius && pointer.x <= b.left + b.width + radius &&
-               pointer.y >= b.top - radius && pointer.y <= b.top + b.height + radius;
-      } catch(e2) {}
-    }
-    return false;
+      return pointer.x >= bounds.left - radius && 
+             pointer.x <= bounds.left + bounds.width + radius &&
+             pointer.y >= bounds.top - radius && 
+             pointer.y <= bounds.top + bounds.height + radius;
+    } catch(e) { return false; }
   }
   
   function hexToRgba(hex, alpha) {
