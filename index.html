@@ -11045,26 +11045,49 @@ document.addEventListener('DOMContentLoaded', function() {
     var ctx = getNoteContext();
     if (!ctx) return;
     
+    // V198fix: fetch diretta da fabricNotes (source of truth) poi fallback a evaluations
     try {
       var t = typeof getTasting === 'function' ? getTasting() : null;
       var ev = typeof getEval === 'function' ? getEval(t, ctx.tasterId, ctx.sampleId) : null;
-      
       if (!ev || !ev.data || !ev.data.vista) return;
       
-      // V198fix: usa fabricNotes se più recente di evaluations
-      var notesData = ev.data.vista.notesV187;
-      try {
-        var fabricNotesData = ev.data.vista.__fabricNotesLatest;
-        if (fabricNotesData && fabricNotesData.updatedAt) {
-          var fnTime = new Date(fabricNotesData.updatedAt).getTime();
-          var evTime = notesData && notesData.updatedAt ? new Date(notesData.updatedAt).getTime() : 0;
-          if (fnTime > evTime) {
-            notesData = fabricNotesData;
+      var docKey = String(ctx.tasterId) + '_' + String(ctx.sampleId);
+      if (typeof db !== 'undefined' && db && t) {
+        getDoc(doc(db, 'tastings', String(t.id), 'fabricNotes', docKey)).then(function(snap) {
+          var notesData = ev.data.vista.notesV187;
+          if (snap && snap.exists) {
+            var d = snap.data ? snap.data() : snap.data;
+            if (d && d.notesData) {
+              var nd = Object.assign({}, d.notesData);
+              if (nd.fabricJson && typeof nd.fabricJson === 'string') {
+                try { nd.fabricJson = JSON.parse(nd.fabricJson); } catch(e) {}
+              }
+              if (nd.textDelta && typeof nd.textDelta === 'string') {
+                try { nd.textDelta = JSON.parse(nd.textDelta); } catch(e) {}
+              }
+              var fnTime = nd.updatedAt ? new Date(nd.updatedAt).getTime() : 0;
+              var evTime = notesData && notesData.updatedAt ? new Date(notesData.updatedAt).getTime() : 0;
+              if (fnTime >= evTime) {
+                notesData = nd;
+                ev.data.vista.notesV187 = nd;
+              }
+            }
           }
-        }
-      } catch(e) {}
-      
-      // V198fix: deserializza fabricJson se è stringa
+          _applyDrawingToCanvas(notesData, ev);
+        }).catch(function(e) {
+          _applyDrawingToCanvas(ev.data.vista.notesV187, ev);
+        });
+        return; // fetch asincrona — _applyDrawingToCanvas chiamato nel then
+      }
+      var notesData = ev.data.vista.notesV187;
+      _applyDrawingToCanvas(notesData, ev);
+    } catch(e) {
+      console.error('Error loading drawing:', e);
+    }
+  }
+
+  function _applyDrawingToCanvas(notesData, ev) {
+    try {
       if (notesData && notesData.fabricJson && typeof notesData.fabricJson === 'string') {
         try { notesData = Object.assign({}, notesData, { fabricJson: JSON.parse(notesData.fabricJson) }); } catch(e) {}
       }
