@@ -10219,7 +10219,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (currentTool === 'eraser') {
         // V197: Eraser mode - stay in drawing mode but track eraser state
         fabricCanvas._isEraserMode = true;
-        fabricCanvas._eraserRadius = strokeWidth * 8;
+        fabricCanvas._eraserRadius = strokeWidth * 3;
         fabricCanvas.isDrawingMode = false; // Disable drawing to allow mouse events
         fabricCanvas.selection = false;
         fabricCanvas.defaultCursor = 'crosshair';
