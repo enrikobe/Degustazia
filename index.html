@@ -11037,6 +11037,10 @@ document.addEventListener('DOMContentLoaded', function() {
       
       var notesData = ev.data.vista.notesV187;
       
+      // V198fix: deserializza fabricJson se è stringa
+      if (notesData && notesData.fabricJson && typeof notesData.fabricJson === 'string') {
+        try { notesData = Object.assign({}, notesData, { fabricJson: JSON.parse(notesData.fabricJson) }); } catch(e) {}
+      }
       if (notesData && notesData.fabricJson && notesData.fabricJson.objects) {
         console.log('📖 V191: Loading Fabric.js drawing...');
         
