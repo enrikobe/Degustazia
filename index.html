@@ -6815,6 +6815,7 @@ function forceEnableClear(){
 <!-- FIREBASE CLOUD-ONLY START -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script><!-- V198 -->
 <script>
 
   // --- Firebase Compat loader (works also on file://) ---
@@ -6882,9 +6883,11 @@ function forceEnableClear(){
   }
 // ====== INIT FIREBASE (NON BLOCCANTE) ======
   let db = null;
+  let storage = null; // V198
   try{
     const app = initializeApp(firebaseConfig);
     db = getFirestore(app);
+    try{ storage = firebase.storage(); }catch(se){ console.warn('Storage init failed:', se); }
   }catch(e){
     console.error('Firebase init error:', e);
     setLed('offline');
@@ -6975,7 +6978,7 @@ const pushAnagrafiche = async () => {
 
   
 
-  // ====== ISOLATED CANVAS SYNC (non realtime UI refresh) ======
+  // ====== ISOLATED CANVAS SYNC — V198: Firebase Storage ======
   let __canvasSyncTimer = null;
   let __canvasDirtyUntil = 0;
 
@@ -6984,17 +6987,38 @@ const pushAnagrafiche = async () => {
     __canvasDirtyUntil = Date.now() + 1500;
     if(__canvasSyncTimer) clearTimeout(__canvasSyncTimer);
     __canvasSyncTimer = setTimeout(async ()=>{
-      const payload = {
-        tastingId: String(tid),
-        tasterId: Number(tasterId),
-        sampleId: String(sampleId),
-        dataUrl: dataUrl || null,
-        updatedAt: new Date().toISOString()
-      };
-      beginWrite();
-      try{
-        await setDoc(doc(db,'tastings', String(tid), 'canvases', String(tasterId) + '_' + String(sampleId)), payload, {merge:true});
-      } finally { endWrite(); }
+      const docKey = String(tasterId) + '_' + String(sampleId);
+      if(!dataUrl){
+        const payload = { tastingId: String(tid), tasterId: Number(tasterId), sampleId: String(sampleId), storageUrl: null, dataUrl: null, updatedAt: new Date().toISOString() };
+        beginWrite();
+        try{ await setDoc(doc(db,'tastings', String(tid), 'canvases', docKey), payload, {merge:true}); } finally { endWrite(); }
+        return;
+      }
+      if(storage){
+        try{
+          const res = await fetch(dataUrl);
+          const blob = await res.blob();
+          const path = 'canvases/' + tid + '/' + docKey + '.png';
+          const storageRef = firebase.storage().ref(path);
+          beginWrite();
+          try{
+            await storageRef.put(blob, { contentType: 'image/png' });
+            const storageUrl = await storageRef.getDownloadURL();
+            const payload = { tastingId: String(tid), tasterId: Number(tasterId), sampleId: String(sampleId), storageUrl: storageUrl, dataUrl: null, updatedAt: new Date().toISOString() };
+            await setDoc(doc(db,'tastings', String(tid), 'canvases', docKey), payload, {merge:true});
+            console.log('V198: Canvas to Storage:', path);
+          } finally { endWrite(); }
+        } catch(e){
+          console.warn('V198: Storage fallback:', e);
+          const payload = { tastingId: String(tid), tasterId: Number(tasterId), sampleId: String(sampleId), dataUrl: dataUrl, updatedAt: new Date().toISOString() };
+          beginWrite();
+          try{ await setDoc(doc(db,'tastings', String(tid), 'canvases', docKey), payload, {merge:true}); } finally { endWrite(); }
+        }
+      } else {
+        const payload = { tastingId: String(tid), tasterId: Number(tasterId), sampleId: String(sampleId), dataUrl: dataUrl, updatedAt: new Date().toISOString() };
+        beginWrite();
+        try{ await setDoc(doc(db,'tastings', String(tid), 'canvases', docKey), payload, {merge:true}); } finally { endWrite(); }
+      }
     }, 700);
   };
   window.queueCanvasSync = queueCanvasSync;
@@ -7142,7 +7166,8 @@ const pushAnagrafiche = async () => {
         const ev = t.evaluations[String(ta)][String(sa)];
         if(!ev.data) ev.data = blankEval().data;
         if(!ev.data.vista) ev.data.vista = {intensita:0, limpidezza:0, desc:[], canvas:null};
-        ev.data.vista.canvas = d.dataUrl || null;
+        // V198: preferisci storageUrl, fallback dataUrl legacy
+        ev.data.vista.canvas = d.storageUrl || d.dataUrl || null;
 
         try{
           if(String(ta)===String(currentTasterId()) && String(sa)===String(selectedSampleId)){
@@ -10912,7 +10937,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.queueNotesSync(t.id, ctx.tasterId, ctx.sampleId, notesData);
       }
       
-      // Also sync legacy canvas dataUrl
+      // V198: Upload canvas PNG su Firebase Storage (via queueCanvasSync)
       if (dataUrl && typeof window.queueCanvasSync === 'function') {
         window.queueCanvasSync(t.id, ctx.tasterId, ctx.sampleId, dataUrl);
       }
