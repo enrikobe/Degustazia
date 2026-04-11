@@ -10146,7 +10146,9 @@ document.addEventListener('DOMContentLoaded', function() {
       
       // V196: Setup object-based eraser
       setupEraserMode(fabricCanvas);
-      window.__debugFabricCanvas = fabricCanvas; // V198debug: temp debug access
+      window.__debugFabricCanvas = fabricCanvas; // V198debug
+      // Aggiorna ogni volta che il canvas viene reinizializzato
+      Object.defineProperty(window, '__fc', { get: function(){ return fabricCanvas; }, configurable: true });
       
       // V192: Save undo state after each stroke
       fabricCanvas.on('path:created', function() {
