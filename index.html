@@ -10268,6 +10268,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var isErasing = false;
     
     canvas.on('mouse:down', function(opt) {
+      console.log('🖱️ mouse:down eraserMode:', canvas._isEraserMode, 'pointer:', opt.pointer);
       if (!canvas._isEraserMode) return;
       isErasing = true;
       eraseAtPoint(canvas, opt.pointer);
