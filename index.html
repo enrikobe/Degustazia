@@ -7153,6 +7153,11 @@ const pushAnagrafiche = async () => {
           if(nd.fabricJson && typeof nd.fabricJson === 'string') {
             try { nd.fabricJson = JSON.parse(nd.fabricJson); } catch(e) {}
           }
+          if(nd.textDelta && typeof nd.textDelta === 'string') {
+            try { nd.textDelta = JSON.parse(nd.textDelta); } catch(e) {}
+          }
+          // V198fix: salva copia come __fabricNotesLatest (più recente di evaluations)
+          ev.data.vista.__fabricNotesLatest = nd;
           ev.data.vista.notesV187 = nd;
           console.log('📥 V195: Notes received from Firebase for', ta, sa, '- current sample:', isCurrentSample);
           
@@ -11046,7 +11051,18 @@ document.addEventListener('DOMContentLoaded', function() {
       
       if (!ev || !ev.data || !ev.data.vista) return;
       
+      // V198fix: usa fabricNotes se più recente di evaluations
       var notesData = ev.data.vista.notesV187;
+      try {
+        var fabricNotesData = ev.data.vista.__fabricNotesLatest;
+        if (fabricNotesData && fabricNotesData.updatedAt) {
+          var fnTime = new Date(fabricNotesData.updatedAt).getTime();
+          var evTime = notesData && notesData.updatedAt ? new Date(notesData.updatedAt).getTime() : 0;
+          if (fnTime > evTime) {
+            notesData = fabricNotesData;
+          }
+        }
+      } catch(e) {}
       
       // V198fix: deserializza fabricJson se è stringa
       if (notesData && notesData.fabricJson && typeof notesData.fabricJson === 'string') {
