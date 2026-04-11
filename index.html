@@ -7118,6 +7118,16 @@ const pushAnagrafiche = async () => {
           return;
         }
         
+        // V198fix: confronta con updatedAt locale per evitare sovrascrittura di dati più recenti
+        try {
+          const localEv = t.evaluations?.[String(ta)]?.[String(sa)];
+          const localUpdatedAt = localEv?.updatedAt ? new Date(localEv.updatedAt).getTime() : 0;
+          if(updateTime < localUpdatedAt) {
+            console.log('⏭️ V198fix: Skipping cloud update older than local for', ta, sa);
+            return;
+          }
+        } catch(e) {}
+        
         __notesLastReceivedAt[fullKey] = updateTime;
         
         // V196: Check if we're currently editing this sample
