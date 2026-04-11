@@ -6964,8 +6964,19 @@ const pushAnagrafiche = async () => {
   const pushEvalDoc = async (tid, tasterId, sampleId, ev) => {
     if(!db || !tid || !tasterId || !sampleId) return;
     const payload = JSON.parse(JSON.stringify(ev || {}));
-    // Non sincronizzare il canvas dentro le evaluation (troppo pesante e causa refresh UI continui)
-    try{ if(payload && payload.data && payload.data.vista) delete payload.data.vista.canvas; }catch(e){}
+    // Non sincronizzare canvas/notes dentro le evaluation (troppo pesante + nested arrays)
+    try{
+      if(payload && payload.data && payload.data.vista) {
+        delete payload.data.vista.canvas;
+        delete payload.data.vista.canvasFS;
+        // notesV187.fabricJson può contenere nested arrays — rimuovi o serializza
+        if(payload.data.vista.notesV187 && payload.data.vista.notesV187.fabricJson) {
+          if(typeof payload.data.vista.notesV187.fabricJson !== 'string') {
+            payload.data.vista.notesV187.fabricJson = JSON.stringify(payload.data.vista.notesV187.fabricJson);
+          }
+        }
+      }
+    }catch(e){}
     payload.tastingId = String(tid);
     payload.tasterId = Number(tasterId);
     payload.sampleId = String(sampleId);
