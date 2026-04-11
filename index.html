@@ -6964,15 +6964,17 @@ const pushAnagrafiche = async () => {
   const pushEvalDoc = async (tid, tasterId, sampleId, ev) => {
     if(!db || !tid || !tasterId || !sampleId) return;
     const payload = JSON.parse(JSON.stringify(ev || {}));
-    // Non sincronizzare canvas/notes dentro le evaluation (troppo pesante + nested arrays)
+    // Non sincronizzare canvas blob (troppo pesante), ma mantieni notesV187 con fabricJson serializzato
     try{
       if(payload && payload.data && payload.data.vista) {
         delete payload.data.vista.canvas;
         delete payload.data.vista.canvasFS;
-        // notesV187.fabricJson può contenere nested arrays — rimuovi o serializza
+        // Serializza fabricJson come stringa per evitare nested arrays Firestore
         if(payload.data.vista.notesV187 && payload.data.vista.notesV187.fabricJson) {
           if(typeof payload.data.vista.notesV187.fabricJson !== 'string') {
-            payload.data.vista.notesV187.fabricJson = JSON.stringify(payload.data.vista.notesV187.fabricJson);
+            payload.data.vista.notesV187 = Object.assign({}, payload.data.vista.notesV187, {
+              fabricJson: JSON.stringify(payload.data.vista.notesV187.fabricJson)
+            });
           }
         }
       }
@@ -7488,6 +7490,16 @@ async function pollEvaluations(tid){
       snap.forEach(ds=>{
         const ev = ds.data() || {};
         // Il canvas NON viaggia nelle evaluation: preserva quello locale già applicato da pollCanvases()
+        // V198fix: deserializza fabricJson se stringa
+        try{
+          if(ev.data && ev.data.vista && ev.data.vista.notesV187 && ev.data.vista.notesV187.fabricJson) {
+            if(typeof ev.data.vista.notesV187.fabricJson === 'string') {
+              ev.data.vista.notesV187 = Object.assign({}, ev.data.vista.notesV187, {
+                fabricJson: JSON.parse(ev.data.vista.notesV187.fabricJson)
+              });
+            }
+          }
+        }catch(e){}
         let keepCanvas = null;
         try{ keepCanvas = t.evaluations?.[String(ev.tasterId)]?.[String(ev.sampleId)]?.data?.vista?.canvas || null; }catch(e){}
         try{ if(ev && ev.data && ev.data.vista) delete ev.data.vista.canvas; }catch(e){}
