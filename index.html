@@ -10491,7 +10491,12 @@ document.addEventListener('DOMContentLoaded', function() {
         initQuillEditor();
       }
       
-      // V194: Initialize fullscreen canvas fresh
+      // V201fix: reinizializza canvas DOPO che modal è visibile (evita 300x150)
+      // Il modal diventa visibile prima di questo setTimeout
+      if (fabricCanvas) {
+        try { fabricCanvas.dispose(); } catch(e) {}
+        fabricCanvas = null;
+      }
       initFabricCanvas();
       
       // V194: Load notes from storage first
@@ -10675,6 +10680,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!confirm('Cancellare tutte le note (testo e disegno)?')) return;
     
     clearEditorsContent();
+    
+    // V201fix: svuota anche widgetCanvas e widgetTextEditor
+    try {
+      if (widgetCanvas) { widgetCanvas.clear(); widgetCanvas.renderAll(); }
+      var wt = document.getElementById('widgetTextEditor');
+      if (wt) wt.innerHTML = '';
+    } catch(e) {}
+    
     immediateSaveNotes();
     
     // V201fix: forza sync su Firestore dopo cancellazione
