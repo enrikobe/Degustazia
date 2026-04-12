@@ -1989,7 +1989,7 @@ button.zenplus-btn:hover:not(:disabled) {
     <div id="splashTitle">DegustAPP</div>
 
     <!-- V200: Firebase Auth Login Form -->
-    <div id="authLoginForm" style="display:none; width:100%; max-width:320px; margin-top:10px;">
+    <div id="authLoginForm" style="display:block; width:100%; max-width:320px; margin-top:10px;">
       <div style="margin-bottom:12px;">
         <input id="authEmail" type="email" placeholder="Email" autocomplete="email"
           style="width:100%; box-sizing:border-box; padding:14px 16px; border:1px solid rgba(255,255,255,0.4);
@@ -11830,7 +11830,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var sp = document.getElementById('splashScreen');
     var form = document.getElementById('authLoginForm');
     if (sp) sp.style.display = 'flex';
-    if (form) form.style.display = 'block';
+    if (form) { form.style.display = 'block'; form.style.opacity = '1'; }
 
     // Nascondi lista legacy
     var list = document.getElementById('splash-tasters-list');
