@@ -1384,6 +1384,9 @@ button.zenplus-btn:hover:not(:disabled) {
   z-index: 999999;
   background: #fff;
   flex-direction: column;
+
+  max-width: 100vw;
+  overflow: hidden;
 }
 
 #fabricNotesModal.visible {
@@ -1933,6 +1936,49 @@ button.zenplus-btn:hover:not(:disabled) {
   color: #722F37;
 }
 
+
+/* V199: Responsive tablet/mobile */
+@media (max-width: 900px) {
+  #fabricNotesModal .fabric-notes-inner {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    padding: 4px !important;
+  }
+  #fabricCanvasWrap, #fabricWidgetWrap {
+    overflow: hidden !important;
+    max-width: calc(100vw - 8px) !important;
+  }
+  #fabricCanvasWrap canvas, #fabricWidgetWrap canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  .fabric-notes-toolbar {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .fabric-tool-btn {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+  .container {
+    padding: 4px;
+    gap: 4px;
+  }
+  .panel {
+    padding: 8px;
+  }
+}
+@media (max-width: 768px) {
+  .menu-bar {
+    height: 48px;
+    padding: 0 6px;
+    gap: 6px;
+  }
+  .menu-btn {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+}
 </style>
 </head>
 
@@ -3747,6 +3793,10 @@ function renderZenPlusDescriptors(){
       state.currentTaster = currentTasterId();
       try{ syncCardColorModeUI(); }catch(e){}
       saveState({skipCloud:true});
+      // V199: aggiorna filtri per il nuovo degustatore
+      try{ renderSortButtons(); }catch(e){}
+      try{ renderProfileFilterBtns(); }catch(e){}
+      try{ renderGroupFilterBtns(); }catch(e){}
       renderGrid();
       updateDetail();
       loadCanvasFromEval();
@@ -7791,8 +7841,9 @@ function getHiddenSamplesForTasting(tid){
 }
 
 function isSampleHidden(tastingId, sampleId){
-  const key = hiddenKeyForCurrent();
-  if(!key) return false;
+  // V199: usa tastingId|tasterId per isolamento per degustatore
+  const tId = currentTasterId();
+  const key = String(tastingId||'') + '|' + String(tId||0);
   const arr = getHiddenSamplesForTasting(key) || [];
   return arr.includes(String(sampleId));
 }
@@ -10028,8 +10079,11 @@ document.addEventListener('DOMContentLoaded', function() {
   var currentNoteContext = null;
   
   // V191: Larger canvas dimensions
-  var CANVAS_WIDTH = 900;
-  var CANVAS_HEIGHT = 1150;
+  // V199: Canvas adattivo al viewport (tablet/mobile)
+  var _vw = Math.min(window.innerWidth, screen.width);
+  var _vh = Math.min(window.innerHeight, screen.height);
+  var CANVAS_WIDTH = Math.min(900, Math.floor(_vw * 0.92));
+  var CANVAS_HEIGHT = Math.min(1150, Math.floor(CANVAS_WIDTH * 1.28));
   
   // Stroke widths for each size
   var STROKE_SIZES = {
