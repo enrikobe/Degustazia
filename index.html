@@ -2028,14 +2028,7 @@ button.zenplus-btn:hover:not(:disabled) {
   </div>
 </div>
   <script>
-    // V181: Dopo 3s mostra selezione degustatori - NON chiudere splash fino a selezione
-    // V200: Gestito da Firebase Auth
-    // setTimeout(function(){
-    //   if (typeof window.showSplashTastersV181 === 'function') {
-    //     window.showSplashTastersV181();
-      }
-      // V181: NON c'è più fallback che chiude la splash - rimane aperta
-    }, 3000);
+    // V200: Login gestito da Firebase Auth (vedi script V200 in fondo)
   window.toggleBlindProduct = function(pid){
   if(isArchived()) return;
 
@@ -11902,7 +11895,7 @@ document.addEventListener('DOMContentLoaded', function() {
           window.__sessionTasterName = t.name;
           closeSplashAndEnterApp(t.id, t.name);
         } else {
-          showAuthError('Account non associato a nessun degustatore. Contatta l'amministratore.');
+          showAuthError('Account non associato a nessun degustatore. Contatta l\'amministratore.');
         }
       }
     }
