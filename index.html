@@ -1986,10 +1986,10 @@ button.zenplus-btn:hover:not(:disabled) {
   <div id="splashScreen">
   <div id="splashInner">
     <img id="splashLogo" src="logo.png" alt="Logo" />
-    <div id="splashTitle">DegustAPP</div>
+    <div id="splashTitle">DegustAPP by EB</div>
 
-    <!-- V200: Firebase Auth Login Form -->
-    <div id="authLoginForm" style="display:block; width:100%; max-width:320px; margin-top:10px;">
+    <!-- V200: Firebase Auth Login Form - sempre visibile -->
+    <div id="authLoginForm" style="width:100%; max-width:320px; margin-top:20px;">
       <div style="margin-bottom:12px;">
         <input id="authEmail" type="email" placeholder="Email" autocomplete="email"
           style="width:100%; box-sizing:border-box; padding:14px 16px; border:1px solid rgba(255,255,255,0.4);
@@ -12011,9 +12011,17 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   document.addEventListener('DOMContentLoaded', function() {
-    // Mostra subito lo splash con loading
+    // Mostra subito lo splash con form visibile
     var sp = document.getElementById('splashScreen');
     if (sp) sp.style.display = 'flex';
+    
+    // Assicura che il form sia visibile
+    var form = document.getElementById('authLoginForm');
+    if (form) { form.style.display = 'block'; form.style.visibility = 'visible'; }
+    
+    // Nascondi legacy list
+    var list = document.getElementById('splash-tasters-list');
+    if (list) list.style.display = 'none';
 
     // Aspetta Firebase
     setTimeout(waitForFirebaseAndInitAuth, 500);
