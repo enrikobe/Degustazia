@@ -10498,27 +10498,34 @@ document.addEventListener('DOMContentLoaded', function() {
       loadNotesFromStorage();
       loadDrawingFromStorage();
       
-      // V194: Sync widget text to fullscreen Quill
-      var widgetText = document.getElementById('widgetTextEditor');
-      if (widgetText && quillEditor) {
-        var widgetContent = widgetText.innerHTML.trim();
-        if (widgetContent && widgetContent !== '<br>' && widgetContent.length > 0) {
-          console.log('📝 V194: Syncing widget text to fullscreen');
-          quillEditor.root.innerHTML = widgetContent;
+      // V201fix: Carica testo dal storage del campione, non dal DOM condiviso
+      try {
+        var _t = typeof getTasting === 'function' ? getTasting() : null;
+        var _ctx = getNoteContext();
+        if (_t && _ctx && quillEditor) {
+          var _ev = typeof getEval === 'function' ? getEval(_t, _ctx.tasterId, _ctx.sampleId) : null;
+          var _nd = _ev && _ev.data && _ev.data.vista && _ev.data.vista.notesV187;
+          if (_nd) {
+            var _td = _nd.textDelta;
+            if (_td && typeof _td === 'string') { try { _td = JSON.parse(_td); } catch(e) {} }
+            if (_td && _td.ops && _td.ops.length > 0) {
+              quillEditor.setContents(_td);
+              console.log('📝 V201fix: Testo caricato da storage campione', _ctx.sampleId);
+            } else if (_nd.textHtml) {
+              quillEditor.root.innerHTML = _nd.textHtml;
+            } else {
+              quillEditor.setContents([{insert:'\n'}]);
+            }
+          } else {
+            quillEditor.setContents([{insert:'\n'}]);
+          }
         }
+      } catch(e) {
+        console.error('V201fix text load error:', e);
       }
       
-      // V194: Sync widget canvas to fullscreen canvas
-      if (widgetCanvas && fabricCanvas) {
-        var json = widgetCanvas.toJSON(['selectable', 'evented']);
-        if (json && json.objects && json.objects.length > 0) {
-          console.log('📝 V194: Syncing widget canvas to fullscreen, objects:', json.objects.length);
-          fabricCanvas.loadFromJSON(json, function() {
-            fabricCanvas.backgroundColor = 'transparent';
-            fabricCanvas.renderAll();
-          });
-        }
-      }
+      // V201fix: carica canvas da storage invece di widgetCanvas (evita taglio)
+      // loadDrawingFromStorage viene chiamato subito dopo, non serve sync dal widget
       
       // V194: Start on DRAW mode (default)
       switchFabricMode('draw');
@@ -10669,6 +10676,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     clearEditorsContent();
     immediateSaveNotes();
+    
+    // V201fix: forza sync su Firestore dopo cancellazione
+    setTimeout(function() {
+      try {
+        var ctx = getNoteContext();
+        if (ctx && typeof window.queueNotesSync === 'function') {
+          var emptyNotes = { fabricJson: null, textDelta: null, textHtml: '', updatedAt: new Date().toISOString() };
+          window.queueNotesSync(ctx.tastingId, ctx.tasterId, ctx.sampleId, emptyNotes);
+          console.log('🗑️ V201fix: Note cancellate sincronizzate su cloud');
+        }
+      } catch(e) { console.error('V201fix clear sync error:', e); }
+    }, 200);
     
     if (typeof toast === 'function') toast('Note cancellate');
   };
