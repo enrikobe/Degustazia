@@ -11910,9 +11910,11 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(function() { sp.style.display = 'none'; }, 400);
     }
 
-    // Mostra pulsante logout nel menu
-    var btnLogout = document.getElementById('btnLogout');
-    if (btnLogout) btnLogout.style.display = 'none'; // nel menu top non nello splash
+    // Mostra pulsante logout nel menu top
+    setTimeout(function() {
+      var btnLogout = document.getElementById('btnMenuLogout');
+      if (btnLogout) btnLogout.style.display = 'inline-block';
+    }, 600);
 
     // Naviga e seleziona degustatore
     setTimeout(function() {
