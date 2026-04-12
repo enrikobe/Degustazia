@@ -10219,7 +10219,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (currentTool === 'eraser') {
         // V197: Eraser mode - stay in drawing mode but track eraser state
         fabricCanvas._isEraserMode = true;
-        fabricCanvas._eraserRadius = strokeWidth * 10;
+        fabricCanvas._eraserRadius = strokeWidth * 4;
         fabricCanvas.isDrawingMode = false; // Disable drawing to allow mouse events
         fabricCanvas.selection = false;
         fabricCanvas.defaultCursor = 'crosshair';
@@ -10328,31 +10328,9 @@ document.addEventListener('DOMContentLoaded', function() {
   
   function isPointNearPath(pointer, pathObj, radius) {
     try {
-      // Prima check bounding rect allargato (veloce)
-      var bounds = pathObj.getBoundingRect(true, true);
-      if (pointer.x < bounds.left - radius || 
-          pointer.x > bounds.left + bounds.width + radius ||
-          pointer.y < bounds.top - radius || 
-          pointer.y > bounds.top + bounds.height + radius) {
-        return false;
-      }
-      // Usa containsPoint di Fabric.js con punto espanso
       var pt = new fabric.Point(pointer.x, pointer.y);
-      if (pathObj.containsPoint(pt)) return true;
-      // Check anche punti vicini per aumentare la sensibilità
-      var offsets = [[radius,0],[-radius,0],[0,radius],[0,-radius]];
-      for (var k = 0; k < offsets.length; k++) {
-        var p2 = new fabric.Point(pointer.x + offsets[k][0], pointer.y + offsets[k][1]);
-        if (pathObj.containsPoint(p2)) return true;
-      }
-      return false;
-    } catch(e) {
-      try {
-        var b = pathObj.getBoundingRect(true, true);
-        return pointer.x >= b.left - radius && pointer.x <= b.left + b.width + radius &&
-               pointer.y >= b.top - radius && pointer.y <= b.top + b.height + radius;
-      } catch(e2) { return false; }
-    }
+      return pathObj.containsPoint(pt);
+    } catch(e) { return false; }
   }
   
   function hexToRgba(hex, alpha) {
