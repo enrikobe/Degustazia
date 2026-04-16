@@ -5877,27 +5877,29 @@ function renderArchive(){
       const MONTHS = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
 
       function cardHtml(t) {
-        const isSelected = window._multiSelectTastings.has(t.id);
-        const date = t.finishedAt ? fmtDateIT(t.finishedAt) : (t.createdAt ? fmtDateIT(t.createdAt) : '');
-        const nSamples = (t.samples||[]).filter(s=>s.active!==false).length;
-        const nTasters = (t.tasterIds||[]).length;
-        const mode = t.mode==='cieca' ? '👁 Cieca' : '🍷 Scoperta';
-        return `<div class="archive-card-compact \${t.pinned?'pinned':''} \${isSelected?'selected':''}" >
-          <input type="checkbox" style="flex-shrink:0;cursor:pointer;" \${isSelected?'checked':''} 
-            onchange="if(this.checked){window._multiSelectTastings.add('\${esc(t.id)}');}else{window._multiSelectTastings.delete('\${esc(t.id)}');} updateMultiSelectUI();" />
-          <button class="archive-pin-btn \${t.pinned?'active':''}" onclick="toggleTastingPin('\${esc(t.id)}')" title="\${t.pinned?'Rimuovi dai preferiti':'Aggiungi ai preferiti'}">\${t.pinned?'⭐':'☆'}</button>
-          <div class="archive-card-info" onclick="openComparison('\${esc(t.id)}')" style="cursor:pointer;">
-            <div class="archive-card-title">\${esc(t.title||'Degustazione')}</div>
-            <div class="archive-card-meta">\${date} · \${mode} · \${nSamples} campioni · \${nTasters} degustatori</div>
-          </div>
-          <div class="archive-card-actions">
-            <button class="archive-action-btn" onclick="openComparison('\${esc(t.id)}')" title="Confronto">📊</button>
-            <button class="archive-action-btn" onclick="reopenTasting('\${esc(t.id)}')" title="Riapri">↩</button>
-            <button class="archive-action-btn" onclick="duplicateTasting('\${esc(t.id)}')" title="Copia">⧉</button>
-            <button class="archive-action-btn" onclick="exportSingleJson('\${esc(t.id)}')" title="Esporta">⬇</button>
-            <button class="archive-action-btn danger" onclick="deleteTasting('\${esc(t.id)}')" title="Elimina">🗑</button>
-          </div>
-        </div>`;
+        var isSelected = window._multiSelectTastings.has(t.id);
+        var date = t.finishedAt ? fmtDateIT(t.finishedAt) : (t.createdAt ? fmtDateIT(t.createdAt) : '');
+        var nSamples = (t.samples||[]).filter(function(s){return s.active!==false;}).length;
+        var nTasters = (t.tasterIds||[]).length;
+        var mode = t.mode==='cieca' ? '👁 Cieca' : '🍷 Scoperta';
+        var tid = esc(t.id);
+        var ttl = esc(t.title||'Degustazione');
+        return '<div class="archive-card-compact ' + (t.pinned?'pinned':'') + ' ' + (isSelected?'selected':'') + '">' +
+          '<input type="checkbox" style="flex-shrink:0;cursor:pointer;" ' + (isSelected?'checked':'') +
+            ' onchange="if(this.checked){window._multiSelectTastings.add(\'' + tid + '\');}else{window._multiSelectTastings.delete(\'' + tid + '\');} updateMultiSelectUI();" />' +
+          '<button class="archive-pin-btn ' + (t.pinned?'active':'') + '" onclick="toggleTastingPin(\'' + tid + '\')" title="' + (t.pinned?'Rimuovi dai preferiti':'Aggiungi ai preferiti') + '">' + (t.pinned?'⭐':'☆') + '</button>' +
+          '<div class="archive-card-info" onclick="openComparison(\'' + tid + '\')" style="cursor:pointer;">' +
+            '<div class="archive-card-title">' + ttl + '</div>' +
+            '<div class="archive-card-meta">' + date + ' · ' + mode + ' · ' + nSamples + ' campioni · ' + nTasters + ' degustatori</div>' +
+          '</div>' +
+          '<div class="archive-card-actions">' +
+            '<button class="archive-action-btn" onclick="openComparison(\'' + tid + '\')" title="Confronto">📊</button>' +
+            '<button class="archive-action-btn" onclick="reopenTasting(\'' + tid + '\')" title="Riapri">↩</button>' +
+            '<button class="archive-action-btn" onclick="duplicateTasting(\'' + tid + '\')" title="Copia">⧉</button>' +
+            '<button class="archive-action-btn" onclick="exportSingleJson(\'' + tid + '\')" title="Esporta">⬇</button>' +
+            '<button class="archive-action-btn danger" onclick="deleteTasting(\'' + tid + '\')" title="Elimina">🗑</button>' +
+          '</div>' +
+        '</div>';
       }
 
       let html = '';
@@ -5905,8 +5907,8 @@ function renderArchive(){
       // Pinned
       if (pinned.length) {
         html += '<div class="archive-year-group">';
-        html += '<div class="archive-year-header" onclick="toggleArchiveGroup(\'__pinned\')">⭐ Preferiti <span class="archive-year-toggle">' + (state.ui.archiveGroupCollapsed?.['__pinned'] ? '▶' : '▼') + '</span></div>';
-        if (!state.ui.archiveGroupCollapsed?.['__pinned']) {
+        html += '<div class="archive-year-header" onclick="toggleArchiveGroup(\'__pinned\')">⭐ Preferiti <span class="archive-year-toggle">' + ((state.ui.archiveGroupCollapsed && state.ui.archiveGroupCollapsed['__pinned']) ? '▶' : '▼') + '</span></div>';
+        if (!state.ui.archiveGroupCollapsed && state.ui.archiveGroupCollapsed['__pinned']) {
           html += pinned.map(cardHtml).join('');
         }
         html += '</div>';
@@ -5915,14 +5917,14 @@ function renderArchive(){
       // Gruppi anno/mese
       Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(yKey => {
         const g = groups[yKey];
-        const yCollapsed = state.ui.archiveGroupCollapsed?.[yKey];
+        const yCollapsed = state.ui.archiveGroupCollapsed && state.ui.archiveGroupCollapsed[yKey];
         const count = Object.values(g.months).reduce((s,m)=>s+m.tastings.length,0);
         html += '<div class="archive-year-group">';
         html += `<div class="archive-year-header" onclick="toggleArchiveGroup('\${esc(yKey)}')">\${esc(g.year)} <span style="opacity:0.7;font-weight:400;font-size:12px;">(\${count})</span><span class="archive-year-toggle">\${yCollapsed?'▶':'▼'}</span></div>`;
         if (!yCollapsed) {
           Object.keys(g.months).sort((a,b)=>b.localeCompare(a)).forEach(mKey => {
             const mg = g.months[mKey];
-            const mCollapsed = state.ui.archiveGroupCollapsed?.[mKey];
+            const mCollapsed = state.ui.archiveGroupCollapsed && state.ui.archiveGroupCollapsed[mKey];
             const mNum = parseInt(mg.month,10)||0;
             const mLabel = MONTHS[mNum] || mg.month;
             html += '<div class="archive-month-group">';
