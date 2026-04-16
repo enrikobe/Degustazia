@@ -1999,24 +1999,13 @@ button.zenplus-btn:hover:not(:disabled) {
 .archive-month-header{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;background:rgba(122,41,56,0.1);color:var(--bordeaux);border-radius:6px;font-weight:700;font-size:13px;margin-bottom:3px;user-select:none}
 .archive-month-toggle{font-size:10px;margin-left:auto}
 
-/* V202: drag handle tablet */
-.drag-handle {
-  display: none;
-  cursor: grab;
-  color: #bbb;
-  font-size: 20px;
-  padding: 8px 6px;
-  touch-action: none;
-  user-select: none;
-  flex-shrink: 0;
-  line-height: 1;
-}
-.drag-handle:active { cursor: grabbing; color: var(--bordeaux); }
-@media (pointer: coarse) {
-  .drag-handle { display: flex; align-items: center; }
-}
+/* V202: tablet drag feedback */
 .sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
 .sample-card.drag-ghost { opacity: 0.4; }
+
+/* V202: touch drag state */
+.sample-card.td-dragging { touch-action: none; opacity: 0.5; }
+.sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
 </style>
 </head>
 
@@ -4660,49 +4649,56 @@ if(blind && !isArchived()) {
             // fallback: Standard Touch API emulation
          });
 
-         // Touch drag via handle dedicato (no longpress, no conflitti scroll)
-         const handle = card.querySelector('.drag-handle');
-         if(handle){
-           let __touchDragActive = false;
-           let __touchSrcId = null;
-           let __touchLastTarget = null;
+         // Touch drag: 200ms press → drag libero in qualsiasi direzione
+         // Prima dei 200ms: browser gestisce scroll normalmente (touch-action:auto)
+         // Dopo 200ms: blocca scroll, attiva drag (touch-action:none via classe)
+         let __td = {armed:false, timer:null, srcId:null, lastTgt:null, startX:0, startY:0};
+         const __TD_MS = 200;   // ms pressione per attivare drag
+         const __TD_SLOP = 12;  // px movimento prima di cancellare armo
 
-           handle.addEventListener('touchstart', e => {
-             e.stopPropagation();
-             e.preventDefault();
-             __touchDragActive = true;
-             __touchSrcId = sid;
-             card.classList.add('drag-ghost');
-           }, {passive:false});
+         const __tdReset = () => {
+           clearTimeout(__td.timer); __td.timer = null;
+           card.classList.remove('td-dragging');
+           if(__td.lastTgt) { __td.lastTgt.classList.remove('drag-over'); }
+           __td = {armed:false, timer:null, srcId:null, lastTgt:null, startX:__td.startX, startY:__td.startY};
+         };
 
-           handle.addEventListener('touchmove', e => {
-             if(!__touchDragActive) return;
-             e.preventDefault();
-             const t0 = e.touches[0];
-             // Evidenzia la card sotto il dito
-             const el = document.elementFromPoint(t0.clientX, t0.clientY);
-             const tgt = el ? el.closest('.sample-card') : null;
-             // Rimuovi highlight precedente
-             if(__touchLastTarget && __touchLastTarget !== tgt){
-               __touchLastTarget.classList.remove('drag-over');
-             }
-             if(tgt && tgt !== card){
-               tgt.classList.add('drag-over');
-               __touchLastTarget = tgt;
-             }
-           }, {passive:false});
+         card.addEventListener('touchstart', e => {
+           if(e.target.closest('.fav-heart') || e.target.closest('.dot')) return;
+           const t0 = e.touches[0]; if(!t0) return;
+           __tdReset();
+           __td.srcId = sid;
+           __td.startX = t0.clientX; __td.startY = t0.clientY;
+           __td.timer = setTimeout(() => {
+             __td.armed = true;
+             __td.timer = null;
+             card.classList.add('td-dragging'); // aggiunge touch-action:none via CSS
+           }, __TD_MS);
+         }, {passive:true});
 
-           ['touchend','touchcancel'].forEach(ev => handle.addEventListener(ev, e => {
-             card.classList.remove('drag-ghost');
-             if(__touchLastTarget) __touchLastTarget.classList.remove('drag-over');
-             if(__touchDragActive && __touchSrcId && __touchLastTarget){
-               doMove(__touchSrcId, String(__touchLastTarget.dataset.sampleid));
-             }
-             __touchDragActive = false;
-             __touchSrcId = null;
-             __touchLastTarget = null;
-           }));
-         }
+         card.addEventListener('touchmove', e => {
+           const t0 = e.touches[0]; if(!t0) return;
+           if(!__td.armed) {
+             // Non ancora armato: cancella se si muove troppo (utente vuole scrollare)
+             const d = Math.hypot(t0.clientX - __td.startX, t0.clientY - __td.startY);
+             if(d > __TD_SLOP) { clearTimeout(__td.timer); __td.timer = null; __td.srcId = null; }
+             return;
+           }
+           // Drag attivo: preventDefault blocca scroll
+           e.preventDefault();
+           const el = document.elementFromPoint(t0.clientX, t0.clientY);
+           const tgt = el ? el.closest('.sample-card') : null;
+           if(__td.lastTgt && __td.lastTgt !== tgt) __td.lastTgt.classList.remove('drag-over');
+           __td.lastTgt = (tgt && tgt !== card) ? tgt : null;
+           if(__td.lastTgt) __td.lastTgt.classList.add('drag-over');
+         }, {passive:false});
+
+         ['touchend','touchcancel'].forEach(ev => card.addEventListener(ev, () => {
+           if(__td.armed && __td.srcId && __td.lastTgt) {
+             doMove(__td.srcId, String(__td.lastTgt.dataset.sampleid));
+           }
+           __tdReset();
+         }));
       });
     }
 
