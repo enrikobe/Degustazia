@@ -5761,7 +5761,10 @@ function renderArchive(){
       const q = (state.ui.archiveSearch||"").toLowerCase().trim();
 
       const arch = state.tastings.filter(t=>t.status==="archiviata");
-      const filtered = !q ? arch : arch.filter(t=>buildArchiveHaystack(t).includes(q));
+      const filtered = !q ? arch : arch.filter(t=>{
+        const hay = buildArchiveHaystack(t);
+        return q.split(';').map(s=>s.trim()).filter(Boolean).every(term=>hay.includes(term));
+      });
 
       if(!window._multiSelectTastings) window._multiSelectTastings = new Set();
 
