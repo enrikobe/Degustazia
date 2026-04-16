@@ -1979,6 +1979,17 @@ button.zenplus-btn:hover:not(:disabled) {
     font-size: 13px;
   }
 }
+
+/* V202-3: azioni archivio visibili solo al click */
+.archive-card .row-actions { display: none; margin-top: 8px; }
+.archive-card.open .row-actions { display: flex; }
+.archive-card { cursor: pointer; }
+
+/* V202-3: azioni archivio visibili solo al click */
+.archive-card .row-actions { display: none !important; margin-top: 8px; }
+.archive-card.open .row-actions { display: flex !important; }
+.archive-card { cursor: pointer; }
+.archive-card h3 { pointer-events: none; }
 </style>
 </head>
 
@@ -5750,7 +5761,7 @@ function renderArchive(){
       list.innerHTML = filtered.length ? filtered.map(t=>{
         const isSelected = window._multiSelectTastings.has(t.id);
         return `
-        <div class="list-card" style="${isSelected ? 'border:2px solid var(--bordeaux);background:#fff8f8;' : ''}">
+        <div class="list-card archive-card ${isSelected ? 'open' : ''}" style="${isSelected ? 'border:2px solid var(--bordeaux);background:#fff8f8;' : ''}" onclick="this.classList.toggle('open')">
           <div style="display:flex;align-items:flex-start;gap:12px;">
             <input type="checkbox" 
                    id="chk_${esc(t.id)}" 
