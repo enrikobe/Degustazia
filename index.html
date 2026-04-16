@@ -2018,12 +2018,15 @@ button.zenplus-btn:hover:not(:disabled) {
   display: flex; gap: 4px; align-items: center; flex-shrink: 0;
 }
 .archive-action-btn {
-  background: none; border: 1px solid var(--grigio-light); border-radius: 6px;
-  cursor: pointer; font-size: 11px; padding: 3px 7px; color: var(--grigio);
+  background: #f5f5f5; border: 1px solid var(--grigio-light); border-radius: 8px;
+  cursor: pointer; font-size: 12px; font-weight: 600; padding: 6px 12px; color: var(--grigio);
   transition: all 0.15s; white-space: nowrap;
 }
 .archive-action-btn:hover { background: var(--bordeaux); color: #fff; border-color: var(--bordeaux); }
-.archive-action-btn.danger:hover { background: var(--rosso); border-color: var(--rosso); }
+.archive-action-btn.view { background: rgba(122,41,56,0.08); color: var(--bordeaux); border-color: var(--bordeaux); }
+.archive-action-btn.view:hover { background: var(--bordeaux); color: #fff; }
+.archive-action-btn.danger { background: #fff0f0; color: #c62828; border-color: #ffcdd2; }
+.archive-action-btn.danger:hover { background: #c62828; color: #fff; border-color: #c62828; }
 .archive-date-filter {
   display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
   padding: 8px 0; border-bottom: 1px solid var(--grigio-light); margin-bottom: 8px;
@@ -5822,7 +5825,7 @@ function buildArchiveHaystack(t){
       return parts.join(' ').toLowerCase();
     }
 
-function renderArchive(){
+    function renderArchive(){
       const list = document.getElementById("archiveList");
       if(!list) return;
       const q = (state.ui.archiveSearch||"").toLowerCase().trim();
@@ -5833,16 +5836,16 @@ function renderArchive(){
 
       let arch = state.tastings.filter(t=>t.status==="archiviata");
 
-      // Filtro ricerca multi-stringa
+      // Ricerca multi-stringa con ";"
       if (q) arch = arch.filter(t => matchesArchiveSearch(t, q));
 
-      // Filtro date
+      // Filtro date - usa slice(0,10) su finishedAt o createdAt
       if (dateFrom) arch = arch.filter(t => {
-        const d = (t.finishedAt||t.createdAt||'').slice(0,10);
+        const d = ((t.finishedAt||t.createdAt||'')+'').slice(0,10);
         return d >= dateFrom;
       });
       if (dateTo) arch = arch.filter(t => {
-        const d = (t.finishedAt||t.createdAt||'').slice(0,10);
+        const d = ((t.finishedAt||t.createdAt||'')+'').slice(0,10);
         return d <= dateTo;
       });
 
@@ -5855,26 +5858,27 @@ function renderArchive(){
       arch.sort((a,b) => {
         if (a.pinned && !b.pinned) return -1;
         if (!a.pinned && b.pinned) return 1;
-        return (b.finishedAt||b.createdAt||'').localeCompare(a.finishedAt||a.createdAt||'');
+        return ((b.finishedAt||b.createdAt||'')+'').localeCompare((a.finishedAt||a.createdAt||'')+'');
       });
 
-      // Raggruppa per anno/mese (pinned in gruppo separato)
       const pinned = arch.filter(t => t.pinned);
       const unpinned = arch.filter(t => !t.pinned);
 
+      // Raggruppa per anno/mese
       const groups = {};
       unpinned.forEach(t => {
-        const d = (t.finishedAt||t.createdAt||'').slice(0,7); // YYYY-MM
+        const d = ((t.finishedAt||t.createdAt||'')+'').slice(0,7);
         const year = d.slice(0,4) || 'N/D';
         const month = d.slice(5,7) || '00';
         const yKey = year;
-        if (!groups[yKey]) groups[yKey] = { year, months: {} };
+        if (!groups[yKey]) groups[yKey] = { year: year, months: {} };
         const mKey = year + '-' + month;
-        if (!groups[yKey].months[mKey]) groups[yKey].months[mKey] = { month, tastings: [] };
+        if (!groups[yKey].months[mKey]) groups[yKey].months[mKey] = { month: month, tastings: [] };
         groups[yKey].months[mKey].tastings.push(t);
       });
 
       const MONTHS = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+      const collapsed = state.ui.archiveGroupCollapsed || {};
 
       function cardHtml(t) {
         var isSelected = window._multiSelectTastings.has(t.id);
@@ -5882,17 +5886,19 @@ function renderArchive(){
         var nSamples = (t.samples||[]).filter(function(s){return s.active!==false;}).length;
         var nTasters = (t.tasterIds||[]).length;
         var mode = t.mode==='cieca' ? '👁 Cieca' : '🍷 Scoperta';
-        var tid = esc(t.id);
+        var tid = esc(String(t.id));
         var ttl = esc(t.title||'Degustazione');
+        var pinLabel = t.pinned ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti';
         return '<div class="archive-card-compact ' + (t.pinned?'pinned':'') + ' ' + (isSelected?'selected':'') + '">' +
-          '<input type="checkbox" style="flex-shrink:0;cursor:pointer;" ' + (isSelected?'checked':'') +
+          '<input type="checkbox" style="flex-shrink:0;cursor:pointer;margin-right:4px;" ' + (isSelected?'checked':'') +
             ' onchange="if(this.checked){window._multiSelectTastings.add(\'' + tid + '\');}else{window._multiSelectTastings.delete(\'' + tid + '\');} updateMultiSelectUI();" />' +
-          '<button class="archive-pin-btn ' + (t.pinned?'active':'') + '" onclick="toggleTastingPin(\'' + tid + '\')" title="' + (t.pinned?'Rimuovi dai preferiti':'Aggiungi ai preferiti') + '">' + (t.pinned?'⭐':'☆') + '</button>' +
-          '<div class="archive-card-info" onclick="openComparison(\'' + tid + '\')" style="cursor:pointer;">' +
+          '<button class="archive-pin-btn ' + (t.pinned?'active':'') + '" onclick="toggleTastingPin(\'' + tid + '\')" title="' + pinLabel + '">' + (t.pinned?'⭐':'☆') + '</button>' +
+          '<div class="archive-card-info" onclick="openComparison(\'' + tid + '\')" style="cursor:pointer;flex:1;min-width:0;">' +
             '<div class="archive-card-title">' + ttl + '</div>' +
             '<div class="archive-card-meta">' + date + ' · ' + mode + ' · ' + nSamples + ' campioni · ' + nTasters + ' degustatori</div>' +
           '</div>' +
           '<div class="archive-card-actions">' +
+            '<button class="archive-action-btn view" onclick="openTasting(\'' + tid + '\')" title="Visualizza">Visualizza</button>' +
             '<button class="archive-action-btn" onclick="openComparison(\'' + tid + '\')" title="Confronto">Confronto</button>' +
             '<button class="archive-action-btn" onclick="reopenTasting(\'' + tid + '\')" title="Riapri">Riapri</button>' +
             '<button class="archive-action-btn" onclick="duplicateTasting(\'' + tid + '\')" title="Copia">Copia</button>' +
@@ -5904,31 +5910,32 @@ function renderArchive(){
 
       let html = '';
 
-      // Pinned
+      // Preferiti
       if (pinned.length) {
+        var pinnedCollapsed = !!collapsed['__pinned'];
         html += '<div class="archive-year-group">';
-        html += '<div class="archive-year-header" onclick="toggleArchiveGroup(\'__pinned\')">⭐ Preferiti <span class="archive-year-toggle">' + ((state.ui.archiveGroupCollapsed && state.ui.archiveGroupCollapsed['__pinned']) ? '▶' : '▼') + '</span></div>';
-        if (!state.ui.archiveGroupCollapsed && state.ui.archiveGroupCollapsed['__pinned']) {
+        html += '<div class="archive-year-header" onclick="toggleArchiveGroup(\'__pinned\')">⭐ Preferiti <span style="opacity:0.7;font-weight:400;font-size:12px;">(' + pinned.length + ')</span><span class="archive-year-toggle">' + (pinnedCollapsed?'▶':'▼') + '</span></div>';
+        if (!pinnedCollapsed) {
           html += pinned.map(cardHtml).join('');
         }
         html += '</div>';
       }
 
       // Gruppi anno/mese
-      Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(yKey => {
-        const g = groups[yKey];
-        const yCollapsed = state.ui.archiveGroupCollapsed && state.ui.archiveGroupCollapsed[yKey];
-        const count = Object.values(g.months).reduce((s,m)=>s+m.tastings.length,0);
+      Object.keys(groups).sort(function(a,b){return b.localeCompare(a);}).forEach(function(yKey) {
+        var g = groups[yKey];
+        var yCollapsed = !!collapsed[yKey];
+        var count = Object.values(g.months).reduce(function(s,m){return s+m.tastings.length;},0);
         html += '<div class="archive-year-group">';
-        html += '<div class="archive-year-header" onclick="toggleArchiveGroup(\'' + esc(yKey) + '\')">'+esc(g.year)+' <span style="opacity:0.7;font-weight:400;font-size:12px;">('+count+')</span><span class="archive-year-toggle">'+(yCollapsed?'▶':'▼')+'</span></div>';
+        html += '<div class="archive-year-header" onclick="toggleArchiveGroup(\'' + esc(yKey) + '\')">' + esc(g.year) + ' <span style="opacity:0.7;font-weight:400;font-size:12px;">(' + count + ')</span><span class="archive-year-toggle">' + (yCollapsed?'▶':'▼') + '</span></div>';
         if (!yCollapsed) {
-          Object.keys(g.months).sort((a,b)=>b.localeCompare(a)).forEach(mKey => {
-            const mg = g.months[mKey];
-            const mCollapsed = state.ui.archiveGroupCollapsed && state.ui.archiveGroupCollapsed[mKey];
-            const mNum = parseInt(mg.month,10)||0;
-            const mLabel = MONTHS[mNum] || mg.month;
+          Object.keys(g.months).sort(function(a,b){return b.localeCompare(a);}).forEach(function(mKey) {
+            var mg = g.months[mKey];
+            var mCollapsed = !!collapsed[mKey];
+            var mNum = parseInt(mg.month,10)||0;
+            var mLabel = MONTHS[mNum] || mg.month;
             html += '<div class="archive-month-group">';
-            html += '<div class="archive-month-header" onclick="toggleArchiveGroup(\'' + esc(mKey) + '\')">'+esc(mLabel)+' <span style="opacity:0.6;font-size:11px;">('+mg.tastings.length+')</span><span class="archive-month-toggle">'+(mCollapsed?'▶':'▼')+'</span></div>';
+            html += '<div class="archive-month-header" onclick="toggleArchiveGroup(\'' + esc(mKey) + '\')">📅 ' + esc(mLabel) + ' <span style="opacity:0.6;font-size:11px;">(' + mg.tastings.length + ')</span><span class="archive-month-toggle">' + (mCollapsed?'▶':'▼') + '</span></div>';
             if (!mCollapsed) {
               html += mg.tastings.map(cardHtml).join('');
             }
