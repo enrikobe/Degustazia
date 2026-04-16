@@ -5934,10 +5934,10 @@ function buildArchiveHaystack(t){
         var tid = esc(String(t.id));
         var ttl = esc(t.title||'Degustazione');
         return '<div class="archive-card-compact ' + (t.pinned?'pinned':'') + ' ' + (isSelected?'selected':'') + '">' +
-          '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;" onclick="window.toggleArchiveCard('' + tid + '')">' +
+          '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;" onclick="window.toggleArchiveCard('" + tid + "')">' +
             '<input type="checkbox" style="flex-shrink:0;cursor:pointer;" ' + (isSelected?'checked':'') +
-              ' onclick="event.stopPropagation();" onchange="if(this.checked){window._multiSelectTastings.add('' + tid + '');}else{window._multiSelectTastings.delete('' + tid + '');} updateMultiSelectUI();" />' +
-            '<button class="archive-pin-btn ' + (t.pinned?'active':'') + '" onclick="event.stopPropagation();window.toggleTastingPin('' + tid + '')" title="Preferito">' + (t.pinned?'&#11088;':'&#9734;') + '</button>' +
+              ' onclick="event.stopPropagation();" onchange="if(this.checked){window._multiSelectTastings.add('" + tid + "');}else{window._multiSelectTastings.delete('" + tid + "');} updateMultiSelectUI();" />' +
+            '<button class="archive-pin-btn ' + (t.pinned?'active':'') + '" onclick="event.stopPropagation();window.toggleTastingPin('" + tid + "')" title="Preferito">' + (t.pinned?'&#11088;':'&#9734;') + '</button>' +
             '<div style="flex:1;min-width:0;">' +
               '<div class="archive-card-title">' + ttl + '</div>' +
               '<div class="archive-card-meta">' + date + ' &middot; ' + mode + ' &middot; ' + nSamples + ' campioni &middot; ' + nTasters + ' degustatori</div>' +
