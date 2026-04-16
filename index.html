@@ -2044,6 +2044,11 @@ button.zenplus-btn:hover:not(:disabled) {
   padding: 2px 4px; opacity: 0.5; transition: opacity 0.2s;
 }
 .result-notes-btn.has-notes { opacity: 1; }
+
+.archive-card-header { display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer; }
+.archive-card-arrow { color:#bbb; font-size:11px; flex-shrink:0; }
+.archive-card-actions-panel { display:none; flex-wrap:wrap; gap:6px; padding:8px 12px 10px 12px; border-top:1px solid #f0e8ea; }
+.archive-chk { flex-shrink:0; cursor:pointer; }
 </style>
 </head>
 
@@ -5864,14 +5869,16 @@ function buildArchiveHaystack(t){
       var terms = q.split(';').map(function(s){return s.trim().toLowerCase();}).filter(Boolean);
       return terms.every(function(term){return hay.includes(term);});
     };
-    window.toggleArchiveCard = function(id) {
-      var actionsEl = document.getElementById('archive-actions-' + id);
-      if (!actionsEl) return;
-      var isOpen = actionsEl.style.display !== 'none';
+    window.toggleArchiveCard = function(headerEl) {
+      var card = headerEl.closest ? headerEl.closest('.archive-card-compact') : headerEl.parentElement;
+      if (!card) return;
+      var panel = card.querySelector('.archive-card-actions-panel');
+      if (!panel) return;
+      var isOpen = panel.style.display !== 'none';
       document.querySelectorAll('.archive-card-actions-panel').forEach(function(el){
         el.style.display = 'none';
       });
-      actionsEl.style.display = isOpen ? 'none' : 'flex';
+      panel.style.display = isOpen ? 'none' : 'flex';
     };
 
     function renderArchive(){
@@ -5933,26 +5940,28 @@ function buildArchiveHaystack(t){
         var mode = t.mode==='cieca' ? 'Cieca' : 'Scoperta';
         var tid = esc(String(t.id));
         var ttl = esc(t.title||'Degustazione');
-        return '<div class="archive-card-compact ' + (t.pinned?'pinned':'') + ' ' + (isSelected?'selected':'') + '">' +
-          '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;" onclick="window.toggleArchiveCard('" + tid + "')">' +
-            '<input type="checkbox" style="flex-shrink:0;cursor:pointer;" ' + (isSelected?'checked':'') +
-              ' onclick="event.stopPropagation();" onchange="if(this.checked){window._multiSelectTastings.add('" + tid + "');}else{window._multiSelectTastings.delete('" + tid + "');} updateMultiSelectUI();" />' +
-            '<button class="archive-pin-btn ' + (t.pinned?'active':'') + '" onclick="event.stopPropagation();window.toggleTastingPin('" + tid + "')" title="Preferito">' + (t.pinned?'&#11088;':'&#9734;') + '</button>' +
-            '<div style="flex:1;min-width:0;">' +
-              '<div class="archive-card-title">' + ttl + '</div>' +
-              '<div class="archive-card-meta">' + date + ' &middot; ' + mode + ' &middot; ' + nSamples + ' campioni &middot; ' + nTasters + ' degustatori</div>' +
-            '</div>' +
-            '<span style="color:#bbb;font-size:11px;flex-shrink:0;">&#9654;</span>' +
-          '</div>' +
-          '<div id="archive-actions-' + tid + '" class="archive-card-actions-panel" style="display:none;flex-wrap:wrap;gap:6px;padding:8px 12px 10px 12px;border-top:1px solid #f0e8ea;">' +
-            '<button class="archive-action-btn view" onclick="openTasting('' + tid + '')">Visualizza</button>' +
-            '<button class="archive-action-btn" onclick="openComparison('' + tid + '')">Confronto</button>' +
-            '<button class="archive-action-btn" onclick="reopenTasting('' + tid + '')">Riapri</button>' +
-            '<button class="archive-action-btn" onclick="duplicateTasting('' + tid + '')">Copia</button>' +
-            '<button class="archive-action-btn" onclick="exportSingleJson('' + tid + '')">Esporta</button>' +
-            '<button class="archive-action-btn danger" onclick="deleteTasting('' + tid + '')">Elimina</button>' +
-          '</div>' +
-        '</div>';
+        var pinIcon = t.pinned ? '&#11088;' : '&#9734;';
+        var html = '';
+        html += '<div class="archive-card-compact' + (t.pinned?' pinned':'') + (isSelected?' selected':'') + '" data-tid="' + tid + '">';
+        html += '<div class="archive-card-header" onclick="window.toggleArchiveCard(this)">';
+        html += '<input type="checkbox" class="archive-chk" data-tid="' + tid + '" ' + (isSelected?'checked':'') + ' onclick="event.stopPropagation();" />';
+        html += '<button class="archive-pin-btn' + (t.pinned?' active':'') + '" data-tid="' + tid + '" onclick="event.stopPropagation();window.toggleTastingPin(this.dataset.tid)" title="Preferito">' + pinIcon + '</button>';
+        html += '<div class="archive-card-info">';
+        html += '<div class="archive-card-title">' + ttl + '</div>';
+        html += '<div class="archive-card-meta">' + date + ' &middot; ' + mode + ' &middot; ' + nSamples + ' campioni &middot; ' + nTasters + ' degustatori</div>';
+        html += '</div>';
+        html += '<span class="archive-card-arrow">&#9654;</span>';
+        html += '</div>';
+        html += '<div class="archive-card-actions-panel" style="display:none;">';
+        html += '<button class="archive-action-btn view" data-tid="' + tid + '" onclick="openTasting(this.dataset.tid)">Visualizza</button>';
+        html += '<button class="archive-action-btn" data-tid="' + tid + '" onclick="openComparison(this.dataset.tid)">Confronto</button>';
+        html += '<button class="archive-action-btn" data-tid="' + tid + '" onclick="reopenTasting(this.dataset.tid)">Riapri</button>';
+        html += '<button class="archive-action-btn" data-tid="' + tid + '" onclick="duplicateTasting(this.dataset.tid)">Copia</button>';
+        html += '<button class="archive-action-btn" data-tid="' + tid + '" onclick="exportSingleJson(this.dataset.tid)">Esporta</button>';
+        html += '<button class="archive-action-btn danger" data-tid="' + tid + '" onclick="deleteTasting(this.dataset.tid)">Elimina</button>';
+        html += '</div>';
+        html += '</div>';
+        return html;
       }
 
       var html = '';
