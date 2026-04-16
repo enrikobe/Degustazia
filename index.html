@@ -5825,6 +5825,55 @@ function buildArchiveHaystack(t){
       return parts.join(' ').toLowerCase();
     }
 
+
+    // V202: Helper archivio globali
+    window.toggleTastingPin = function(id) {
+      var t = state.tastings.find(function(x){return x.id===id;});
+      if (!t) return;
+      t.pinned = !t.pinned;
+      saveState();
+      renderArchive();
+    };
+    window.toggleArchiveGroup = function(key) {
+      if (!state.ui.archiveGroupCollapsed) state.ui.archiveGroupCollapsed = {};
+      state.ui.archiveGroupCollapsed[key] = !state.ui.archiveGroupCollapsed[key];
+      saveState({skipCloud: true});
+      renderArchive();
+    };
+    window.onArchiveDateFilter = function() {
+      var f = document.getElementById('archiveDateFrom');
+      var t2 = document.getElementById('archiveDateTo');
+      state.ui.archiveDateFrom = f ? f.value : '';
+      state.ui.archiveDateTo = t2 ? t2.value : '';
+      saveState({skipCloud: true});
+      renderArchive();
+    };
+    window.clearArchiveDateFilter = function() {
+      state.ui.archiveDateFrom = '';
+      state.ui.archiveDateTo = '';
+      var f = document.getElementById('archiveDateFrom');
+      var t2 = document.getElementById('archiveDateTo');
+      if (f) f.value = '';
+      if (t2) t2.value = '';
+      saveState({skipCloud: true});
+      renderArchive();
+    };
+    window.matchesArchiveSearch = function(t, q) {
+      if (!q) return true;
+      var hay = buildArchiveHaystack(t);
+      var terms = q.split(';').map(function(s){return s.trim().toLowerCase();}).filter(Boolean);
+      return terms.every(function(term){return hay.includes(term);});
+    };
+    window.toggleArchiveCard = function(id) {
+      var actionsEl = document.getElementById('archive-actions-' + id);
+      if (!actionsEl) return;
+      var isOpen = actionsEl.style.display !== 'none';
+      document.querySelectorAll('.archive-card-actions-panel').forEach(function(el){
+        el.style.display = 'none';
+      });
+      actionsEl.style.display = isOpen ? 'none' : 'flex';
+    };
+
     function renderArchive(){
       const list = document.getElementById("archiveList");
       if(!list) return;
