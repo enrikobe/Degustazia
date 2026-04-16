@@ -1979,6 +1979,68 @@ button.zenplus-btn:hover:not(:disabled) {
     font-size: 13px;
   }
 }
+
+/* V202: Archivio migliorie */
+.archive-year-group { margin-bottom: 16px; }
+.archive-year-header {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 6px 10px; background: var(--bordeaux); color: #fff;
+  border-radius: 8px; font-weight: 900; font-size: 14px;
+  user-select: none; margin-bottom: 6px;
+}
+.archive-year-header .archive-year-toggle { font-size: 11px; margin-left: auto; opacity: 0.8; }
+.archive-month-group { margin-bottom: 8px; padding-left: 4px; }
+.archive-month-header {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 4px 8px; background: rgba(122,41,56,0.1); color: var(--bordeaux);
+  border-radius: 6px; font-weight: 800; font-size: 13px; margin-bottom: 4px;
+}
+.archive-month-toggle { font-size: 10px; margin-left: auto; }
+.archive-card-compact {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 8px;
+  background: #fff; border: 1px solid var(--grigio-light);
+  margin-bottom: 4px; transition: background 0.15s;
+}
+.archive-card-compact:hover { background: #fdf8f9; }
+.archive-card-compact.pinned { border-left: 3px solid #f9a825; background: #fffde7; }
+.archive-card-compact.selected { border: 2px solid var(--bordeaux); background: #fff8f8; }
+.archive-pin-btn { 
+  background: none; border: none; cursor: pointer; font-size: 16px; 
+  padding: 2px 4px; opacity: 0.4; transition: opacity 0.2s; flex-shrink: 0;
+}
+.archive-pin-btn.active { opacity: 1; }
+.archive-card-info { flex: 1; min-width: 0; }
+.archive-card-title { font-weight: 800; font-size: 14px; color: var(--bordeaux); 
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.archive-card-meta { font-size: 11px; color: #888; margin-top: 1px; }
+.archive-card-actions { 
+  display: flex; gap: 4px; align-items: center; flex-shrink: 0;
+}
+.archive-action-btn {
+  background: none; border: 1px solid var(--grigio-light); border-radius: 6px;
+  cursor: pointer; font-size: 11px; padding: 3px 7px; color: var(--grigio);
+  transition: all 0.15s; white-space: nowrap;
+}
+.archive-action-btn:hover { background: var(--bordeaux); color: #fff; border-color: var(--bordeaux); }
+.archive-action-btn.danger:hover { background: var(--rosso); border-color: var(--rosso); }
+.archive-date-filter {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 8px 0; border-bottom: 1px solid var(--grigio-light); margin-bottom: 8px;
+}
+.archive-date-filter input[type=date] {
+  padding: 4px 8px; border: 1px solid var(--grigio-light); border-radius: 6px;
+  font-size: 12px; color: var(--grigio);
+}
+.archive-date-filter label { font-size: 12px; color: #888; }
+.notes-preview-icon { font-size: 14px; cursor: pointer; opacity: 0.6; }
+.notes-preview-icon.has-notes { opacity: 1; color: var(--bordeaux); }
+/* Results notes icon */
+.result-notes-btn {
+  background: none; border: none; cursor: pointer; font-size: 16px;
+  padding: 2px 4px; opacity: 0.5; transition: opacity 0.2s;
+}
+.result-notes-btn.has-notes { opacity: 1; }
 </style>
 </head>
 
@@ -2595,8 +2657,17 @@ function setCardColorMode(mode){
           <div class="row-actions">
             <button class="btn" onclick="exportJson()">Export</button>
             <button class="btn" onclick="triggerImportJson()">Import</button>
+        </div>
+        <div class="archive-date-filter">
+          <label>Da:</label>
+          <input type="date" id="archiveDateFrom" onchange="onArchiveDateFilter()" />
+          <label>A:</label>
+          <input type="date" id="archiveDateTo" onchange="onArchiveDateFilter()" />
+          <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="clearArchiveDateFilter()">✕ Reset</button>
+        </div>
+        <div style="display:none"><!-- replaced -->
             <label style="font-size:12px;font-weight:950;">Cerca</label>
-            <input class="input" style="padding:8px 10px;" placeholder="testo libero..." oninput="onArchiveSearch(this.value)" />
+            <input class="input" style="padding:8px 10px;" placeholder="Cerca... (separa con ;)" id="archiveSearchInput" oninput="onArchiveSearch(this.value)" />
           </div>
         </div>
         
@@ -3376,6 +3447,10 @@ if(window.__cloudApplying || skipCloud) return;
       });
       s.currentTastingId = s.currentTastingId || s.tastings[0]?.id || null;
       s.ui = s.ui || {};
+      // V202: persistenza filtri archivio
+      s.ui.archiveDateFrom = s.ui.archiveDateFrom || '';
+      s.ui.archiveDateTo = s.ui.archiveDateTo || '';
+      s.ui.archiveGroupCollapsed = s.ui.archiveGroupCollapsed || {};
       return s;
     }
     function ensureTastingTaxonomies(t){
@@ -3791,7 +3866,18 @@ function renderZenPlusDescriptors(){
       if(pageId==="degustazione"){ setTimeout(()=>{ initCanvas(); renderTastingPage(); }, 0); }
       if(pageId==="preparazione"){ renderPreparation(); }
       if(pageId==="anagrafiche"){ renderAnagrafiche(); }
-      if(pageId==="archivio"){ renderArchive(); }
+      if(pageId==="archivio"){ 
+        renderArchive();
+        // V202: ripristina filtri data
+        setTimeout(function(){
+          var f = document.getElementById('archiveDateFrom');
+          var t2 = document.getElementById('archiveDateTo');
+          if(f) f.value = state.ui.archiveDateFrom||'';
+          if(t2) t2.value = state.ui.archiveDateTo||'';
+          var s = document.getElementById('archiveSearchInput');
+          if(s) s.value = state.ui.archiveSearch||'';
+        },0);
+      }
       if(pageId==="risultati"){ renderResultsSelect(); renderResultsTable(); }
     }
 
@@ -5740,127 +5826,121 @@ function renderArchive(){
       const list = document.getElementById("archiveList");
       if(!list) return;
       const q = (state.ui.archiveSearch||"").toLowerCase().trim();
+      const dateFrom = state.ui.archiveDateFrom || '';
+      const dateTo = state.ui.archiveDateTo || '';
 
-      const arch = state.tastings.filter(t=>t.status==="archiviata");
-      const filtered = !q ? arch : arch.filter(t=>buildArchiveHaystack(t).includes(q));
-
-      // V183: Multi-select state
       if(!window._multiSelectTastings) window._multiSelectTastings = new Set();
 
-      list.innerHTML = filtered.length ? filtered.map(t=>{
-        const isSelected = window._multiSelectTastings.has(t.id);
-        return `
-        <div class="list-card" style="${isSelected ? 'border:2px solid var(--bordeaux);background:#fff8f8;' : ''}">
-          <div style="display:flex;align-items:flex-start;gap:12px;">
-            <input type="checkbox" 
-                   id="chk_${esc(t.id)}" 
-                   ${isSelected ? 'checked' : ''} 
-                   onchange="toggleMultiSelect('${esc(t.id)}')"
-                   style="width:20px;height:20px;margin-top:5px;cursor:pointer;" />
-            <div style="flex:1;">
-              <h3>${esc(t.title)}</h3>
-              <div class="meta">
-                <span>${esc(t.samples.length)} campioni</span>
-                <span>${esc(t.mode)}</span>
-                <span>Terminata: ${esc(fmtDateIT(t.finishedAt))}</span>
-              </div>
-              <div class="row-actions" style="gap:6px; flex-wrap:wrap">
-                <button class="btn primary" onclick="viewArchived('${esc(t.id)}')">Visualizza</button>
-                <button class="btn" onclick="reopenTasting('${esc(t.id)}')">Riapri</button>
-                <button class="btn" onclick="copyTasting('${esc(t.id)}')">Copia</button>
-                <button class="btn" onclick="openComparison('${esc(t.id)}')">Confronto</button>
-                <button class="btn" onclick="deleteTasting('${esc(t.id)}')">Elimina</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      `}).join("") : `<div class="muted">Nessuna degustazione in archivio.</div>`;
-      
-      // V183: Aggiorna UI multi-select
-      updateMultiSelectUI();
-    }
+      let arch = state.tastings.filter(t=>t.status==="archiviata");
 
-    // V183: Toggle selezione per confronto multiplo
-    function toggleMultiSelect(id){
-      if(!window._multiSelectTastings) window._multiSelectTastings = new Set();
-      if(window._multiSelectTastings.has(id)){
-        window._multiSelectTastings.delete(id);
-      } else {
-        window._multiSelectTastings.add(id);
-      }
-      updateMultiSelectUI();
-      renderArchive();
-    }
+      // Filtro ricerca multi-stringa
+      if (q) arch = arch.filter(t => matchesArchiveSearch(t, q));
 
-    function updateMultiSelectUI(){
-      const controls = document.getElementById('multiCompareControls');
-      const countEl = document.getElementById('multiCompareCount');
-      if(!controls || !countEl) return;
-      
-      const count = window._multiSelectTastings ? window._multiSelectTastings.size : 0;
-      controls.style.display = count > 0 ? 'block' : 'none';
-      countEl.textContent = count + ' selezionat' + (count === 1 ? 'a' : 'e');
-    }
+      // Filtro date
+      if (dateFrom) arch = arch.filter(t => {
+        const d = (t.finishedAt||t.createdAt||'').slice(0,10);
+        return d >= dateFrom;
+      });
+      if (dateTo) arch = arch.filter(t => {
+        const d = (t.finishedAt||t.createdAt||'').slice(0,10);
+        return d <= dateTo;
+      });
 
-    function clearMultiSelection(){
-      window._multiSelectTastings = new Set();
-      updateMultiSelectUI();
-      renderArchive();
-    }
-
-    // V184: Fixed multi-comparison to load all data properly
-    async function openMultiComparison(){
-      if(!window._multiSelectTastings || window._multiSelectTastings.size === 0){
-        toast('Seleziona almeno una degustazione');
+      if (!arch.length) {
+        list.innerHTML = '<div class="muted" style="padding:20px;text-align:center;">Nessuna degustazione trovata.</div>';
         return;
       }
-      
-      const tastingIds = Array.from(window._multiSelectTastings);
-      console.log('📊 V184 openMultiComparison:', tastingIds.length, 'degustazioni');
-      
-      // Vai alla pagina risultati
-      go('risultati', document.getElementById('btnMenuRes'));
-      
-      const wrap = document.getElementById('resultsTableWrap');
-      if(wrap) wrap.innerHTML = '<div class="muted">Caricamento dati per ' + tastingIds.length + ' degustazioni...</div>';
-      
-      // V184: Carica i dati per TUTTE le degustazioni selezionate
-      for(const tid of tastingIds) {
-        try {
-          // Forza refresh metadati
-          if(typeof pollTastings === 'function') await pollTastings();
-          
-          // Attendi che la degustazione sia presente
-          let t = state.tastings.find(x=>String(x.id)===String(tid));
-          for(let i=0; i<10 && (!t || !t.samples || !t.samples.length); i++){
-            await new Promise(r=>setTimeout(r,100));
-            if(typeof pollTastings === 'function') await pollTastings();
-            t = state.tastings.find(x=>String(x.id)===String(tid));
-          }
-          
-          // Carica valutazioni archiviate
-          if(typeof fetchArchivedEvaluations === 'function') {
-            await fetchArchivedEvaluations(tid);
-          }
-          
-          console.log('✅ Dati caricati per:', tid, t ? t.title : 'N/A');
-        } catch(e) {
-          console.error('Errore caricamento dati per', tid, e);
-        }
-      }
-      
-      // Salva gli ID selezionati e renderizza
-      state.ui.multiCompareTastingIds = tastingIds;
-      saveState({skipCloud: true});
-      
-      // Renderizza tutte le tabelle
-      renderResultsTable();
-      console.log('✅ V184 Multi-compare completato');
-    }
 
+      // Pinned in cima, poi per data decrescente
+      arch.sort((a,b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return (b.finishedAt||b.createdAt||'').localeCompare(a.finishedAt||a.createdAt||'');
+      });
+
+      // Raggruppa per anno/mese (pinned in gruppo separato)
+      const pinned = arch.filter(t => t.pinned);
+      const unpinned = arch.filter(t => !t.pinned);
+
+      const groups = {};
+      unpinned.forEach(t => {
+        const d = (t.finishedAt||t.createdAt||'').slice(0,7); // YYYY-MM
+        const year = d.slice(0,4) || 'N/D';
+        const month = d.slice(5,7) || '00';
+        const yKey = year;
+        if (!groups[yKey]) groups[yKey] = { year, months: {} };
+        const mKey = year + '-' + month;
+        if (!groups[yKey].months[mKey]) groups[yKey].months[mKey] = { month, tastings: [] };
+        groups[yKey].months[mKey].tastings.push(t);
+      });
+
+      const MONTHS = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+      function cardHtml(t) {
+        const isSelected = window._multiSelectTastings.has(t.id);
+        const date = t.finishedAt ? fmtDateIT(t.finishedAt) : (t.createdAt ? fmtDateIT(t.createdAt) : '');
+        const nSamples = (t.samples||[]).filter(s=>s.active!==false).length;
+        const nTasters = (t.tasterIds||[]).length;
+        const mode = t.mode==='cieca' ? '👁 Cieca' : '🍷 Scoperta';
+        return \`<div class="archive-card-compact \${t.pinned?'pinned':''} \${isSelected?'selected':''}" >
+          <input type="checkbox" style="flex-shrink:0;cursor:pointer;" \${isSelected?'checked':''} 
+            onchange="if(this.checked){window._multiSelectTastings.add('\${esc(t.id)}');}else{window._multiSelectTastings.delete('\${esc(t.id)}');} updateMultiSelectUI();" />
+          <button class="archive-pin-btn \${t.pinned?'active':''}" onclick="toggleTastingPin('\${esc(t.id)}')" title="\${t.pinned?'Rimuovi dai preferiti':'Aggiungi ai preferiti'}">\${t.pinned?'⭐':'☆'}</button>
+          <div class="archive-card-info" onclick="openComparison('\${esc(t.id)}')" style="cursor:pointer;">
+            <div class="archive-card-title">\${esc(t.title||'Degustazione')}</div>
+            <div class="archive-card-meta">\${date} · \${mode} · \${nSamples} campioni · \${nTasters} degustatori</div>
+          </div>
+          <div class="archive-card-actions">
+            <button class="archive-action-btn" onclick="openComparison('\${esc(t.id)}')" title="Confronto">📊</button>
+            <button class="archive-action-btn" onclick="reopenTasting('\${esc(t.id)}')" title="Riapri">↩</button>
+            <button class="archive-action-btn" onclick="duplicateTasting('\${esc(t.id)}')" title="Copia">⧉</button>
+            <button class="archive-action-btn" onclick="exportSingleJson('\${esc(t.id)}')" title="Esporta">⬇</button>
+            <button class="archive-action-btn danger" onclick="deleteTasting('\${esc(t.id)}')" title="Elimina">🗑</button>
+          </div>
+        </div>\`;
+      }
+
+      let html = '';
+
+      // Pinned
+      if (pinned.length) {
+        html += '<div class="archive-year-group">';
+        html += '<div class="archive-year-header" onclick="toggleArchiveGroup(\'__pinned\')">⭐ Preferiti <span class="archive-year-toggle">' + (state.ui.archiveGroupCollapsed?.['__pinned'] ? '▶' : '▼') + '</span></div>';
+        if (!state.ui.archiveGroupCollapsed?.['__pinned']) {
+          html += pinned.map(cardHtml).join('');
+        }
+        html += '</div>';
+      }
+
+      // Gruppi anno/mese
+      Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(yKey => {
+        const g = groups[yKey];
+        const yCollapsed = state.ui.archiveGroupCollapsed?.[yKey];
+        const count = Object.values(g.months).reduce((s,m)=>s+m.tastings.length,0);
+        html += '<div class="archive-year-group">';
+        html += \`<div class="archive-year-header" onclick="toggleArchiveGroup('\${esc(yKey)}')">\${esc(g.year)} <span style="opacity:0.7;font-weight:400;font-size:12px;">(\${count})</span><span class="archive-year-toggle">\${yCollapsed?'▶':'▼'}</span></div>\`;
+        if (!yCollapsed) {
+          Object.keys(g.months).sort((a,b)=>b.localeCompare(a)).forEach(mKey => {
+            const mg = g.months[mKey];
+            const mCollapsed = state.ui.archiveGroupCollapsed?.[mKey];
+            const mNum = parseInt(mg.month,10)||0;
+            const mLabel = MONTHS[mNum] || mg.month;
+            html += '<div class="archive-month-group">';
+            html += \`<div class="archive-month-header" onclick="toggleArchiveGroup('\${esc(mKey)}')">\${esc(mLabel)} <span style="opacity:0.6;font-size:11px;">(\${mg.tastings.length})</span><span class="archive-month-toggle">\${mCollapsed?'▶':'▼'}</span></div>\`;
+            if (!mCollapsed) {
+              html += mg.tastings.map(cardHtml).join('');
+            }
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+      });
+
+      list.innerHTML = html;
+    }
     function onArchiveSearch(val){
       state.ui.archiveSearch = String(val||"");
-      // UI-only: non salvare sul cloud
+      saveState({skipCloud: true});
       renderArchive();
     }
 
