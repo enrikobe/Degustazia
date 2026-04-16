@@ -1990,6 +1990,14 @@ button.zenplus-btn:hover:not(:disabled) {
 .archive-card.open .row-actions { display: flex !important; }
 .archive-card { cursor: pointer; }
 .archive-card h3 { pointer-events: none; }
+
+/* V202-5: raggruppamento archivio */
+.archive-year-group{margin-bottom:10px}
+.archive-year-header{display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 10px;background:var(--bordeaux);color:#fff;border-radius:8px;font-weight:900;font-size:14px;user-select:none;margin-bottom:4px}
+.archive-year-toggle{font-size:11px;margin-left:auto}
+.archive-month-group{margin-bottom:4px;padding-left:6px}
+.archive-month-header{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;background:rgba(122,41,56,0.1);color:var(--bordeaux);border-radius:6px;font-weight:700;font-size:13px;margin-bottom:3px;user-select:none}
+.archive-month-toggle{font-size:10px;margin-left:auto}
 </style>
 </head>
 
@@ -5755,41 +5763,98 @@ function renderArchive(){
       const arch = state.tastings.filter(t=>t.status==="archiviata");
       const filtered = !q ? arch : arch.filter(t=>buildArchiveHaystack(t).includes(q));
 
-      // V183: Multi-select state
       if(!window._multiSelectTastings) window._multiSelectTastings = new Set();
 
-      list.innerHTML = filtered.length ? filtered.map(t=>{
+      if(!filtered.length){
+        list.innerHTML = '<div class="muted">Nessuna degustazione in archivio.</div>';
+        updateMultiSelectUI();
+        return;
+      }
+
+      // Ordina per data decrescente
+      filtered.sort((a,b)=>(b.finishedAt||b.createdAt||'').localeCompare(a.finishedAt||a.createdAt||''));
+
+      // Raggruppa per anno e mese
+      const groups = {};
+      filtered.forEach(t=>{
+        const d = (t.finishedAt||t.createdAt||'').slice(0,7); // YYYY-MM
+        const year = d.slice(0,4)||'N/D';
+        const month = d.slice(5,7)||'00';
+        if(!groups[year]) groups[year] = {year, months:{}};
+        const mKey = year+'-'+month;
+        if(!groups[year].months[mKey]) groups[year].months[mKey] = {month, tastings:[]};
+        groups[year].months[mKey].tastings.push(t);
+      });
+
+      if(!state.ui.archiveGroupCollapsed) state.ui.archiveGroupCollapsed = {};
+      const collapsed = state.ui.archiveGroupCollapsed;
+
+      const MONTHS = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+      const cardHtml = (t)=>{
         const isSelected = window._multiSelectTastings.has(t.id);
         return `
-        <div class="list-card archive-card ${isSelected ? 'open' : ''}" style="${isSelected ? 'border:2px solid var(--bordeaux);background:#fff8f8;' : ''}" onclick="this.classList.toggle('open')">
+        <div class="list-card archive-card ${isSelected?'open':''}" style="${isSelected?'border:2px solid var(--bordeaux);background:#fff8f8;':''}" onclick="this.classList.toggle('open')">
           <div style="display:flex;align-items:flex-start;gap:12px;">
-            <input type="checkbox" 
-                   id="chk_${esc(t.id)}" 
-                   ${isSelected ? 'checked' : ''} 
+            <input type="checkbox"
+                   id="chk_${esc(t.id)}"
+                   ${isSelected?'checked':''}
                    onchange="toggleMultiSelect('${esc(t.id)}')"
+                   onclick="event.stopPropagation();"
                    style="width:20px;height:20px;margin-top:5px;cursor:pointer;" />
             <div style="flex:1;">
               <h3>${esc(t.title)}</h3>
               <div class="meta">
-                <span>${esc(t.samples.length)} campioni</span>
+                <span>${esc((t.samples||[]).length)} campioni</span>
                 <span>${esc(t.mode)}</span>
                 <span>Terminata: ${esc(fmtDateIT(t.finishedAt))}</span>
               </div>
-              <div class="row-actions" style="gap:6px; flex-wrap:wrap">
-                <button class="btn primary" onclick="viewArchived('${esc(t.id)}')">Visualizza</button>
-                <button class="btn" onclick="reopenTasting('${esc(t.id)}')">Riapri</button>
-                <button class="btn" onclick="copyTasting('${esc(t.id)}')">Copia</button>
-                <button class="btn" onclick="openComparison('${esc(t.id)}')">Confronto</button>
-                <button class="btn" onclick="deleteTasting('${esc(t.id)}')">Elimina</button>
+              <div class="row-actions" style="gap:6px;flex-wrap:wrap">
+                <button class="btn primary" onclick="event.stopPropagation();viewArchived('${esc(t.id)}')">Visualizza</button>
+                <button class="btn" onclick="event.stopPropagation();reopenTasting('${esc(t.id)}')">Riapri</button>
+                <button class="btn" onclick="event.stopPropagation();copyTasting('${esc(t.id)}')">Copia</button>
+                <button class="btn" onclick="event.stopPropagation();openComparison('${esc(t.id)}')">Confronto</button>
+                <button class="btn" onclick="event.stopPropagation();deleteTasting('${esc(t.id)}')">Elimina</button>
               </div>
             </div>
           </div>
-        </div>
-      `}).join("") : `<div class="muted">Nessuna degustazione in archivio.</div>`;
-      
-      // V183: Aggiorna UI multi-select
+        </div>`;
+      };
+
+      let html = '';
+      Object.keys(groups).sort((a,b)=>b.localeCompare(a)).forEach(yKey=>{
+        const g = groups[yKey];
+        const yCollapsed = !!collapsed[yKey];
+        const yCount = Object.values(g.months).reduce((s,m)=>s+m.tastings.length,0);
+        html += `<div class="archive-year-group">
+          <div class="archive-year-header" onclick="(function(){if(!state.ui.archiveGroupCollapsed)state.ui.archiveGroupCollapsed={};state.ui.archiveGroupCollapsed['${yKey}']=!state.ui.archiveGroupCollapsed['${yKey}'];renderArchive();})()">
+            ${esc(g.year)} <span style="opacity:0.7;font-size:12px;font-weight:400;">(${yCount})</span>
+            <span class="archive-year-toggle">${yCollapsed?'&#9654;':'&#9660;'}</span>
+          </div>`;
+        if(!yCollapsed){
+          Object.keys(g.months).sort((a,b)=>b.localeCompare(a)).forEach(mKey=>{
+            const mg = g.months[mKey];
+            const mCollapsed = !!collapsed[mKey];
+            const mNum = parseInt(mg.month,10)||0;
+            const mLabel = MONTHS[mNum]||mg.month;
+            html += `<div class="archive-month-group">
+              <div class="archive-month-header" onclick="(function(){if(!state.ui.archiveGroupCollapsed)state.ui.archiveGroupCollapsed={};state.ui.archiveGroupCollapsed['${mKey}']=!state.ui.archiveGroupCollapsed['${mKey}'];renderArchive();})()">
+                &#128197; ${esc(mLabel)} <span style="opacity:0.6;font-size:11px;">(${mg.tastings.length})</span>
+                <span class="archive-month-toggle">${mCollapsed?'&#9654;':'&#9660;'}</span>
+              </div>`;
+            if(!mCollapsed){
+              html += mg.tastings.map(cardHtml).join('');
+            }
+            html += '</div>';
+          });
+        }
+        html += '</div>';
+      });
+
+      list.innerHTML = html;
       updateMultiSelectUI();
     }
+
 
     // V183: Toggle selezione per confronto multiplo
     function toggleMultiSelect(id){
