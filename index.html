@@ -2006,6 +2006,20 @@ button.zenplus-btn:hover:not(:disabled) {
 /* V202: touch drag state */
 .sample-card.td-dragging { touch-action: none; opacity: 0.5; }
 .sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
+
+/* Nascondi indicatore drag su sample-card su touch device */
+@media (pointer: coarse) {
+  .sample-card[draggable="true"]::before,
+  .sample-card[draggable="true"]::after {
+    display: none !important;
+    content: none !important;
+  }
+  .sample-card .drag-indicator,
+  .sample-card .reorder-icon,
+  .sample-card > *:first-child:not(.sample-top):not(.sample-id-col):not(.fav-heart) {
+    display: none !important;
+  }
+}
 </style>
 </head>
 
