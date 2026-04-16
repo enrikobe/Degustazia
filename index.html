@@ -1998,6 +1998,25 @@ button.zenplus-btn:hover:not(:disabled) {
 .archive-month-group{margin-bottom:4px;padding-left:6px}
 .archive-month-header{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 8px;background:rgba(122,41,56,0.1);color:var(--bordeaux);border-radius:6px;font-weight:700;font-size:13px;margin-bottom:3px;user-select:none}
 .archive-month-toggle{font-size:10px;margin-left:auto}
+
+/* V202: drag handle tablet */
+.drag-handle {
+  display: none;
+  cursor: grab;
+  color: #bbb;
+  font-size: 20px;
+  padding: 8px 6px;
+  touch-action: none;
+  user-select: none;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.drag-handle:active { cursor: grabbing; color: var(--bordeaux); }
+@media (pointer: coarse) {
+  .drag-handle { display: flex; align-items: center; }
+}
+.sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
+.sample-card.drag-ghost { opacity: 0.4; }
 </style>
 </head>
 
@@ -4522,7 +4541,7 @@ if(blind && assignedHtmlTop){
   l4Html = "";
 }
         return `
-          <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""} ${accentClass}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg};${accentStyle}">
+          <div class="sample-card ${selectedSampleId===String(s.id)?"selected":""} ${accentClass}" data-sampleid="${esc(s.id)}" draggable="${dragOk?"true":"false"}" style="background:${groupBg};${accentStyle}">${dragOk ? '<div class="drag-handle" title="Trascina per riordinare">&#8801;</div>' : ''}
             <div class="sample-top">
               <div class="sample-id-col"><div class="sample-id-row"><div class="sample-id">${esc(String(s.id).padStart(2,"0"))}</div>
               <div class="fav-heart ${favOn?"on":""} ${(!tId||isArchived())?"disabled":""}" data-fav-sample="${esc(s.id)}">${favOn?"❤":"♡"}</div></div></div>
@@ -4641,54 +4660,49 @@ if(blind && !isArchived()) {
             // fallback: Standard Touch API emulation
          });
 
-         // Touch Drag Emulation (tablet-safe)
-         // Arm move only after a long-press, and cancel if the finger moves (scroll).
-         const REORDER_LP_MS = 500;
-         const REORDER_MOVE_PX = 14;
-         let __reLpTimer = null;
-         let __reLpFired = false;
-         let __reStartX = 0, __reStartY = 0;
+         // Touch drag via handle dedicato (no longpress, no conflitti scroll)
+         const handle = card.querySelector('.drag-handle');
+         if(handle){
+           let __touchDragActive = false;
+           let __touchSrcId = null;
+           let __touchLastTarget = null;
 
-         const __reClear = ()=>{
-            if(__reLpTimer){ clearTimeout(__reLpTimer); __reLpTimer = null; }
-            __reLpFired = false;
-            dragSrcId = null;
-            try{ card.style.opacity = '1'; }catch(_e){}
-         };
+           handle.addEventListener('touchstart', e => {
+             e.stopPropagation();
+             e.preventDefault();
+             __touchDragActive = true;
+             __touchSrcId = sid;
+             card.classList.add('drag-ghost');
+           }, {passive:false});
 
-         card.addEventListener('touchstart', e => {
-            if(e.target.closest('.fav-heart') || e.target.closest('.dot')) return;
-            const t0 = e.touches && e.touches[0];
-            if(!t0) return;
-            __reClear();
-            __reStartX = t0.clientX; __reStartY = t0.clientY;
-            __reLpFired = false;
-            __reLpTimer = setTimeout(()=>{
-              __reLpFired = true;
-              dragSrcId = sid;
-              __reLpTimer = null;
-              try{ card.style.opacity = '0.65'; }catch(_e){}
-            }, REORDER_LP_MS);
-         }, {passive:true});
+           handle.addEventListener('touchmove', e => {
+             if(!__touchDragActive) return;
+             e.preventDefault();
+             const t0 = e.touches[0];
+             // Evidenzia la card sotto il dito
+             const el = document.elementFromPoint(t0.clientX, t0.clientY);
+             const tgt = el ? el.closest('.sample-card') : null;
+             // Rimuovi highlight precedente
+             if(__touchLastTarget && __touchLastTarget !== tgt){
+               __touchLastTarget.classList.remove('drag-over');
+             }
+             if(tgt && tgt !== card){
+               tgt.classList.add('drag-over');
+               __touchLastTarget = tgt;
+             }
+           }, {passive:false});
 
-         card.addEventListener('touchmove', e => {
-            if(!__reLpTimer || __reLpFired) return;
-            const t0 = e.touches && e.touches[0];
-            if(!t0) return;
-            const dx = Math.abs(t0.clientX - __reStartX);
-            const dy = Math.abs(t0.clientY - __reStartY);
-            if(dx > REORDER_MOVE_PX || dy > REORDER_MOVE_PX) __reClear();
-         }, {passive:true});
-
-         ['touchend','touchcancel'].forEach(ev=> card.addEventListener(ev, e => {
-            if(!__reLpFired || !dragSrcId){ __reClear(); return; }
-            const t = e.changedTouches && e.changedTouches[0];
-            if(!t){ __reClear(); return; }
-            const el = document.elementFromPoint(t.clientX, t.clientY);
-            const tgt = el ? el.closest('.sample-card') : null;
-            if(tgt) doMove(dragSrcId, String(tgt.dataset.sampleid));
-            __reClear();
-         }));
+           ['touchend','touchcancel'].forEach(ev => handle.addEventListener(ev, e => {
+             card.classList.remove('drag-ghost');
+             if(__touchLastTarget) __touchLastTarget.classList.remove('drag-over');
+             if(__touchDragActive && __touchSrcId && __touchLastTarget){
+               doMove(__touchSrcId, String(__touchLastTarget.dataset.sampleid));
+             }
+             __touchDragActive = false;
+             __touchSrcId = null;
+             __touchLastTarget = null;
+           }));
+         }
       });
     }
 
