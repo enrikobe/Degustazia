@@ -5893,11 +5893,11 @@ function renderArchive(){
             '<div class="archive-card-meta">' + date + ' · ' + mode + ' · ' + nSamples + ' campioni · ' + nTasters + ' degustatori</div>' +
           '</div>' +
           '<div class="archive-card-actions">' +
-            '<button class="archive-action-btn" onclick="openComparison(\'' + tid + '\')" title="Confronto">📊</button>' +
-            '<button class="archive-action-btn" onclick="reopenTasting(\'' + tid + '\')" title="Riapri">↩</button>' +
-            '<button class="archive-action-btn" onclick="duplicateTasting(\'' + tid + '\')" title="Copia">⧉</button>' +
-            '<button class="archive-action-btn" onclick="exportSingleJson(\'' + tid + '\')" title="Esporta">⬇</button>' +
-            '<button class="archive-action-btn danger" onclick="deleteTasting(\'' + tid + '\')" title="Elimina">🗑</button>' +
+            '<button class="archive-action-btn" onclick="openComparison(\'' + tid + '\')" title="Confronto">Confronto</button>' +
+            '<button class="archive-action-btn" onclick="reopenTasting(\'' + tid + '\')" title="Riapri">Riapri</button>' +
+            '<button class="archive-action-btn" onclick="duplicateTasting(\'' + tid + '\')" title="Copia">Copia</button>' +
+            '<button class="archive-action-btn" onclick="exportSingleJson(\'' + tid + '\')" title="Esporta">Esporta</button>' +
+            '<button class="archive-action-btn danger" onclick="deleteTasting(\'' + tid + '\')" title="Elimina">Elimina</button>' +
           '</div>' +
         '</div>';
       }
@@ -5920,7 +5920,7 @@ function renderArchive(){
         const yCollapsed = state.ui.archiveGroupCollapsed && state.ui.archiveGroupCollapsed[yKey];
         const count = Object.values(g.months).reduce((s,m)=>s+m.tastings.length,0);
         html += '<div class="archive-year-group">';
-        html += `<div class="archive-year-header" onclick="toggleArchiveGroup('\${esc(yKey)}')">\${esc(g.year)} <span style="opacity:0.7;font-weight:400;font-size:12px;">(\${count})</span><span class="archive-year-toggle">\${yCollapsed?'▶':'▼'}</span></div>`;
+        html += '<div class="archive-year-header" onclick="toggleArchiveGroup(\'' + esc(yKey) + '\')">'+esc(g.year)+' <span style="opacity:0.7;font-weight:400;font-size:12px;">('+count+')</span><span class="archive-year-toggle">'+(yCollapsed?'▶':'▼')+'</span></div>';
         if (!yCollapsed) {
           Object.keys(g.months).sort((a,b)=>b.localeCompare(a)).forEach(mKey => {
             const mg = g.months[mKey];
@@ -5928,7 +5928,7 @@ function renderArchive(){
             const mNum = parseInt(mg.month,10)||0;
             const mLabel = MONTHS[mNum] || mg.month;
             html += '<div class="archive-month-group">';
-            html += `<div class="archive-month-header" onclick="toggleArchiveGroup('\${esc(mKey)}')">\${esc(mLabel)} <span style="opacity:0.6;font-size:11px;">(\${mg.tastings.length})</span><span class="archive-month-toggle">\${mCollapsed?'▶':'▼'}</span></div>`;
+            html += '<div class="archive-month-header" onclick="toggleArchiveGroup(\'' + esc(mKey) + '\')">'+esc(mLabel)+' <span style="opacity:0.6;font-size:11px;">('+mg.tastings.length+')</span><span class="archive-month-toggle">'+(mCollapsed?'▶':'▼')+'</span></div>';
             if (!mCollapsed) {
               html += mg.tastings.map(cardHtml).join('');
             }
