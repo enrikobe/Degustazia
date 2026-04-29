@@ -2080,6 +2080,47 @@ button.zenplus-btn:hover:not(:disabled) {
 .prep-card .meta{ pointer-events:none; }
 .prep-card.open{ border-color:var(--bordeaux); background:#fff8f8; }
 
+/* V212: stella preferita + sezioni collassabili in Preparazione */
+.prep-card{ position:relative; }
+.prep-star{
+  position:absolute; top:8px; right:10px;
+  font-size:24px; line-height:1;
+  cursor:pointer;
+  color:#c8c8c8;
+  user-select:none; -webkit-user-select:none;
+  transition: transform .12s ease, color .12s ease;
+  padding:2px 4px;
+  z-index:2;
+}
+.prep-star:hover{ transform:scale(1.12); color:#f6c84a; }
+.prep-star.on{ color:#f6c84a; text-shadow:0 1px 2px rgba(0,0,0,.10); }
+.prep-card h3{ padding-right:36px; }
+.prep-draft-badge{
+  display:inline-block;
+  font-size:10px; font-weight:950;
+  color:#fff; background:#999;
+  padding:2px 7px; border-radius:6px;
+  margin-right:6px; vertical-align:middle;
+  letter-spacing:.5px;
+}
+
+/* V212: gruppi sezione Preferite/Altre */
+.prep-group{ margin-bottom:10px; }
+.prep-group-header{
+  display:flex; align-items:center; gap:8px;
+  cursor:pointer; padding:8px 12px;
+  background:var(--bordeaux); color:#fff;
+  border-radius:8px; font-weight:900; font-size:14px;
+  user-select:none; margin-bottom:6px;
+}
+.prep-group-toggle{ font-size:11px; margin-left:auto; }
+.prep-group-body{ display:flex; flex-direction:column; gap:8px; }
+
+/* V212: nascondi tab Attive/Bozze */
+#page-preparazione .tabs{ display:none !important; }
+#prep-bozze{ display:none !important; }
+
+
 .sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
 
 /* Nascondi indicatore drag su sample-card su touch device */
@@ -5791,18 +5832,43 @@ function initCanvas(){
     }
 
     function renderPreparation(){
+      // V212: lista unica con 2 sezioni collassabili (Preferite / Altre).
+      // Le tab "Attive"/"Bozze" sono nascoste via CSS, ma lo stato bozza
+      // viene mantenuto a livello dati (gestito dal modale di creazione).
       const divAtt = document.getElementById("prep-attive");
       const divBoz = document.getElementById("prep-bozze");
-      if(!divAtt || !divBoz) return;
+      if(!divAtt) return;
+      if(divBoz) divBoz.innerHTML = "";
 
-      const attive = state.tastings.filter(t=>t.status!=="archiviata");
-      const bozze = state.tastings.filter(t=>t.status==="bozza");
+      // Tutte le degustazioni non archiviate, ordinate per data desc
+      const all = (state.tastings||[])
+        .filter(t=>t.status!=="archiviata")
+        .slice()
+        .sort((a,b)=>(String(b.createdAt||"")).localeCompare(String(a.createdAt||"")));
+
+      const fav    = all.filter(t=> !!t.favourite);
+      const others = all.filter(t=> !t.favourite);
+
+      if(!state.ui) state.ui = {};
+      if(!state.ui.prepGroupCollapsed) state.ui.prepGroupCollapsed = { fav:false, others:false };
+      const colF = !!state.ui.prepGroupCollapsed.fav;
+      const colO = !!state.ui.prepGroupCollapsed.others;
+
+      const starHtml = (t)=>{
+        const isFav = !!t.favourite;
+        return `<span class="prep-star ${isFav?'on':''}" data-tid="${esc(t.id)}" onclick="event.stopPropagation();toggleTastingFavourite('${esc(t.id)}')" title="${isFav?'Rimuovi dai preferiti':'Aggiungi ai preferiti'}">${isFav?'★':'☆'}</span>`;
+      };
+
+      const draftBadge = (t)=> (t.status==="bozza")
+        ? '<span class="prep-draft-badge">BOZZA</span>'
+        : '';
 
       const cardHtml = (t)=>`
         <div class="list-card prep-card" onclick="this.classList.toggle('open')">
-          <h3>${esc(t.title)}</h3>
+          ${starHtml(t)}
+          <h3>${draftBadge(t)}${esc(t.title)}</h3>
           <div class="meta">
-            <span>${esc(t.samples.length)} campioni</span>
+            <span>${esc((t.samples||[]).length)} campioni</span>
             <span>${esc(t.mode)}</span>
             <span>Creata: ${esc(fmtDateIT(t.createdAt))}</span>
           </div>
@@ -5814,6 +5880,43 @@ function initCanvas(){
           </div>
         </div>
       `;
+
+      const sectionHtml = (key, title, items, collapsed)=>{
+        if(!items.length) return '';
+        return `<div class="prep-group">
+          <div class="prep-group-header" onclick="togglePrepGroup('${esc(key)}')">
+            ${esc(title)} <span style="opacity:0.7;font-size:12px;font-weight:400;">(${items.length})</span>
+            <span class="prep-group-toggle">${collapsed?'▶':'▼'}</span>
+          </div>
+          ${collapsed ? '' : '<div class="prep-group-body">'+items.map(cardHtml).join('')+'</div>'}
+        </div>`;
+      };
+
+      let html = '';
+      html += sectionHtml('fav',   '⭐ Preferite', fav, colF);
+      html += sectionHtml('others','Altre',           others, colO);
+      if(!html) html = '<div class="muted">Nessuna degustazione. Crea la prima con il pulsante in alto.</div>';
+
+      divAtt.innerHTML = html;
+    }
+
+    // V212: toggle preferita degustazione (proprietà condivisa)
+    function toggleTastingFavourite(id){
+      const t = state.tastings.find(x=>String(x.id)===String(id));
+      if(!t) return;
+      t.favourite = !t.favourite;
+      saveState();
+      try{ renderPreparation(); }catch(e){}
+    }
+
+    // V212: collassa/espande sezione Preferite/Altre
+    function togglePrepGroup(key){
+      if(!state.ui) state.ui = {};
+      if(!state.ui.prepGroupCollapsed) state.ui.prepGroupCollapsed = { fav:false, others:false };
+      state.ui.prepGroupCollapsed[key] = !state.ui.prepGroupCollapsed[key];
+      saveState({skipCloud:true});
+      try{ renderPreparation(); }catch(e){}
+    }
 
       divAtt.innerHTML = attive.length ? attive.map(cardHtml).join("") : `<div class="muted">Nessuna degustazione attiva.</div>`;
       divBoz.innerHTML = bozze.length ? bozze.map(cardHtml).join("") : `<div class="muted">Nessuna bozza.</div>`;
