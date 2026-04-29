@@ -3561,15 +3561,22 @@ if(window.__cloudApplying || skipCloud) return;
       return Math.round(clamp(avg + bonus, 0, 5) * 10) / 10;
     }
 function cardDescriptorsHtml(ev){
-      if(!ev || !ev.data) return '';
+      if(!ev) return '';
+      const evalLabel = (ev && typeof ev.evaluation === 'string' && ev.evaluation) ? ev.evaluation : '';
       const a = [];
       const pushAll = (arr)=>{ (arr||[]).forEach(x=>{ if(x && !a.includes(x)) a.push(x); }); };
-      pushAll(ev.data.vista?.desc);
-      pushAll(ev.data.olfatto?.desc);
-      pushAll(ev.data.gusto?.desc);
-      if(!a.length) return '';
+      if(ev.data){
+        pushAll(ev.data.vista?.desc);
+        pushAll(ev.data.olfatto?.desc);
+        pushAll(ev.data.gusto?.desc);
+      }
+      if(!evalLabel && !a.length) return '';
       const shown = a.slice(0,10);
-      return `<div class="card-desc-row">` + shown.map((x,i)=>`<span class="card-desc">${esc(x)}</span>${i<shown.length-1?', ':''}`).join('') + `</div>`;
+      // V206: valutazione in grassetto come primo elemento, separato dai descrittori da virgola
+      const evalHtml = evalLabel ? `<span class="card-eval"><strong>${esc(evalLabel)}</strong></span>` : '';
+      const sep = (evalLabel && shown.length) ? ', ' : '';
+      const descsHtml = shown.map((x,i)=>`<span class="card-desc">${esc(x)}</span>${i<shown.length-1?', ':''}`).join('');
+      return `<div class="card-desc-row">` + evalHtml + sep + descsHtml + `</div>`;
     }
 
 
