@@ -5918,10 +5918,6 @@ function initCanvas(){
       try{ renderPreparation(); }catch(e){}
     }
 
-      divAtt.innerHTML = attive.length ? attive.map(cardHtml).join("") : `<div class="muted">Nessuna degustazione attiva.</div>`;
-      divBoz.innerHTML = bozze.length ? bozze.map(cardHtml).join("") : `<div class="muted">Nessuna bozza.</div>`;
-    }
-
     function showPrepTab(tab, btn){
       state.ui.prepTab = tab;
       // UI-only: non salvare sul cloud
