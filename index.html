@@ -3573,16 +3573,14 @@ if(window.__cloudApplying || skipCloud) return;
     }
 function cardDescriptorsHtml(ev){
       if(!ev) return '';
-      // V208: rispetta gli switch del pannello filtri (per-tasting)
-      let cs = { evaluation:true, vista:true, olfatto:true, gusto:true };
-      try{ cs = (typeof getCardShowPrefs === 'function') ? getCardShowPrefs() : cs; }catch(e){}
-      const evalLabel = (cs.evaluation && ev && typeof ev.evaluation === 'string' && ev.evaluation) ? ev.evaluation : '';
+      // V210: card sempre completa, gli switch agiscono solo su detail/ZEN+
+      const evalLabel = (ev && typeof ev.evaluation === 'string' && ev.evaluation) ? ev.evaluation : '';
       const a = [];
       const pushAll = (arr)=>{ (arr||[]).forEach(x=>{ if(x && !a.includes(x)) a.push(x); }); };
       if(ev.data){
-        if(cs.vista)   pushAll(ev.data.vista?.desc);
-        if(cs.olfatto) pushAll(ev.data.olfatto?.desc);
-        if(cs.gusto)   pushAll(ev.data.gusto?.desc);
+        pushAll(ev.data.vista?.desc);
+        pushAll(ev.data.olfatto?.desc);
+        pushAll(ev.data.gusto?.desc);
       }
       if(!evalLabel && !a.length) return '';
       const shown = a.slice(0,10);
@@ -3628,6 +3626,7 @@ function cardDescriptorsHtml(ev){
       document.getElementById("filtersOverlay")?.classList.add("active");
       try{ applyLocalCardUiPrefs(); }catch(e){}
       try{ updateHiddenButtons(); }catch(e){}
+      try{ renderCardShowSwitches(); }catch(e){}
     }
     function toggleFiltersPanel(){
       const p = document.getElementById("filtersPanel");
@@ -3640,6 +3639,7 @@ function cardDescriptorsHtml(ev){
     function forceOpenFiltersPanel(){
       document.getElementById("filtersPanel")?.classList.add("active");
       document.getElementById("filtersOverlay")?.classList.add("active");
+      try{ renderCardShowSwitches(); }catch(e){}
     }
 
     function zenPlusToggleFilters(ev){
@@ -3834,6 +3834,7 @@ function renderZenPlusDescriptors(){
 
         try{ syncCardColorModeUI(); }catch(e){} // V143
         renderZenPlusDescriptors();
+        try{ applyCardShowToDom(); }catch(e){}
         
         // V183: Rimuovi protezione dopo 800ms (tempo sufficiente per rilasciare il dito)
         setTimeout(function() {
@@ -4510,8 +4511,44 @@ function attachProfileRenameLongPress(){
       if(!t.uiPrefs.cardShow) t.uiPrefs.cardShow = { evaluation:true, vista:true, olfatto:true, gusto:true };
       t.uiPrefs.cardShow[key] = !!val;
       saveState();
-      try{ renderGrid(); }catch(e){}
+      try{ applyCardShowToDom(); }catch(e){}
       try{ renderCardShowSwitches(); }catch(e){}
+    }
+
+    // V210: nasconde/mostra le sezioni nel detail e ZEN+ in base ai prefs
+    // NON tocca le card (rimangono sempre con tutti i descrittori).
+    function applyCardShowToDom(){
+      try{
+        const cs = getCardShowPrefs();
+        // Detail panel (.fiche-box) — selezione per testo h3
+        const boxes = document.querySelectorAll('#page-degustazione .fiche-box');
+        boxes.forEach(box=>{
+          const h3 = box.querySelector('h3');
+          if(!h3) return;
+          const label = (h3.textContent||'').trim().toLowerCase();
+          let key = null;
+          if(label.startsWith('valutazione')) key = 'evaluation';
+          else if(label.startsWith('vista'))   key = 'vista';
+          else if(label.startsWith('olfatto')) key = 'olfatto';
+          else if(label.startsWith('gusto'))   key = 'gusto';
+          if(key){
+            box.style.display = cs[key] ? '' : 'none';
+          }
+        });
+        // ZEN+ strips
+        const stripMap = [
+          ['.zenplus-strip.eval', 'evaluation'],
+          ['.zenplus-strip.desc.vista', 'vista'],
+          ['.zenplus-strip.desc.olfatto', 'olfatto'],
+          ['.zenplus-strip.desc.gusto', 'gusto'],
+        ];
+        stripMap.forEach(pair=>{
+          const sel = pair[0], key = pair[1];
+          document.querySelectorAll(sel).forEach(el=>{
+            el.style.display = cs[key] ? '' : 'none';
+          });
+        });
+      }catch(e){ console.error('applyCardShowToDom', e); }
     }
 
     function renderCardShowSwitches(){
@@ -4607,6 +4644,7 @@ function attachProfileRenameLongPress(){
       renderDescriptorPickers();
       renderEvaluationPicker();
       hydrateTasterSelect();
+      try{ applyCardShowToDom(); }catch(e){}
 
       try{
         const sel = document.getElementById("tasterSelect");
