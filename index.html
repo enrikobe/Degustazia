@@ -2029,6 +2029,57 @@ button.zenplus-btn:hover:not(:disabled) {
 
 /* V202: touch drag state */
 .sample-card.td-dragging { touch-action: none; opacity: 0.5; }
+
+/* V211: Switch iOS uniformi (override globale) */
+.switch{
+  position:relative !important;
+  display:inline-block !important;
+  width:51px !important; height:31px !important;
+  flex:0 0 auto !important;
+  vertical-align:middle !important;
+}
+.switch input{ opacity:0 !important; width:0 !important; height:0 !important; position:absolute !important; }
+.switch .slider{
+  position:absolute !important; inset:0 !important;
+  background:#e5e5ea !important;
+  transition: background .22s ease !important;
+  border-radius:999px !important;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.06) !important;
+  cursor:pointer !important;
+  /* Reset eventuali rule precedenti */
+  height:auto !important; width:auto !important;
+  -webkit-appearance:none !important;
+  border:none !important;
+}
+.switch .slider:before{
+  position:absolute !important; content:"" !important;
+  height:27px !important; width:27px !important;
+  left:2px !important; top:2px !important;
+  background:#fff !important;
+  border-radius:50% !important;
+  transition: transform .22s ease !important;
+  box-shadow: 0 1px 1px rgba(0,0,0,.08), 0 3px 8px rgba(0,0,0,.18) !important;
+}
+.switch input:checked + .slider{ background:#34C759 !important; }
+.switch input:checked + .slider:before{ transform: translateX(20px) !important; }
+.switch input:disabled + .slider{ opacity:.55 !important; cursor:not-allowed !important; }
+
+/* V211: Switch mini per ZEN+ (75% scale) */
+.switch.mini{ width:38px !important; height:23px !important; }
+.switch.mini .slider:before{
+  height:19px !important; width:19px !important;
+  left:2px !important; top:2px !important;
+}
+.switch.mini input:checked + .slider:before{ transform: translateX(15px) !important; }
+
+/* V211: Preparazione card collassata stile Archivio */
+.prep-card{ cursor:pointer; transition: background .15s ease, border-color .15s ease; }
+.prep-card .row-actions{ display:none !important; margin-top:8px; }
+.prep-card.open .row-actions{ display:flex !important; }
+.prep-card h3{ pointer-events:none; }
+.prep-card .meta{ pointer-events:none; }
+.prep-card.open{ border-color:var(--bordeaux); background:#fff8f8; }
+
 .sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
 
 /* Nascondi indicatore drag su sample-card su touch device */
@@ -5748,7 +5799,7 @@ function initCanvas(){
       const bozze = state.tastings.filter(t=>t.status==="bozza");
 
       const cardHtml = (t)=>`
-        <div class="list-card">
+        <div class="list-card prep-card" onclick="this.classList.toggle('open')">
           <h3>${esc(t.title)}</h3>
           <div class="meta">
             <span>${esc(t.samples.length)} campioni</span>
@@ -5756,10 +5807,10 @@ function initCanvas(){
             <span>Creata: ${esc(fmtDateIT(t.createdAt))}</span>
           </div>
           <div class="row-actions">
-            <button class="btn primary" onclick="openTasting('${esc(t.id)}')">Apri</button>
-            <button class="btn" onclick="openEditModal('${esc(t.id)}')">Modifica</button>
-            <button class="btn" onclick="copyTastingVirgin('${esc(t.id)}')">Copia</button>
-            <button class="btn" onclick="deleteTasting('${esc(t.id)}')">Elimina</button>
+            <button class="btn primary" onclick="event.stopPropagation();openTasting('${esc(t.id)}')">Apri</button>
+            <button class="btn" onclick="event.stopPropagation();openEditModal('${esc(t.id)}')">Modifica</button>
+            <button class="btn" onclick="event.stopPropagation();copyTastingVirgin('${esc(t.id)}')">Copia</button>
+            <button class="btn" onclick="event.stopPropagation();deleteTasting('${esc(t.id)}')">Elimina</button>
           </div>
         </div>
       `;
