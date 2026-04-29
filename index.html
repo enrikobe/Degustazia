@@ -2003,6 +2003,23 @@ button.zenplus-btn:hover:not(:disabled) {
 .sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
 .sample-card.drag-ghost { opacity: 0.4; }
 
+/* V205: Valutazioni */
+.evaluation-pick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.eval-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid rgba(0,0,0,.15);background:#fafafa;font-weight:850;font-size:13px;cursor:pointer;user-select:none;-webkit-user-select:none;transition:all .12s;}
+.eval-pill:hover{border-color:var(--bordeaux);}
+.eval-pill.selected{border-color:var(--bordeaux);background:rgba(122,41,56,.18);color:var(--bordeaux);font-weight:950;}
+.eval-pill-add{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border-radius:999px;border:1px dashed rgba(0,0,0,.25);background:#fff;font-weight:800;font-size:12px;cursor:pointer;color:#666;}
+.evaluations-list-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--grigio-light);}
+.evaluations-list-row:last-child{border-bottom:none;}
+.evaluations-list-row .lbl{flex:1;font-weight:850;}
+/* ZEN+ Valutazione */
+.zenplus-eval-row{height:100%;display:flex;align-items:center;gap:10px;padding:6px 10px;overflow:hidden}
+.zenplus-eval-title{flex:0 0 auto;font-weight:950;color:var(--bordeaux);font-size:12px;white-space:nowrap}
+.zenplus-eval-list{flex:1 1 auto;display:flex;align-items:center;gap:8px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}
+.zenplus-eval-list::-webkit-scrollbar{display:none;height:0}
+.zenplus-eval-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.15);background:#fafafa;font-weight:850;font-size:14px;cursor:pointer}
+.zenplus-eval-pill.selected{border-color:var(--bordeaux);background:rgba(122,41,56,.18);color:var(--bordeaux);font-weight:950}
+
 /* V202: touch drag state */
 .sample-card.td-dragging { touch-action: none; opacity: 0.5; }
 .sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
@@ -2429,6 +2446,11 @@ function setCardColorMode(mode){
               </div>
 
               <div class="fiche-box">
+                <h3>Valutazione</h3>
+                <div id="pickEvaluation" class="evaluation-pick"></div>
+              </div>
+
+              <div class="fiche-box">
                 <h3>Vista</h3>
                 <div class="slider-group">
                   <div class="slider-label"><span>Intensità</span><span id="lblvistaintensita">0</span></div>
@@ -2544,6 +2566,7 @@ function setCardColorMode(mode){
 
         <div class="tabs">
           <button class="tab active" onclick="showAnaTab('descrittori', this)">Descrittori</button>
+          <button class="tab" onclick="showAnaTab('valutazioni', this)">Valutazioni</button>
           <button class="tab" onclick="showAnaTab('profili', this)">Profili</button>
           <button class="tab" onclick="showAnaTab('gruppi', this)">Gruppi</button>
           <button class="tab" onclick="showAnaTab('degustatori', this)">Degustatori</button>
@@ -2552,6 +2575,24 @@ function setCardColorMode(mode){
         <div class="content-scroll">
           <div id="ana-descrittori" class="ana-tab">
             <div id="descriptorsWrap"></div>
+          </div>
+
+          <div id="ana-valutazioni" class="ana-tab" style="display:none;">
+            <div class="grid-2">
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light);">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Aggiungi valutazione</div>
+                <div class="form-group">
+                  <label>Etichetta valutazione</label>
+                  <input class="input" id="newEvaluationName" placeholder="es. Eccellente" onkeydown="if(event.key==='Enter') addEvaluation()" />
+                </div>
+                <button class="btn primary" onclick="addEvaluation()">Aggiungi</button>
+                <div class="muted" style="margin-top:8px;font-size:12px;">Le valutazioni sono uniche e universali, applicabili a qualsiasi campione/degustazione.</div>
+              </div>
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light);">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Valutazioni attuali</div>
+                <div id="evaluationsList"></div>
+              </div>
+            </div>
           </div>
 
           <div id="ana-profili" class="ana-tab" style="display:none;">
@@ -3168,6 +3209,9 @@ function fmtDateIT(iso){
         gusto:{white:["Fresco","Sapido"], red:["Morbido","Caldo"]},
       };
     }
+    function defaultEvaluationsList(){
+      return ["Eccellente","Buono","Discreto","Sufficiente","Insufficiente"];
+    }
 
     function demoTasting(){
       const cols = ["Col1","Col2","Col3","Col4"];
@@ -3210,6 +3254,7 @@ function fmtDateIT(iso){
         profiles: defaultProfiles(),
         groups: defaultGroups(),
         descriptors: defaultDescriptors(),
+        evaluationsList: defaultEvaluationsList(),
         tastings:[],
         currentTastingId: null,
         currentTaster: null,
@@ -3405,6 +3450,7 @@ if(window.__cloudApplying || skipCloud) return;
       s.profiles = Array.isArray(s.profiles) ? s.profiles : defaultProfiles();
       s.groups = Array.isArray(s.groups) ? s.groups : defaultGroups();
       s.descriptors = s.descriptors || defaultDescriptors();
+      s.evaluationsList = Array.isArray(s.evaluationsList) && s.evaluationsList.length ? s.evaluationsList : defaultEvaluationsList();
       s.tastings = Array.isArray(s.tastings) ? s.tastings : [];
       // Cloud-only: non creare demo automaticamente (evita overwrite multi-istanza)
       s.tastings.forEach(t=>{
@@ -3715,6 +3761,7 @@ function cardDescriptorsHtml(ev){
     }
 
 function renderZenPlusDescriptors(){
+      try{ renderZenPlusEvaluation(); }catch(e){}
       const t = getTasting();
       const tid = currentTasterId();
       const sid = selectedSampleId;
@@ -4236,6 +4283,7 @@ function attachProfileRenameLongPress(){
       renderGroupFilterBtns();
       renderProfileOptions();
       renderDescriptorPickers();
+      renderEvaluationPicker();
       hydrateTasterSelect();
 
       try{
@@ -5215,6 +5263,7 @@ function initCanvas(){
         });
       });
 
+      try{ renderEvaluationPicker(); }catch(e){}
       loadCanvasFromEval();
   // V31: Render evo picker
   const evoPick = document.getElementById('detailEvoPick');
@@ -5513,6 +5562,7 @@ function initCanvas(){
     }
 
 function renderAnagrafiche(){
+      try{ renderEvaluationsAnagrafica(); }catch(e){}
       const dwrap = document.getElementById("descriptorsWrap");
       if(dwrap){
         const secs=["vista","olfatto","gusto"];
@@ -5616,6 +5666,135 @@ function renderAnagrafiche(){
       saveState();
       renderAnagrafiche();
     }
+
+    // === V205 VALUTAZIONI ===
+    function addEvaluation(){
+      const inp = document.getElementById("newEvaluationName");
+      if(!inp) return;
+      const v = String(inp.value||"").trim();
+      if(!v) return;
+      if(!Array.isArray(state.evaluationsList)) state.evaluationsList = defaultEvaluationsList();
+      if(state.evaluationsList.includes(v)){
+        toast("Valutazione già presente");
+        return;
+      }
+      state.evaluationsList.push(v);
+      saveState();
+      renderEvaluationsAnagrafica();
+      renderEvaluationPicker();
+      try{ if(document.body.classList.contains("zenplus")) renderZenPlusEvaluation(); }catch(e){}
+      inp.value = "";
+      toast("Valutazione aggiunta");
+    }
+
+    function removeEvaluation(val){
+      if(!confirm("Eliminare valutazione \""+val+"\"?")) return;
+      if(!Array.isArray(state.evaluationsList)) return;
+      state.evaluationsList = state.evaluationsList.filter(x=>x!==val);
+      saveState();
+      renderEvaluationsAnagrafica();
+      renderEvaluationPicker();
+      try{ if(document.body.classList.contains("zenplus")) renderZenPlusEvaluation(); }catch(e){}
+    }
+
+    function renameEvaluation(oldVal){
+      const newVal = prompt("Rinomina valutazione:", oldVal);
+      if(newVal==null) return;
+      const v = String(newVal||"").trim();
+      if(!v || v===oldVal) return;
+      if(!Array.isArray(state.evaluationsList)) return;
+      if(state.evaluationsList.includes(v)){
+        toast("Valutazione già presente");
+        return;
+      }
+      const idx = state.evaluationsList.indexOf(oldVal);
+      if(idx<0) return;
+      state.evaluationsList[idx] = v;
+      try{
+        (state.tastings||[]).forEach(t=>{
+          const evs = t.evaluations || {};
+          Object.keys(evs).forEach(tasterId=>{
+            const per = evs[tasterId] || {};
+            Object.keys(per).forEach(sampleId=>{
+              const ev = per[sampleId];
+              if(ev && ev.evaluation === oldVal) ev.evaluation = v;
+            });
+          });
+        });
+      }catch(e){ console.error("rename evaluation cascade", e); }
+      saveState();
+      renderEvaluationsAnagrafica();
+      renderEvaluationPicker();
+      try{ if(document.body.classList.contains("zenplus")) renderZenPlusEvaluation(); }catch(e){}
+      toast("Valutazione rinominata");
+    }
+
+    function toggleEvaluation(val){
+      if(isArchived()) return;
+      const t = getTasting();
+      const tId = currentTasterId();
+      if(!t || !tId || !selectedSampleId){ toast("Seleziona degustatore e campione"); return; }
+      const ev = getEval(t,tId,selectedSampleId);
+      ev.evaluation = (ev.evaluation === val) ? null : val;
+      ev.updatedAt = nowIso();
+      try{ recalc(); }catch(e){}
+      saveState();
+      try{ renderGrid(); }catch(e){}
+      renderEvaluationPicker();
+      try{ if(document.body.classList.contains("zenplus")) renderZenPlusEvaluation(); }catch(e){}
+    }
+
+    function renderEvaluationPicker(){
+      const el = document.getElementById("pickEvaluation");
+      if(!el) return;
+      const list = Array.isArray(state.evaluationsList) ? state.evaluationsList : [];
+      const t = getTasting();
+      const tId = currentTasterId();
+      const ev = (t && tId && selectedSampleId) ? getEval(t,tId,selectedSampleId) : null;
+      const cur = ev ? ev.evaluation : null;
+      const pillsHtml = list.map(v=>{
+        const sel = (cur===v) ? " selected" : "";
+        return '<span class="eval-pill'+sel+'" onclick="toggleEvaluation(\''+esc(v)+'\')">'+esc(v)+'</span>';
+      }).join("");
+      el.innerHTML = pillsHtml || '<span class="muted">Nessuna valutazione disponibile. Aggiungile in Anagrafiche.</span>';
+    }
+
+    function renderZenPlusEvaluation(){
+      const el = document.getElementById("zenPlusEvalList");
+      if(!el) return;
+      const list = Array.isArray(state.evaluationsList) ? state.evaluationsList : [];
+      const t = getTasting();
+      const tId = currentTasterId();
+      const ev = (t && tId && selectedSampleId) ? getEval(t,tId,selectedSampleId) : null;
+      const cur = ev ? ev.evaluation : null;
+      el.innerHTML = list.map(v=>{
+        const sel = (cur===v) ? " selected" : "";
+        return '<span class="zenplus-eval-pill'+sel+'" onclick="zenPlusToggleEvaluation(\''+esc(v)+'\')">'+esc(v)+'</span>';
+      }).join("");
+    }
+
+    function zenPlusToggleEvaluation(val){
+      toggleEvaluation(val);
+      try{ if(document.body.classList.contains("zenplus")) setTimeout(renderZenPlusEvaluation,0); }catch(e){}
+    }
+
+    function renderEvaluationsAnagrafica(){
+      const wrap = document.getElementById("evaluationsList");
+      if(!wrap) return;
+      const list = Array.isArray(state.evaluationsList) ? state.evaluationsList : [];
+      if(!list.length){
+        wrap.innerHTML = '<div class="muted">Nessuna valutazione. Aggiungine una.</div>';
+        return;
+      }
+      wrap.innerHTML = list.map(v=>(
+        '<div class="evaluations-list-row">'+
+        '<span class="lbl">'+esc(v)+'</span>'+
+        '<button class="btn" style="padding:4px 8px;font-size:11px;" onclick="renameEvaluation(\''+esc(v)+'\')">Rinomina</button>'+
+        '<button class="btn" style="padding:4px 8px;font-size:11px;" onclick="removeEvaluation(\''+esc(v)+'\')">Elimina</button>'+
+        '</div>'
+      )).join("");
+    }
+    // === FINE V205 VALUTAZIONI ===
 
     function addProfile(){
       const n = document.getElementById("newProfileName").value.trim();
@@ -5770,6 +5949,7 @@ function buildArchiveHaystack(t){
         Object.keys(per).forEach(sampleId=>{
           const ev = per[sampleId] || {};
           parts.push(String(ev.profileKey||""));
+          parts.push(String(ev.evaluation||""));
           parts.push(String(ev.evolution||""));
           const d = ev.data || {};
           ['vista','olfatto','gusto'].forEach(k=>{
@@ -7743,7 +7923,8 @@ const meta = list.map(t=>({id:t.id, updatedAt:t.updatedAt||'', status:t.status||
       tasters: Array.isArray(d.tasters)?d.tasters:[],
       profiles: Array.isArray(d.profiles)?d.profiles:[],
       groups: Array.isArray(d.groups)?d.groups:[],
-      descriptors: (d.descriptors && typeof d.descriptors==='object') ? d.descriptors : {}
+      descriptors: (d.descriptors && typeof d.descriptors==='object') ? d.descriptors : {},
+      evaluationsList: Array.isArray(d.evaluationsList)?d.evaluationsList:[]
     });
     if(h === lastAnaHash) { __markCloudReady('anagrafiche'); return; }
 
@@ -7751,6 +7932,7 @@ const meta = list.map(t=>({id:t.id, updatedAt:t.updatedAt||'', status:t.status||
     try{
       state.tasters = Array.isArray(d.tasters) ? d.tasters : state.tasters;
       state.profiles = Array.isArray(d.profiles) ? d.profiles : state.profiles;
+      state.evaluationsList = (Array.isArray(d.evaluationsList) && d.evaluationsList.length) ? d.evaluationsList : state.evaluationsList;
       state.groups = Array.isArray(d.groups) ? d.groups : state.groups;
       state.descriptors = (d.descriptors && typeof d.descriptors==='object') ? d.descriptors : state.descriptors;
       lastAnaHash = h;
@@ -11898,6 +12080,11 @@ document.addEventListener('DOMContentLoaded', function() {
           if(profileLabel) {
             md.push(indent + '    * Profilo: ' + profileLabel);
           }
+        }
+
+        // V205: Valutazione (prima dei descrittori)
+        if(ev && ev.evaluation) {
+          md.push(indent + '    * Valutazione: ' + ev.evaluation);
         }
 
         // Descrittori per famiglia
