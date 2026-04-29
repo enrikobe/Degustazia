@@ -2022,6 +2022,11 @@ button.zenplus-btn:hover:not(:disabled) {
 .zenplus-eval-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.15);background:#fafafa;font-weight:850;font-size:14px;cursor:pointer}
 .zenplus-eval-pill.selected{border-color:var(--bordeaux);background:rgba(122,41,56,.18);color:var(--bordeaux);font-weight:950}
 
+/* V208: Switch sezioni card nel pannello Filtri */
+.card-show-switches{display:flex;flex-direction:column;gap:6px;margin-top:6px;}
+.card-show-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff;border:1px solid var(--grigio-light);border-radius:10px;font-weight:850;font-size:13px;}
+.card-show-label{flex:1;color:var(--grigio);}
+
 /* V202: touch drag state */
 .sample-card.td-dragging { touch-action: none; opacity: 0.5; }
 .sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
@@ -3565,17 +3570,19 @@ if(window.__cloudApplying || skipCloud) return;
     }
 function cardDescriptorsHtml(ev){
       if(!ev) return '';
-      const evalLabel = (ev && typeof ev.evaluation === 'string' && ev.evaluation) ? ev.evaluation : '';
+      // V208: rispetta gli switch del pannello filtri (per-tasting)
+      let cs = { evaluation:true, vista:true, olfatto:true, gusto:true };
+      try{ cs = (typeof getCardShowPrefs === 'function') ? getCardShowPrefs() : cs; }catch(e){}
+      const evalLabel = (cs.evaluation && ev && typeof ev.evaluation === 'string' && ev.evaluation) ? ev.evaluation : '';
       const a = [];
       const pushAll = (arr)=>{ (arr||[]).forEach(x=>{ if(x && !a.includes(x)) a.push(x); }); };
       if(ev.data){
-        pushAll(ev.data.vista?.desc);
-        pushAll(ev.data.olfatto?.desc);
-        pushAll(ev.data.gusto?.desc);
+        if(cs.vista)   pushAll(ev.data.vista?.desc);
+        if(cs.olfatto) pushAll(ev.data.olfatto?.desc);
+        if(cs.gusto)   pushAll(ev.data.gusto?.desc);
       }
       if(!evalLabel && !a.length) return '';
       const shown = a.slice(0,10);
-      // V206: valutazione in grassetto come primo elemento, separato dai descrittori da virgola
       const evalHtml = evalLabel ? `<span class="card-eval"><strong>${esc(evalLabel)}</strong></span>` : '';
       const sep = (evalLabel && shown.length) ? ', ' : '';
       const descsHtml = shown.map((x,i)=>`<span class="card-desc">${esc(x)}</span>${i<shown.length-1?', ':''}`).join('');
@@ -4289,6 +4296,245 @@ function attachProfileRenameLongPress(){
         try{ if(document.body.classList.contains('zenplus')) renderZenPlusEvaluation(); }catch(e){}
       }catch(e){ console.error('removeTastingEvaluation', e); }
     }
+
+    // === V208 LONG-PRESS DESCRITTORE/VALUTAZIONE ===
+    // Long-press su .desc-pill / .zenplus-desc-pill / .eval-pill / .zenplus-eval-pill
+    // → elimina dalla lista locale della degustazione e da tutte le selezioni.
+
+    function removeTastingDescriptorFull(sec, val){
+      try{
+        const t = getTasting();
+        if(!t) return;
+        if(!confirm('Eliminare descrittore "'+val+'" ('+sec+') da questa degustazione?\nVerrà rimosso dalle pills e dalle selezioni esistenti.')) return;
+        const store = ensureTastingDescriptors(t);
+        if(store && store[sec]){
+          ['white','red'].forEach(col=>{
+            if(Array.isArray(store[sec][col])){
+              store[sec][col] = store[sec][col].filter(x=>x!==val);
+            }
+          });
+        }
+        // Rimuovi dalle selezioni in tutte le evaluations
+        try{
+          const evs = t.evaluations || {};
+          Object.keys(evs).forEach(tid=>{
+            const per = evs[tid] || {};
+            Object.keys(per).forEach(sid=>{
+              const ev = per[sid];
+              if(ev && ev.data && ev.data[sec] && Array.isArray(ev.data[sec].desc)){
+                ev.data[sec].desc = ev.data[sec].desc.filter(x=>x!==val);
+              }
+            });
+          });
+        }catch(e){}
+        saveState();
+        try{ renderDescriptorPickers(); }catch(e){}
+        try{ if(document.body.classList.contains('zenplus')) renderZenPlusDescriptors(); }catch(e){}
+        try{ renderGrid(); }catch(e){}
+        try{ updateDetail(); }catch(e){}
+      }catch(e){ console.error('removeTastingDescriptorFull', e); }
+    }
+
+    function removeTastingEvaluationFull(val){
+      try{
+        const t = getTasting();
+        if(!t) return;
+        if(!confirm('Eliminare valutazione "'+val+'" da questa degustazione?\nVerrà rimossa dalle pills e dalle selezioni esistenti.')) return;
+        const list = ensureTastingEvaluations(t);
+        const idx = list.indexOf(val);
+        if(idx>=0) list.splice(idx,1);
+        // Rimuovi dalle selezioni
+        try{
+          const evs = t.evaluations || {};
+          Object.keys(evs).forEach(tid=>{
+            const per = evs[tid] || {};
+            Object.keys(per).forEach(sid=>{
+              const ev = per[sid];
+              if(ev && ev.evaluation === val) ev.evaluation = null;
+            });
+          });
+        }catch(e){}
+        saveState();
+        try{ renderEvaluationPicker(); }catch(e){}
+        try{ if(document.body.classList.contains('zenplus')) renderZenPlusEvaluation(); }catch(e){}
+        try{ renderGrid(); }catch(e){}
+        try{ updateDetail(); }catch(e){}
+      }catch(e){ console.error('removeTastingEvaluationFull', e); }
+    }
+
+    // Binding generico long-press su un container (.pages-attive: detail e zenplus)
+    function bindPillLongPressDelete(){
+      try{
+        if(window.__pillLPBound) return;
+        window.__pillLPBound = true;
+
+        const LP_MS = 800;
+        const MOVE_PX = 12;
+
+        const state = { timer:null, x:0, y:0, target:null, fired:false };
+
+        const findPill = (target)=>{
+          if(!target || !target.closest) return null;
+          // Detail vista normale
+          let el = target.closest('.desc-pill[data-sec][data-desc]');
+          if(el) return { kind:'desc', el, sec: el.dataset.sec, val: el.dataset.desc };
+          el = target.closest('.eval-pill');
+          if(el && !el.classList.contains('eval-pill-add')){
+            // Recupera il valore dal testo (la pill è creata con esc(v))
+            const val = (el.textContent||'').trim();
+            if(val) return { kind:'eval', el, val };
+          }
+          // ZEN+
+          el = target.closest('.zenplus-desc-pill');
+          if(el){
+            // ZEN+ desc pill ha onclick="zenPlusToggleDesc('sec','desc',this)"
+            // Estraggo sec/desc dall'attributo onclick
+            const oc = el.getAttribute('onclick') || '';
+            const m = oc.match(/zenPlusToggleDesc\('([^']+)','([^']+)'/);
+            if(m) return { kind:'desc', el, sec:m[1], val:m[2] };
+          }
+          el = target.closest('.zenplus-eval-pill');
+          if(el){
+            const val = (el.textContent||'').trim();
+            if(val) return { kind:'eval', el, val };
+          }
+          return null;
+        };
+
+        const clear = ()=>{
+          if(state.timer){ clearTimeout(state.timer); state.timer = null; }
+          state.target = null;
+        };
+
+        const start = (x,y,target)=>{
+          const info = findPill(target);
+          if(!info) return;
+          state.target = info;
+          state.x = x; state.y = y;
+          state.fired = false;
+          if(state.timer) clearTimeout(state.timer);
+          state.timer = setTimeout(()=>{
+            state.fired = true;
+            state.timer = null;
+            try{
+              if(info.kind === 'desc') removeTastingDescriptorFull(info.sec, info.val);
+              else if(info.kind === 'eval') removeTastingEvaluationFull(info.val);
+            }catch(err){ console.error(err); }
+          }, LP_MS);
+        };
+
+        const move = (x,y)=>{
+          if(!state.timer) return;
+          if(Math.abs(x-state.x)>MOVE_PX || Math.abs(y-state.y)>MOVE_PX) clear();
+        };
+
+        // Document-level: una sola binding cattura sia detail sia zenplus
+        document.addEventListener('pointerdown', (e)=>{
+          start(e.clientX, e.clientY, e.target);
+        }, {capture:true});
+        document.addEventListener('pointermove', (e)=>{
+          move(e.clientX, e.clientY);
+        }, {capture:true, passive:true});
+        ['pointerup','pointercancel','pointerleave'].forEach(ev=>{
+          document.addEventListener(ev, ()=>{ clear(); }, {capture:true, passive:true});
+        });
+        // Touch fallback
+        document.addEventListener('touchstart', (e)=>{
+          const t = e.touches && e.touches[0];
+          if(!t) return;
+          start(t.clientX, t.clientY, e.target);
+        }, {capture:true, passive:true});
+        document.addEventListener('touchmove', (e)=>{
+          const t = e.touches && e.touches[0];
+          if(!t) return;
+          move(t.clientX, t.clientY);
+        }, {capture:true, passive:true});
+        ['touchend','touchcancel'].forEach(ev=>{
+          document.addEventListener(ev, ()=>{ clear(); }, {capture:true, passive:true});
+        });
+
+        // Sopprimi click dopo long-press
+        document.addEventListener('click', (e)=>{
+          if(state.fired){
+            e.preventDefault();
+            e.stopPropagation();
+            state.fired = false;
+          }
+        }, true);
+
+        // Sopprimi context-menu su pill (browser desktop)
+        document.addEventListener('contextmenu', (e)=>{
+          if(findPill(e.target)){
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+          }
+        }, true);
+
+      }catch(e){ console.error('bindPillLongPressDelete', e); }
+    }
+
+    // Auto-bind quando il DOM è pronto
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', ()=>{ try{ bindPillLongPressDelete(); }catch(e){} });
+    } else {
+      try{ bindPillLongPressDelete(); }catch(e){}
+    }
+
+    // === V208 SWITCH SEZIONI CARD ===
+    // Persistenza per-tasting in t.uiPrefs.cardShow = {evaluation, vista, olfatto, gusto}
+    // Default: tutti true. Usato da cardDescriptorsHtml per filtrare cosa mostrare.
+
+    function getCardShowPrefs(){
+      const t = getTasting();
+      if(!t) return { evaluation:true, vista:true, olfatto:true, gusto:true };
+      if(!t.uiPrefs) t.uiPrefs = {};
+      if(!t.uiPrefs.cardShow){
+        t.uiPrefs.cardShow = { evaluation:true, vista:true, olfatto:true, gusto:true };
+      }
+      const cs = t.uiPrefs.cardShow;
+      // Backfill di chiavi mancanti
+      ['evaluation','vista','olfatto','gusto'].forEach(k=>{
+        if(typeof cs[k] !== 'boolean') cs[k] = true;
+      });
+      return cs;
+    }
+
+    function setCardShowPref(key, val){
+      const t = getTasting();
+      if(!t) return;
+      if(!t.uiPrefs) t.uiPrefs = {};
+      if(!t.uiPrefs.cardShow) t.uiPrefs.cardShow = { evaluation:true, vista:true, olfatto:true, gusto:true };
+      t.uiPrefs.cardShow[key] = !!val;
+      saveState();
+      try{ renderGrid(); }catch(e){}
+      try{ renderCardShowSwitches(); }catch(e){}
+    }
+
+    function renderCardShowSwitches(){
+      const wrap = document.getElementById('cardShowSwitches');
+      if(!wrap) return;
+      const t = getTasting();
+      if(!t){
+        wrap.innerHTML = '<div class="muted">Seleziona prima una degustazione.</div>';
+        return;
+      }
+      const cs = getCardShowPrefs();
+      const items = [
+        { k:'evaluation', label:'Valutazione' },
+        { k:'vista',      label:'Vista' },
+        { k:'olfatto',    label:'Olfatto' },
+        { k:'gusto',      label:'Gusto' },
+      ];
+      wrap.innerHTML = items.map(it=>{
+        const checked = cs[it.k] ? 'checked' : '';
+        return '<label class="card-show-row">'
+             +   '<span class="card-show-label">'+esc(it.label)+'</span>'
+             +   '<label class="switch"><input type="checkbox" '+checked+' onchange="setCardShowPref(\''+it.k+'\', this.checked)"><span class="slider"></span></label>'
+             + '</label>';
+      }).join('');
+    }
+    // === FINE V208 ===
 
     function getActiveDescriptorSource(){
       const t = getTasting();
