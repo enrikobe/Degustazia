@@ -681,9 +681,11 @@
     .zenplus-strip{overflow:hidden;border-top:1px solid rgba(0,0,0,.08);background:#fff}
     .zenplus-strip.profiles{flex:0 0 5vh}
     .zenplus-strip.groups{flex:0 0 5vh}
+    .zenplus-strip.eval{flex:0 0 4vh}
     .zenplus-strip.desc.vista{flex:0 0 4vh}
     .zenplus-strip.desc.olfatto{flex:0 0 4vh}
     .zenplus-strip.desc.gusto{flex:0 0 4vh}
+    .zenplus-eval-add{margin-left:6px;font-weight:900;color:#666;cursor:pointer;font-size:11px}
 
     /* Scrolling: solo orizzontale + scrollbar nascosta */
     .zenplus-strip-inner{height:100%;display:flex;align-items:center;gap:10px;padding:6px 10px;overflow-x:auto;overflow-y:hidden;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}
@@ -2361,6 +2363,7 @@ function setCardColorMode(mode){
     <div class="zenplus-strip profiles"><div class="zenplus-strip-inner"><div id="zenPlusProfilesSlot" class="zenplus-slot"><label class="switch mini" title="Colore card: profilo"><input type="checkbox" id="swZenColorProfile" onchange="setCardColorMode('profile')"><span class="slider"></span></label><span class="zenplus-mini-label">Profili</span></div></div></div>
     <div class="zenplus-strip groups"><div class="zenplus-strip-inner"><div id="zenPlusGroupsSlot" class="zenplus-slot"><label class="switch mini" title="Colore card: gruppo"><input type="checkbox" id="swZenColorGroup" onchange="setCardColorMode('group')"><span class="slider"></span></label><span class="zenplus-mini-label">Gruppi</span></div></div></div>
 
+    <div class="zenplus-strip eval"><div class="zenplus-eval-row"><div class="zenplus-eval-title">Valutazione <span class="zenplus-eval-add" onclick="addTastingEvaluation()">+ aggiungi</span></div><div id="zenPlusEvalList" class="zenplus-eval-list"></div></div></div>
     <div class="zenplus-strip desc vista"><div class="zenplus-desc-row"><div class="zenplus-desc-title">Vista <span class="zenplus-desc-add" onclick="addTastingDescriptorQuick('vista')">+ aggiungi</span></div><div id="zenPlusDescVista" class="zenplus-desc-list"></div></div></div>
     <div class="zenplus-strip desc olfatto"><div class="zenplus-desc-row"><div class="zenplus-desc-title">Olfatto <span class="zenplus-desc-add" onclick="addTastingDescriptorQuick('olfatto')">+ aggiungi</span></div><div id="zenPlusDescOlfatto" class="zenplus-desc-list"></div></div></div>
     <div class="zenplus-strip desc gusto"><div class="zenplus-desc-row"><div class="zenplus-desc-title">Gusto <span class="zenplus-desc-add" onclick="addTastingDescriptorQuick('gusto')">+ aggiungi</span></div><div id="zenPlusDescGusto" class="zenplus-desc-list"></div></div></div>
@@ -4224,6 +4227,69 @@ function attachProfileRenameLongPress(){
       return t.descriptors;
     }
 
+    // V207: per-tasting evaluations list (mirror of descriptors pattern)
+    function ensureTastingEvaluations(t){
+      if(!t) return null;
+      if(!Array.isArray(t.evaluationsList) || !t.evaluationsList.length){
+        const src = Array.isArray(state.evaluationsList) ? state.evaluationsList : [];
+        t.evaluationsList = JSON.parse(JSON.stringify(src));
+      }
+      return t.evaluationsList;
+    }
+
+    function getActiveEvaluationsList(){
+      const t = getTasting();
+      if(t){
+        ensureTastingEvaluations(t);
+        return t.evaluationsList || [];
+      }
+      return Array.isArray(state.evaluationsList) ? state.evaluationsList : [];
+    }
+
+    function addTastingEvaluation(){
+      try{
+        const t = getTasting();
+        if(!t) return;
+        const list = ensureTastingEvaluations(t);
+        const label = prompt('Nuova valutazione:', '');
+        if(label==null) return;
+        const v = String(label||'').trim();
+        if(!v) return;
+        if(list.includes(v)){ toast('Valutazione già presente'); return; }
+        list.push(v);
+        saveState();
+        renderEvaluationPicker();
+        try{ if(document.body.classList.contains('zenplus')) renderZenPlusEvaluation(); }catch(e){}
+        toast('Valutazione aggiunta');
+      }catch(e){ console.error('addTastingEvaluation', e); }
+    }
+
+    function removeTastingEvaluation(val){
+      try{
+        const t = getTasting();
+        if(!t) return;
+        const list = ensureTastingEvaluations(t);
+        if(!confirm('Eliminare valutazione "'+val+'" da questa degustazione?')) return;
+        const idx = list.indexOf(val);
+        if(idx<0) return;
+        list.splice(idx,1);
+        // Se qualche evaluation aveva quel valore, lo deselezioniamo
+        try{
+          const evs = t.evaluations || {};
+          Object.keys(evs).forEach(tid=>{
+            const per = evs[tid] || {};
+            Object.keys(per).forEach(sid=>{
+              const ev = per[sid];
+              if(ev && ev.evaluation === val) ev.evaluation = null;
+            });
+          });
+        }catch(e){}
+        saveState();
+        renderEvaluationPicker();
+        try{ if(document.body.classList.contains('zenplus')) renderZenPlusEvaluation(); }catch(e){}
+      }catch(e){ console.error('removeTastingEvaluation', e); }
+    }
+
     function getActiveDescriptorSource(){
       const t = getTasting();
       if(t && t.descriptors) return t.descriptors;
@@ -5754,7 +5820,7 @@ function renderAnagrafiche(){
     function renderEvaluationPicker(){
       const el = document.getElementById("pickEvaluation");
       if(!el) return;
-      const list = Array.isArray(state.evaluationsList) ? state.evaluationsList : [];
+      const list = getActiveEvaluationsList();
       const t = getTasting();
       const tId = currentTasterId();
       const ev = (t && tId && selectedSampleId) ? getEval(t,tId,selectedSampleId) : null;
@@ -5763,13 +5829,14 @@ function renderAnagrafiche(){
         const sel = (cur===v) ? " selected" : "";
         return '<span class="eval-pill'+sel+'" onclick="toggleEvaluation(\''+esc(v)+'\')">'+esc(v)+'</span>';
       }).join("");
-      el.innerHTML = pillsHtml || '<span class="muted">Nessuna valutazione disponibile. Aggiungile in Anagrafiche.</span>';
+      const addBtn = '<span class="eval-pill-add" onclick="addTastingEvaluation()">+ aggiungi</span>';
+      el.innerHTML = (pillsHtml || '<span class="muted">Nessuna valutazione disponibile.</span>') + addBtn;
     }
 
     function renderZenPlusEvaluation(){
       const el = document.getElementById("zenPlusEvalList");
       if(!el) return;
-      const list = Array.isArray(state.evaluationsList) ? state.evaluationsList : [];
+      const list = getActiveEvaluationsList();
       const t = getTasting();
       const tId = currentTasterId();
       const ev = (t && tId && selectedSampleId) ? getEval(t,tId,selectedSampleId) : null;
@@ -7042,6 +7109,7 @@ function onResultsSearch(val){
         columns: ["Col1","Col2","Col3","Col4"],
         groups: existing ? existing.groups : clone(state.groups),
         profiles: existing ? (existing.profiles || clone(state.profiles)) : clone(state.profiles),
+        evaluationsList: existing ? (existing.evaluationsList || clone(state.evaluationsList||[])) : clone(state.evaluationsList||[]),
         samples: finalSamples,
         products: finalProducts,
         blindMap: blindMap,
@@ -7418,6 +7486,7 @@ const pushAnagrafiche = async () => {
       profiles: state.profiles || [],
       groups: state.groups || [],
       descriptors: state.descriptors || [],
+      evaluationsList: state.evaluationsList || [],
       updatedAt: new Date().toISOString()
     };
     beginWrite();
