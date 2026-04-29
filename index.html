@@ -2636,6 +2636,8 @@ function setCardColorMode(mode){
           <div class="row-actions">
             <button class="btn" onclick="exportJson()">Export</button>
             <button class="btn" onclick="triggerImportJson()">Import</button>
+            <button class="btn" style="background:#7a2938;color:#fff;" onclick="exportFullBackup()" title="Backup completo di tutti i dati dell\'app">📦 Backup</button>
+            <button class="btn" style="background:#7a2938;color:#fff;" onclick="triggerImportFullBackup()" title="Ripristina backup completo">📥 Ripristina</button>
             <label style="font-size:12px;font-weight:950;">Cerca</label>
             <input class="input" style="padding:8px 10px;" placeholder="testo libero..." oninput="onArchiveSearch(this.value)" />
           </div>
@@ -2853,6 +2855,7 @@ function setCardColorMode(mode){
   </div>
 
   <input id="importJsonInput" type="file" accept="application/json" style="display:none;" />
+  <input id="importFullBackupInput" type="file" accept="application/json" style="display:none;" onchange="handleFullBackupImport(this.files[0])" />
   <div id="toast" class="toast"></div>
 
   <script>
@@ -5982,6 +5985,114 @@ function renderArchive(){
     function triggerImportJson(){
       document.getElementById("importJsonInput").click();
     }
+
+    // === BACKUP COMPLETO V204 ===
+    function exportFullBackup(){
+      try{
+        const allT = state.tastings || [];
+        const stats = {
+          tastingsAttive: allT.filter(t=>t.status!=="archiviata" && t.status!=="bozza").length,
+          bozze: allT.filter(t=>t.status==="bozza").length,
+          archiviate: allT.filter(t=>t.status==="archiviata").length,
+          tasters: (state.tasters||[]).length,
+          profiles: (state.profiles||[]).length,
+          groups: (state.groups||[]).length,
+          descriptors: (state.descriptors||[]).length
+        };
+        const backup = {
+          format: "degustapp-full-backup",
+          version: 1,
+          appVersion: "V204",
+          exportedAt: new Date().toISOString(),
+          stats: stats,
+          data: state
+        };
+        const json = JSON.stringify(backup, null, 2);
+        const ts = new Date().toISOString().slice(0,16).replace(/[:T]/g,"-");
+        downloadBlob(`degustapp-backup-completo-${ts}.json`, json, "application/json");
+        toast(`Backup completo: ${stats.tastingsAttive} attive + ${stats.bozze} bozze + ${stats.archiviate} archiviate`);
+      }catch(e){
+        console.error("exportFullBackup error", e);
+        toast("Errore durante il backup");
+      }
+    }
+
+    function triggerImportFullBackup(){
+      const inp = document.getElementById("importFullBackupInput");
+      if(inp){ inp.value = ""; inp.click(); }
+    }
+
+    function handleFullBackupImport(file){
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev)=>{
+        try{
+          const json = JSON.parse(ev.target.result);
+          // Riconosci formato nuovo (con .data) o vecchio (state piatto)
+          const isFullFormat = json && json.format === "degustapp-full-backup" && json.data;
+          const importedState = isFullFormat ? json.data : json;
+          if(!importedState || !Array.isArray(importedState.tastings)){
+            toast("Formato file non valido");
+            return;
+          }
+          const allNew = importedState.tastings || [];
+          const sNew = {
+            tastings: allNew.filter(t=>t.status!=="archiviata" && t.status!=="bozza").length,
+            bozze: allNew.filter(t=>t.status==="bozza").length,
+            archiviate: allNew.filter(t=>t.status==="archiviata").length,
+            tasters: (importedState.tasters||[]).length
+          };
+          const expDate = isFullFormat ? new Date(json.exportedAt).toLocaleString("it-IT") : "data sconosciuta";
+          const allCur = state.tastings || [];
+          const sCur = {
+            tastings: allCur.filter(t=>t.status!=="archiviata" && t.status!=="bozza").length,
+            bozze: allCur.filter(t=>t.status==="bozza").length,
+            archiviate: allCur.filter(t=>t.status==="archiviata").length
+          };
+          const choice = prompt(
+            "\u{1F4E6} RIPRISTINO BACKUP\n" +
+            "Data export: " + expDate + "\n" +
+            "Contiene: " + sNew.tastings + " attive, " + sNew.bozze + " bozze, " + sNew.archiviate + " archiviate, " + sNew.tasters + " degustatori\n\n" +
+            "\u{1F4CA} STATO ATTUALE\n" +
+            sCur.tastings + " attive, " + sCur.bozze + " bozze, " + sCur.archiviate + " archiviate\n\n" +
+            "Cosa vuoi fare?\n" +
+            "  1 = SOVRASCRIVI tutto (i dati attuali vengono persi)\n" +
+            "  2 = UNISCI (aggiungi solo ID nuovi, mantieni tutto il resto)\n" +
+            "  vuoto = ANNULLA\n\n" +
+            "Digita 1 oppure 2:"
+          );
+          if(choice === "1"){
+            if(!confirm("\u26A0\uFE0F Sovrascrivere DAVVERO tutti i dati attuali?\nL\'operazione NON \u00E8 reversibile.")) return;
+            state = migrate(importedState);
+            saveState();
+            toast("Backup ripristinato (sovrascritto)");
+            setTimeout(()=>location.reload(), 800);
+          } else if(choice === "2"){
+            const existingIds = new Set(allCur.map(t=>t.id));
+            const addedT = allNew.filter(t=>!existingIds.has(t.id));
+            const existingEmails = new Set((state.tasters||[]).map(t=>(t.email||"").toLowerCase()).filter(Boolean));
+            const newTasters = (importedState.tasters||[]).filter(t=>{
+              const em = (t.email||"").toLowerCase();
+              if(!em) return false;
+              return !existingEmails.has(em);
+            });
+            state.tastings = allCur.concat(addedT);
+            state.tasters = (state.tasters||[]).concat(newTasters);
+            state = migrate(state);
+            saveState();
+            toast("Unite " + addedT.length + " degustazioni e " + newTasters.length + " degustatori");
+            setTimeout(()=>location.reload(), 800);
+          } else {
+            toast("Ripristino annullato");
+          }
+        }catch(ex){
+          console.error("handleFullBackupImport error", ex);
+          toast("Errore lettura file backup");
+        }
+      };
+      reader.readAsText(file);
+    }
+    // === FINE BACKUP COMPLETO V204 ===
     document.getElementById("importJsonInput").addEventListener("change", (e)=>{
       const f = e.target.files[0];
       if(!f) return;
