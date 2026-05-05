@@ -4692,8 +4692,12 @@ function attachProfileRenameLongPress(){
         try{ arr.sort((a,b)=>String(a).localeCompare(String(b),'it')); }catch(e){}
         store[sec][color] = arr;
         // V214: protezione finestra dirty per evitare overwrite dal poller
-        try{ if(typeof window.markLocalDirty==='function') window.markLocalDirty(5000); }catch(e){}
-        saveState({skipCloud:true});
+        // V215: usa saveState() normale per garantire il push al cloud.
+        // markLocalDirty(4500) è già chiamato dentro saveState, quindi
+        // la protezione anti-poller resta attiva. Il commit V214 era
+        // inefficace perché skipCloud:true impediva cloudRequestSync()
+        // di propagare la modifica al cloud.
+        saveState();
         renderDescriptorPickers();
       }catch(e){ console.error(e); }
     }
