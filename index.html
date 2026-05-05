@@ -8318,7 +8318,10 @@ const pushAnagrafiche = async () => {
       tasters: state.tasters || [],
       profiles: state.profiles || [],
       groups: state.groups || [],
-      descriptors: state.descriptors || []
+      descriptors: state.descriptors || [],
+      // V216: evaluationsList ora partecipa al diff hash, così addEvaluation/
+      // removeEvaluation/renameEvaluation triggerano correttamente il push cloud
+      evaluationsList: state.evaluationsList || []
     };
     const anaHash = stableStringify(anaObj);
     if(anaHash !== lastAnaHash){
