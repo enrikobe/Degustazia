@@ -2120,6 +2120,43 @@ button.zenplus-btn:hover:not(:disabled) {
 #page-preparazione .tabs{ display:none !important; }
 #prep-bozze{ display:none !important; }
 
+/* V217: Liqueur d'expedition */
+#liqueurFicheBox{ padding:10px 12px; }
+.liqueur-header{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.liqueur-header h3{ color:var(--bordeaux); font-weight:950; }
+.liqueur-header-actions{ display:flex; gap:6px; flex-wrap:wrap; }
+.liqueur-header-actions .btn{ padding:5px 10px; font-size:12px; }
+.liqueur-cards{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px; }
+.liqueur-card{ border:1px solid var(--grigio-light); border-radius:10px; background:#fff; padding:8px; transition: border-color .15s ease, background .15s ease; }
+.liqueur-card.fav{ border-color:#e57373; background:#fff8f8; }
+.liqueur-card-header{ display:flex; align-items:center; gap:6px; padding:2px 0 8px 0; border-bottom:1px solid var(--grigio-light); margin-bottom:8px; }
+.liqueur-card-heart{ font-size:18px; cursor:pointer; user-select:none; -webkit-user-select:none; line-height:1; }
+.liqueur-card-heart:hover{ transform: scale(1.15); }
+.liqueur-card-label{ flex:1; font-weight:950; color:var(--bordeaux); cursor:pointer; font-size:14px; }
+.liqueur-card-label:hover{ text-decoration: underline; }
+.liqueur-card-remove{ font-size:14px; color:#999; cursor:pointer; padding:2px 6px; }
+.liqueur-card-remove:hover{ color:#c62828; }
+.liqueur-card-body{ display:flex; flex-direction:column; gap:5px; }
+.liqueur-row{ display:flex; align-items:center; gap:6px; }
+.liqueur-row-name{ flex:1; font-size:13px; font-weight:700; color:#444; }
+.liqueur-row-qty{ width:64px; padding:4px 6px; font-size:13px; font-weight:850; text-align:right; border:1px solid var(--grigio-light); border-radius:6px; background:#fafafa; }
+.liqueur-row-qty:focus{ outline:none; border-color:var(--bordeaux); background:#fff; }
+.liqueur-row-unit{ width:34px; font-size:11px; color:#777; font-weight:700; }
+.liqueur-comp-list{ margin-top:10px; padding-top:8px; border-top:1px dashed var(--grigio-light); }
+.liqueur-comp-pill{ display:inline-flex; align-items:center; gap:6px; padding:3px 8px; margin:2px 4px 2px 0; border-radius:999px; background:#f4eef0; font-size:11px; font-weight:700; }
+.liqueur-comp-remove{ cursor:pointer; color:#999; font-weight:900; padding:0 2px; }
+.liqueur-comp-remove:hover{ color:#c62828; }
+
+/* V217: Confronto liqueur in pagina risultati */
+.liqueur-cmp-section{ padding:10px; }
+.liqueur-cmp-sample{ margin-bottom:18px; padding:10px; background:#fafafa; border-radius:8px; border:1px solid var(--grigio-light); }
+.liqueur-cmp-sample-title{ font-weight:950; color:var(--bordeaux); font-size:15px; margin-bottom:8px; }
+.liqueur-cmp-card{ margin-bottom:10px; padding:6px 10px; background:#fff; border-radius:6px; border-left:3px solid var(--bordeaux); }
+.liqueur-cmp-label{ font-weight:850; color:var(--grigio); margin-bottom:4px; }
+.liqueur-cmp-list{ margin:0; padding-left:18px; font-size:13px; }
+.liqueur-cmp-list li{ margin:2px 0; }
+
+
 
 .sample-card.drag-over { outline: 2px solid var(--bordeaux); background: rgba(122,41,56,0.06); }
 
@@ -2545,6 +2582,10 @@ function setCardColorMode(mode){
                 <div id="groupOptions" class="group-options"></div>
               </div>
 
+              <div class="fiche-box" id="liqueurFicheBox">
+                <div id="liqueurSection"></div>
+              </div>
+
               <div class="fiche-box">
                 <h3>Valutazione</h3>
                 <div id="pickEvaluation" class="evaluation-pick"></div>
@@ -2667,6 +2708,7 @@ function setCardColorMode(mode){
         <div class="tabs">
           <button class="tab active" onclick="showAnaTab('descrittori', this)">Descrittori</button>
           <button class="tab" onclick="showAnaTab('valutazioni', this)">Valutazioni</button>
+          <button class="tab" onclick="showAnaTab('liqueur', this)">Liqueur</button>
           <button class="tab" onclick="showAnaTab('profili', this)">Profili</button>
           <button class="tab" onclick="showAnaTab('gruppi', this)">Gruppi</button>
           <button class="tab" onclick="showAnaTab('degustatori', this)">Degustatori</button>
@@ -2691,6 +2733,28 @@ function setCardColorMode(mode){
               <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light);">
                 <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Valutazioni attuali</div>
                 <div id="evaluationsList"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="ana-liqueur" class="ana-tab" style="display:none;">
+            <div class="grid-2">
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light);">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Aggiungi componente liqueur</div>
+                <div class="form-group">
+                  <label>Nome componente</label>
+                  <input class="input" id="newLiqueurCompName" placeholder="es. Dose, Riserva 2018" />
+                </div>
+                <div class="form-group">
+                  <label>Unita di misura</label>
+                  <input class="input" id="newLiqueurCompUnit" placeholder="es. mL, %, g/L" onkeydown="if(event.key==='Enter') addLiqueurComponent()" />
+                </div>
+                <button class="btn primary" onclick="addLiqueurComponent()">Aggiungi</button>
+                <div class="muted" style="margin-top:8px;font-size:12px;">I componenti sono utilizzabili nelle liqueur d expedition durante la degustazione. La quantita si inserisce direttamente sulla card.</div>
+              </div>
+              <div class="card" style="box-shadow:none;border:1px solid var(--grigio-light);">
+                <div style="font-weight:950;color:var(--bordeaux);margin-bottom:8px;">Componenti attuali</div>
+                <div id="liqueurComponentsList"></div>
               </div>
             </div>
           </div>
@@ -2831,6 +2895,7 @@ function setCardColorMode(mode){
 
         <div class="content-scroll">
           <div id="resultsTableWrap" class="muted">Seleziona una degustazione.</div>
+          <div id="liqueurComparisonWrap"></div>
         </div>
       </div>
     </div>
@@ -3315,6 +3380,13 @@ function fmtDateIT(iso){
     function defaultEvaluationsList(){
       return ["Eccellente","Buono","Discreto","Sufficiente","Insufficiente"];
     }
+    function defaultLiqueurComponents(){
+      return [
+        { name: "Dose",     unit: "mL" },
+        { name: "Riserva",  unit: "%"  },
+        { name: "Cognac",   unit: "%"  }
+      ];
+    }
 
     function demoTasting(){
       const cols = ["Col1","Col2","Col3","Col4"];
@@ -3358,6 +3430,7 @@ function fmtDateIT(iso){
         groups: defaultGroups(),
         descriptors: defaultDescriptors(),
         evaluationsList: defaultEvaluationsList(),
+        liqueurComponents: defaultLiqueurComponents(),
         tastings:[],
         currentTastingId: null,
         currentTaster: null,
@@ -3554,6 +3627,7 @@ if(window.__cloudApplying || skipCloud) return;
       s.groups = Array.isArray(s.groups) ? s.groups : defaultGroups();
       s.descriptors = s.descriptors || defaultDescriptors();
       s.evaluationsList = Array.isArray(s.evaluationsList) && s.evaluationsList.length ? s.evaluationsList : defaultEvaluationsList();
+      s.liqueurComponents = Array.isArray(s.liqueurComponents) ? s.liqueurComponents : defaultLiqueurComponents();
       s.tastings = Array.isArray(s.tastings) ? s.tastings : [];
       // Cloud-only: non creare demo automaticamente (evita overwrite multi-istanza)
       s.tastings.forEach(t=>{
@@ -4586,14 +4660,14 @@ function attachProfileRenameLongPress(){
 
     function getCardShowPrefs(){
       const t = getTasting();
-      if(!t) return { evaluation:true, vista:true, olfatto:true, gusto:true };
+      if(!t) return { evaluation:true, vista:true, olfatto:true, gusto:true, liqueurs:true };
       if(!t.uiPrefs) t.uiPrefs = {};
       if(!t.uiPrefs.cardShow){
-        t.uiPrefs.cardShow = { evaluation:true, vista:true, olfatto:true, gusto:true };
+        t.uiPrefs.cardShow = { evaluation:true, vista:true, olfatto:true, gusto:true, liqueurs:true };
       }
       const cs = t.uiPrefs.cardShow;
-      // Backfill di chiavi mancanti
-      ['evaluation','vista','olfatto','gusto'].forEach(k=>{
+      // Backfill di chiavi mancanti (V217: liqueurs)
+      ['evaluation','vista','olfatto','gusto','liqueurs'].forEach(k=>{
         if(typeof cs[k] !== 'boolean') cs[k] = true;
       });
       return cs;
@@ -4618,6 +4692,11 @@ function attachProfileRenameLongPress(){
         // Detail panel (.fiche-box) — selezione per testo h3
         const boxes = document.querySelectorAll('#page-degustazione .fiche-box');
         boxes.forEach(box=>{
+          // V217: liqueur box - id specifico, no h3 di livello fiche-box
+          if(box.id === 'liqueurFicheBox'){
+            box.style.display = cs.liqueurs ? '' : 'none';
+            return;
+          }
           const h3 = box.querySelector('h3');
           if(!h3) return;
           const label = (h3.textContent||'').trim().toLowerCase();
@@ -4660,6 +4739,7 @@ function attachProfileRenameLongPress(){
         { k:'vista',      label:'Vista' },
         { k:'olfatto',    label:'Olfatto' },
         { k:'gusto',      label:'Gusto' },
+        { k:'liqueurs',   label:'Liqueurs' },
       ];
       wrap.innerHTML = items.map(it=>{
         const checked = cs[it.k] ? 'checked' : '';
@@ -5728,6 +5808,7 @@ function initCanvas(){
       });
 
       try{ renderEvaluationPicker(); }catch(e){}
+      try{ renderLiqueurSection(); }catch(e){}
       loadCanvasFromEval();
   // V31: Render evo picker
   const evoPick = document.getElementById('detailEvoPick');
@@ -6085,6 +6166,7 @@ function initCanvas(){
 
 function renderAnagrafiche(){
       try{ renderEvaluationsAnagrafica(); }catch(e){}
+      try{ renderLiqueurComponentsAnagrafica(); }catch(e){}
       const dwrap = document.getElementById("descriptorsWrap");
       if(dwrap){
         const secs=["vista","olfatto","gusto"];
@@ -6319,6 +6401,471 @@ function renderAnagrafiche(){
       )).join("");
     }
     // === FINE V205 VALUTAZIONI ===
+
+    // === V217 LIQUEUR D EXPEDITION ===
+
+    // Anagrafica globale (state.liqueurComponents)
+    function addLiqueurComponent(){
+      const inpName = document.getElementById("newLiqueurCompName");
+      const inpUnit = document.getElementById("newLiqueurCompUnit");
+      if(!inpName || !inpUnit) return;
+      const name = String(inpName.value || "").trim();
+      const unit = String(inpUnit.value || "").trim();
+      if(!name){ toast("Inserisci il nome del componente"); return; }
+      if(!Array.isArray(state.liqueurComponents)) state.liqueurComponents = defaultLiqueurComponents();
+      if(state.liqueurComponents.some(function(c){ return c.name === name; })){
+        toast("Componente gia presente");
+        return;
+      }
+      state.liqueurComponents.push({ name: name, unit: unit });
+      saveState();
+      renderLiqueurComponentsAnagrafica();
+      inpName.value = "";
+      inpUnit.value = "";
+      toast("Componente aggiunto");
+    }
+
+    function removeLiqueurComponent(name){
+      if(!confirm('Eliminare componente "'+name+'" dall anagrafica?')) return;
+      if(!Array.isArray(state.liqueurComponents)) return;
+      state.liqueurComponents = state.liqueurComponents.filter(function(c){ return c.name !== name; });
+      saveState();
+      renderLiqueurComponentsAnagrafica();
+    }
+
+    function renameLiqueurComponent(oldName){
+      const item = (state.liqueurComponents || []).find(function(c){ return c.name === oldName; });
+      if(!item) return;
+      const newName = prompt("Rinomina componente:", oldName);
+      if(newName == null) return;
+      const v = String(newName || "").trim();
+      if(!v || v === oldName) return;
+      if((state.liqueurComponents || []).some(function(c){ return c.name === v; })){
+        toast("Nome gia presente"); return;
+      }
+      const newUnit = prompt("Unita di misura:", item.unit || "");
+      if(newUnit == null) return;
+      item.name = v;
+      item.unit = String(newUnit || "").trim();
+      // Cascata su tutte le tastings
+      try{
+        (state.tastings || []).forEach(function(t){
+          if(Array.isArray(t.liqueurComponents)){
+            t.liqueurComponents.forEach(function(c){
+              if(c.name === oldName){ c.name = v; c.unit = item.unit; }
+            });
+          }
+          const lbs = t.liqueursBySample || {};
+          Object.keys(lbs).forEach(function(sid){
+            (lbs[sid] || []).forEach(function(lq){
+              if(lq.quantities && (oldName in lq.quantities)){
+                lq.quantities[v] = lq.quantities[oldName];
+                delete lq.quantities[oldName];
+              }
+            });
+          });
+        });
+      }catch(e){ console.error("rename liqueur cascade", e); }
+      saveState();
+      renderLiqueurComponentsAnagrafica();
+      try{ if(typeof updateDetail === "function") updateDetail(); }catch(e){}
+      toast("Componente rinominato");
+    }
+
+    function renderLiqueurComponentsAnagrafica(){
+      const wrap = document.getElementById("liqueurComponentsList");
+      if(!wrap) return;
+      const list = Array.isArray(state.liqueurComponents) ? state.liqueurComponents : [];
+      if(!list.length){
+        wrap.innerHTML = '<div class="muted">Nessun componente. Aggiungine uno.</div>';
+        return;
+      }
+      // Build con data-action (no escape annidato negli onclick)
+      wrap.innerHTML = list.map(function(c){
+        return ''
+          + '<div class="evaluations-list-row">'
+          + '<span class="lbl">' + esc(c.name) + '</span>'
+          + '<span class="muted" style="font-size:12px;margin-right:8px;">' + esc(c.unit || "") + '</span>'
+          + '<button class="btn" style="padding:4px 8px;font-size:11px;" data-liq-action="rename-comp" data-liq-name="' + esc(c.name) + '">Rinomina</button>'
+          + '<button class="btn" style="padding:4px 8px;font-size:11px;" data-liq-action="remove-comp" data-liq-name="' + esc(c.name) + '">Elimina</button>'
+          + '</div>';
+      }).join("");
+    }
+
+    // Per-tasting (clone detached come descrittori)
+    function ensureTastingLiqueurComponents(t){
+      if(!t) return null;
+      if(!Array.isArray(t.liqueurComponents) || !t.liqueurComponents.length){
+        const src = Array.isArray(state.liqueurComponents) ? state.liqueurComponents : [];
+        t.liqueurComponents = JSON.parse(JSON.stringify(src));
+      }
+      return t.liqueurComponents;
+    }
+
+    function ensureLiqueursForSample(t, sid){
+      if(!t || !sid) return [];
+      if(!t.liqueursBySample) t.liqueursBySample = {};
+      if(!Array.isArray(t.liqueursBySample[sid]) || !t.liqueursBySample[sid].length){
+        t.liqueursBySample[sid] = [
+          { id: "lq_" + Math.random().toString(36).slice(2,9), label: "Liqueur A", favourite: false, quantities: {} },
+          { id: "lq_" + Math.random().toString(36).slice(2,9), label: "Liqueur B", favourite: false, quantities: {} }
+        ];
+      }
+      return t.liqueursBySample[sid];
+    }
+
+    // Azioni utente sezione Liqueur del detail
+    function addLiqueurCard(){
+      if(isArchived()) return;
+      const t = getTasting();
+      const sid = selectedSampleId;
+      if(!t || !sid){ toast("Seleziona un campione"); return; }
+      const list = ensureLiqueursForSample(t, sid);
+      const nextLetter = String.fromCharCode(65 + list.length);
+      list.push({
+        id: "lq_" + Math.random().toString(36).slice(2,9),
+        label: "Liqueur " + (nextLetter || (list.length + 1)),
+        favourite: false,
+        quantities: {}
+      });
+      try{ if(typeof window.markLocalDirty === "function") window.markLocalDirty(5000); }catch(e){}
+      saveState();
+      renderLiqueurSection();
+    }
+
+    function removeLiqueurCard(lqId){
+      if(isArchived()) return;
+      const t = getTasting();
+      const sid = selectedSampleId;
+      if(!t || !sid) return;
+      const list = (t.liqueursBySample && t.liqueursBySample[sid]) || [];
+      if(list.length <= 1){ toast("Mantieni almeno una card"); return; }
+      if(!confirm("Eliminare questa card liqueur?")) return;
+      t.liqueursBySample[sid] = list.filter(function(lq){ return lq.id !== lqId; });
+      try{ if(typeof window.markLocalDirty === "function") window.markLocalDirty(5000); }catch(e){}
+      saveState();
+      renderLiqueurSection();
+    }
+
+    function renameLiqueurCard(lqId){
+      if(isArchived()) return;
+      const t = getTasting();
+      const sid = selectedSampleId;
+      if(!t || !sid) return;
+      const list = (t.liqueursBySample && t.liqueursBySample[sid]) || [];
+      const lq = list.find(function(x){ return x.id === lqId; });
+      if(!lq) return;
+      const v = prompt("Nome card liqueur:", lq.label || "");
+      if(v == null) return;
+      const nv = String(v || "").trim();
+      if(!nv) return;
+      lq.label = nv;
+      try{ if(typeof window.markLocalDirty === "function") window.markLocalDirty(5000); }catch(e){}
+      saveState();
+      renderLiqueurSection();
+    }
+
+    function toggleLiqueurFavourite(lqId){
+      if(isArchived()) return;
+      const t = getTasting();
+      const sid = selectedSampleId;
+      if(!t || !sid) return;
+      const list = (t.liqueursBySample && t.liqueursBySample[sid]) || [];
+      const lq = list.find(function(x){ return x.id === lqId; });
+      if(!lq) return;
+      lq.favourite = !lq.favourite;
+      try{ if(typeof window.markLocalDirty === "function") window.markLocalDirty(5000); }catch(e){}
+      saveState();
+      renderLiqueurSection();
+    }
+
+    function setLiqueurQuantity(lqId, compName, value){
+      if(isArchived()) return;
+      const t = getTasting();
+      const sid = selectedSampleId;
+      if(!t || !sid) return;
+      const list = (t.liqueursBySample && t.liqueursBySample[sid]) || [];
+      const lq = list.find(function(x){ return x.id === lqId; });
+      if(!lq) return;
+      if(!lq.quantities) lq.quantities = {};
+      const v = String(value || "").trim();
+      if(v === ""){
+        delete lq.quantities[compName];
+      } else {
+        const num = parseFloat(v.replace(",", "."));
+        lq.quantities[compName] = isNaN(num) ? v : num;
+      }
+      try{ if(typeof window.markLocalDirty === "function") window.markLocalDirty(5000); }catch(e){}
+      saveState();
+      // Niente re-render: mantieni il focus
+    }
+
+    function addLiqueurComponentToTasting(){
+      if(isArchived()) return;
+      const t = getTasting();
+      if(!t){ toast("Apri una degustazione"); return; }
+      const name = prompt("Nome componente:", "");
+      if(name == null) return;
+      const n = String(name || "").trim();
+      if(!n) return;
+      const unit = prompt("Unita di misura (es. mL, %, g/L):", "");
+      if(unit == null) return;
+      const u = String(unit || "").trim();
+      const list = ensureTastingLiqueurComponents(t);
+      if(list.some(function(c){ return c.name === n; })){ toast("Componente gia presente"); return; }
+      list.push({ name: n, unit: u });
+      try{ if(typeof window.markLocalDirty === "function") window.markLocalDirty(5000); }catch(e){}
+      saveState();
+      renderLiqueurSection();
+    }
+
+    function removeLiqueurComponentFromTasting(compName){
+      if(isArchived()) return;
+      const t = getTasting();
+      if(!t) return;
+      if(!confirm('Eliminare componente "'+compName+'" da TUTTE le card di questa degustazione?')) return;
+      const list = ensureTastingLiqueurComponents(t);
+      t.liqueurComponents = list.filter(function(c){ return c.name !== compName; });
+      const lbs = t.liqueursBySample || {};
+      Object.keys(lbs).forEach(function(sid){
+        (lbs[sid] || []).forEach(function(lq){
+          if(lq.quantities && (compName in lq.quantities)){
+            delete lq.quantities[compName];
+          }
+        });
+      });
+      try{ if(typeof window.markLocalDirty === "function") window.markLocalDirty(5000); }catch(e){}
+      saveState();
+      renderLiqueurSection();
+    }
+
+    // Render della sezione Liqueur nel detail (NO onclick inline)
+    function renderLiqueurSection(){
+      const wrap = document.getElementById("liqueurSection");
+      if(!wrap) return;
+      const t = getTasting();
+      const sid = selectedSampleId;
+      if(!t || !sid){
+        wrap.innerHTML = '<div class="muted" style="padding:8px 0;">Seleziona un campione per gestire le liqueur d expedition.</div>';
+        return;
+      }
+      const components = ensureTastingLiqueurComponents(t);
+      const liqueurs = ensureLiqueursForSample(t, sid);
+      const archived = isArchived();
+
+      let html = '<div class="liqueur-header">';
+      html +=   '<h3 style="margin:0;">Liqueur d expedition</h3>';
+      html +=   '<div class="liqueur-header-actions">';
+      if(!archived){
+        html +=   '<button class="btn" data-liq-action="add-comp">+ Componente</button>';
+        html +=   '<button class="btn" data-liq-action="add-card">+ Card</button>';
+      }
+      html +=     '<button class="btn" data-liq-action="export-notes" title="Aggiungi liqueur alle Note">Esporta in Note</button>';
+      html +=   '</div>';
+      html += '</div>';
+
+      if(!components.length){
+        html += '<div class="muted" style="padding:10px 0;">Nessun componente definito. Aggiungine uno con + Componente oppure dall anagrafica Liqueur.</div>';
+        wrap.innerHTML = html;
+        return;
+      }
+
+      html += '<div class="liqueur-cards">';
+      liqueurs.forEach(function(lq){
+        const heart = lq.favourite ? "&#10084;&#65039;" : "&#129293;";
+        const lqIdEsc = esc(lq.id);
+        html += '<div class="liqueur-card' + (lq.favourite ? ' fav' : '') + '">';
+        html +=   '<div class="liqueur-card-header">';
+        html +=     '<span class="liqueur-card-heart" data-liq-action="toggle-fav" data-liq-id="' + lqIdEsc + '" title="' + (lq.favourite ? 'Rimuovi preferita' : 'Marca come preferita') + '">' + heart + '</span>';
+        if(archived){
+          html +=   '<span class="liqueur-card-label">' + esc(lq.label || "") + '</span>';
+        } else {
+          html +=   '<span class="liqueur-card-label" data-liq-action="rename-card" data-liq-id="' + lqIdEsc + '" title="Click per rinominare">' + esc(lq.label || "") + '</span>';
+        }
+        if(!archived){
+          html +=   '<span class="liqueur-card-remove" data-liq-action="remove-card" data-liq-id="' + lqIdEsc + '" title="Elimina card">&#10005;</span>';
+        }
+        html +=   '</div>';
+
+        html +=   '<div class="liqueur-card-body">';
+        components.forEach(function(c){
+          const v = (lq.quantities && (c.name in lq.quantities)) ? lq.quantities[c.name] : "";
+          html += '<div class="liqueur-row">';
+          html +=   '<span class="liqueur-row-name">' + esc(c.name) + '</span>';
+          if(archived){
+            html += '<input class="liqueur-row-qty" type="text" inputmode="decimal" value="' + esc(String(v)) + '" readonly placeholder="-" />';
+          } else {
+            html += '<input class="liqueur-row-qty" type="text" inputmode="decimal" value="' + esc(String(v)) + '" data-liq-qty-id="' + lqIdEsc + '" data-liq-qty-comp="' + esc(c.name) + '" placeholder="-" />';
+          }
+          html +=   '<span class="liqueur-row-unit">' + esc(c.unit || "") + '</span>';
+          html += '</div>';
+        });
+        html +=   '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+
+      if(!archived && components.length){
+        html += '<div class="liqueur-comp-list">';
+        html +=   '<div class="muted" style="font-size:11px;font-weight:850;margin-bottom:4px;">Componenti di questa degustazione (click x per rimuovere da tutte le card):</div>';
+        components.forEach(function(c){
+          html += '<span class="liqueur-comp-pill">' + esc(c.name) + ' <span style="opacity:0.7">' + esc(c.unit || "") + '</span> <span class="liqueur-comp-remove" data-liq-action="remove-tcomp" data-liq-comp="' + esc(c.name) + '">&#10005;</span></span>';
+        });
+        html += '</div>';
+      }
+
+      wrap.innerHTML = html;
+    }
+
+    // Event delegation per tutte le azioni della sezione Liqueur
+    // Si installa una sola volta a livello di document
+    if(!window.__liqueurDelegationInstalled){
+      window.__liqueurDelegationInstalled = true;
+      document.addEventListener("click", function(ev){
+        const el = ev.target.closest && ev.target.closest("[data-liq-action]");
+        if(!el) return;
+        const action = el.getAttribute("data-liq-action");
+        const id = el.getAttribute("data-liq-id");
+        const name = el.getAttribute("data-liq-name");
+        const comp = el.getAttribute("data-liq-comp");
+        try{
+          if(action === "add-card") addLiqueurCard();
+          else if(action === "remove-card") removeLiqueurCard(id);
+          else if(action === "rename-card") renameLiqueurCard(id);
+          else if(action === "toggle-fav") toggleLiqueurFavourite(id);
+          else if(action === "add-comp") addLiqueurComponentToTasting();
+          else if(action === "remove-tcomp") removeLiqueurComponentFromTasting(comp);
+          else if(action === "rename-comp") renameLiqueurComponent(name);
+          else if(action === "remove-comp") removeLiqueurComponent(name);
+          else if(action === "export-notes") exportLiqueurToNotes();
+        }catch(e){ console.error("liqueur action", action, e); }
+      }, true);
+      // Listener separato per gli input quantita (event input, non click)
+      document.addEventListener("input", function(ev){
+        const el = ev.target;
+        if(!el || !el.getAttribute) return;
+        const lqId = el.getAttribute("data-liq-qty-id");
+        const compName = el.getAttribute("data-liq-qty-comp");
+        if(lqId && compName){
+          try{ setLiqueurQuantity(lqId, compName, el.value); }catch(e){ console.error(e); }
+        }
+      }, true);
+    }
+
+    // Esportazione in Note testuali
+    function exportLiqueurToNotes(){
+      const t = getTasting();
+      const sid = selectedSampleId;
+      if(!t || !sid){ toast("Seleziona un campione"); return; }
+      const tId = currentTasterId();
+      if(!tId){ toast("Seleziona un degustatore"); return; }
+
+      const liqueurs = (t.liqueursBySample && t.liqueursBySample[sid]) || [];
+      if(!liqueurs.length){ toast("Nessuna liqueur da esportare"); return; }
+
+      const components = t.liqueurComponents || [];
+      function fmtVal(v){ return (typeof v === "number") ? String(v).replace(".", ",") : String(v || ""); }
+
+      let md = "\n\n# Liqueur d expedition\n\n";
+      liqueurs.forEach(function(lq){
+        const heart = lq.favourite ? "\u2764\ufe0f " : "";
+        md += "## " + heart + (lq.label || "Liqueur") + "\n";
+        let any = false;
+        components.forEach(function(c){
+          if(lq.quantities && (c.name in lq.quantities)){
+            const v = lq.quantities[c.name];
+            md += "- **" + c.name + "**: " + fmtVal(v) + " " + (c.unit || "") + "\n";
+            any = true;
+          }
+        });
+        if(!any){ md += "_(nessuna quantita)_\n"; }
+        md += "\n";
+      });
+
+      const ev = getEval(t, tId, sid);
+      if(!ev.data) ev.data = {};
+      if(!ev.data.vista) ev.data.vista = { intensita:0, limpidezza:0, desc:[], canvas:null };
+      if(!ev.data.vista.notesV187){
+        ev.data.vista.notesV187 = { version:217, text:"", textDelta:null, fabricJson:null, paperType:"lined", updatedAt:new Date().toISOString() };
+      }
+      const cur = ev.data.vista.notesV187.text || "";
+      const htmlMd = md
+        .replace(/^# (.+)$/gm, "<h1>$1</h1>")
+        .replace(/^## (.+)$/gm, "<h2>$1</h2>")
+        .replace(/^- \*\*(.+?)\*\*: (.+)$/gm, "<p><strong>$1</strong>: $2</p>")
+        .replace(/^_\((.+)\)_$/gm, "<p><em>($1)</em></p>")
+        .replace(/\n\n/g, "<br/>");
+      ev.data.vista.notesV187.text = cur + htmlMd;
+      ev.data.vista.notesV187.updatedAt = new Date().toISOString();
+      ev.updatedAt = nowIso();
+
+      try{ if(typeof window.markLocalDirty === "function") window.markLocalDirty(5000); }catch(e){}
+      saveState();
+
+      try{
+        if(typeof window.queueNotesSync === "function"){
+          window.queueNotesSync(t.id, tId, sid, ev.data.vista.notesV187);
+        }
+      }catch(e){}
+
+      try{
+        if(typeof loadNotesFromStorage === "function") loadNotesFromStorage();
+        if(typeof refreshWidgetNotes === "function") refreshWidgetNotes();
+      }catch(e){}
+
+      toast("Liqueur esportate nelle note");
+    }
+
+    // Render confronto in pagina Risultati
+    function renderLiqueurComparison(tid){
+      const wrap = document.getElementById("liqueurComparisonWrap");
+      if(!wrap) return;
+      const t = (state.tastings || []).find(function(x){ return String(x.id) === String(tid); });
+      if(!t){ wrap.innerHTML = ""; return; }
+
+      const components = t.liqueurComponents || [];
+      const lbs = t.liqueursBySample || {};
+      const samples = (t.samples || []).filter(function(s){ return s.active !== false; });
+      const hasAny = samples.some(function(s){
+        return Array.isArray(lbs[String(s.id)]) && lbs[String(s.id)].some(function(lq){
+          return lq.quantities && Object.keys(lq.quantities).length;
+        });
+      });
+      if(!hasAny){ wrap.innerHTML = ""; return; }
+
+      function fmtVal(v){ return (typeof v === "number") ? String(v).replace(".", ",") : String(v || ""); }
+
+      let html = '<div class="liqueur-cmp-section">';
+      html += '<h3 style="color:var(--bordeaux);margin:18px 0 8px 0;">Liqueur d expedition</h3>';
+      samples.forEach(function(s){
+        const sid = String(s.id);
+        const sampleLiq = lbs[sid] || [];
+        const filled = sampleLiq.filter(function(lq){ return lq.quantities && Object.keys(lq.quantities).length; });
+        if(!filled.length) return;
+        const sampleName = (typeof getSampleName === "function") ? getSampleName(t, s) : ("Campione " + sid);
+        html += '<div class="liqueur-cmp-sample">';
+        html +=   '<div class="liqueur-cmp-sample-title">' + esc(sampleName) + '</div>';
+        filled.forEach(function(lq){
+          const heart = lq.favourite ? "&#10084;&#65039; " : "";
+          html += '<div class="liqueur-cmp-card">';
+          html +=   '<div class="liqueur-cmp-label">' + heart + esc(lq.label || "") + '</div>';
+          html +=   '<ul class="liqueur-cmp-list">';
+          components.forEach(function(c){
+            if(lq.quantities && (c.name in lq.quantities)){
+              const v = lq.quantities[c.name];
+              html += '<li><strong>' + esc(c.name) + '</strong>: ' + esc(fmtVal(v)) + ' ' + esc(c.unit || "") + '</li>';
+            }
+          });
+          html +=   '</ul>';
+          html += '</div>';
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+      wrap.innerHTML = html;
+    }
+
+    // === FINE V217 LIQUEUR ===
 
     function addProfile(){
       const n = document.getElementById("newProfileName").value.trim();
@@ -6904,7 +7451,11 @@ function renderResultsSelect(){
     }
     
     async function onResultsDegChange(tid){
-       if(!tid){ renderResultsTable(); return; }
+       if(!tid){
+         renderResultsTable();
+         try{ const w = document.getElementById('liqueurComparisonWrap'); if(w) w.innerHTML = ''; }catch(e){}
+         return;
+       }
 
        const wrap = document.getElementById("resultsTableWrap");
        if(wrap) wrap.innerHTML = '<div class="muted">Caricamento dati in corso...</div>';
@@ -6913,6 +7464,7 @@ function renderResultsSelect(){
            await fetchArchivedEvaluations(tid);
        }
        renderResultsTable();
+       try{ renderLiqueurComparison(tid); }catch(e){}
     }
 
 function onResultsSearch(val){
@@ -7958,6 +8510,7 @@ const pushAnagrafiche = async () => {
       groups: state.groups || [],
       descriptors: state.descriptors || [],
       evaluationsList: state.evaluationsList || [],
+      liqueurComponents: state.liqueurComponents || [],
       updatedAt: new Date().toISOString()
     };
     beginWrite();
@@ -8319,9 +8872,10 @@ const pushAnagrafiche = async () => {
       profiles: state.profiles || [],
       groups: state.groups || [],
       descriptors: state.descriptors || [],
-      // V216: evaluationsList ora partecipa al diff hash, così addEvaluation/
-      // removeEvaluation/renameEvaluation triggerano correttamente il push cloud
-      evaluationsList: state.evaluationsList || []
+      // V216: evaluationsList ora partecipa al diff hash
+      evaluationsList: state.evaluationsList || [],
+      // V217: idem per i componenti liqueur
+      liqueurComponents: state.liqueurComponents || []
     };
     const anaHash = stableStringify(anaObj);
     if(anaHash !== lastAnaHash){
@@ -8487,6 +9041,7 @@ const meta = list.map(t=>({id:t.id, updatedAt:t.updatedAt||'', status:t.status||
       state.tasters = Array.isArray(d.tasters) ? d.tasters : state.tasters;
       state.profiles = Array.isArray(d.profiles) ? d.profiles : state.profiles;
       state.evaluationsList = (Array.isArray(d.evaluationsList) && d.evaluationsList.length) ? d.evaluationsList : state.evaluationsList;
+      state.liqueurComponents = Array.isArray(d.liqueurComponents) ? d.liqueurComponents : state.liqueurComponents;
       state.groups = Array.isArray(d.groups) ? d.groups : state.groups;
       state.descriptors = (d.descriptors && typeof d.descriptors==='object') ? d.descriptors : state.descriptors;
       lastAnaHash = h;
