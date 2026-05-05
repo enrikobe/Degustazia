@@ -4360,6 +4360,7 @@ function attachProfileRenameLongPress(){
         if(!v) return;
         if(list.includes(v)){ toast('Valutazione già presente'); return; }
         list.push(v);
+        try{ if(typeof window.markLocalDirty==='function') window.markLocalDirty(5000); }catch(e){}
         saveState();
         renderEvaluationPicker();
         try{ if(document.body.classList.contains('zenplus')) renderZenPlusEvaluation(); }catch(e){}
@@ -4402,6 +4403,7 @@ function attachProfileRenameLongPress(){
         const t = getTasting();
         if(!t) return;
         if(!confirm('Eliminare descrittore "'+val+'" ('+sec+') da questa degustazione?\nVerrà rimosso dalle pills e dalle selezioni esistenti.')) return;
+        try{ if(typeof window.markLocalDirty==='function') window.markLocalDirty(5000); }catch(e){}
         const store = ensureTastingDescriptors(t);
         if(store && store[sec]){
           ['white','red'].forEach(col=>{
@@ -4436,6 +4438,7 @@ function attachProfileRenameLongPress(){
         const t = getTasting();
         if(!t) return;
         if(!confirm('Eliminare valutazione "'+val+'" da questa degustazione?\nVerrà rimossa dalle pills e dalle selezioni esistenti.')) return;
+        try{ if(typeof window.markLocalDirty==='function') window.markLocalDirty(5000); }catch(e){}
         const list = ensureTastingEvaluations(t);
         const idx = list.indexOf(val);
         if(idx>=0) list.splice(idx,1);
@@ -4688,6 +4691,8 @@ function attachProfileRenameLongPress(){
         arr.push(v);
         try{ arr.sort((a,b)=>String(a).localeCompare(String(b),'it')); }catch(e){}
         store[sec][color] = arr;
+        // V214: protezione finestra dirty per evitare overwrite dal poller
+        try{ if(typeof window.markLocalDirty==='function') window.markLocalDirty(5000); }catch(e){}
         saveState({skipCloud:true});
         renderDescriptorPickers();
       }catch(e){ console.error(e); }
@@ -5592,7 +5597,10 @@ function initCanvas(){
       renderGrid();
       updateDetail();
       loadCanvasFromEval();
-      
+      // V214: ricarica esplicitamente note testuali e disegno (utile in archivio)
+      try{ if(typeof loadNotesFromStorage === 'function') setTimeout(loadNotesFromStorage, 80); }catch(e){}
+      try{ if(typeof loadDrawingFromStorage === 'function') setTimeout(loadDrawingFromStorage, 120); }catch(e){}
+
       // V196: Instantly refresh notes widget for new sample
       try{
         if(typeof refreshWidgetNotes === 'function') {
@@ -6247,6 +6255,7 @@ function renderAnagrafiche(){
       const ev = getEval(t,tId,selectedSampleId);
       ev.evaluation = (ev.evaluation === val) ? null : val;
       ev.updatedAt = nowIso();
+      try{ if(typeof window.markLocalDirty==='function') window.markLocalDirty(5000); }catch(e){}
       try{ recalc(); }catch(e){}
       saveState();
       try{ renderGrid(); }catch(e){}
@@ -6364,7 +6373,28 @@ function renderAnagrafiche(){
       state.currentTaster=(t.tasterIds||[])[0]||null; // Auto-select first taster
       saveState();
       go("degustazione", document.getElementById("btnMenuDeg"));
-      setTimeout(()=>{ const s=document.getElementById("tasterSelect"); if(s && state.currentTaster) s.value=String(state.currentTaster); onSelectTaster(); }, 50);
+      // V214: seleziona anche il primo campione e forza il ricaricamento delle note/disegni
+      setTimeout(()=>{
+        try{
+          const s=document.getElementById("tasterSelect");
+          if(s && state.currentTaster) s.value=String(state.currentTaster);
+          onSelectTaster();
+        }catch(e){}
+        try{
+          const samples = (t.samples||[]).filter(x=>x.active!==false);
+          if(samples.length){
+            const firstSid = String(samples[0].id);
+            if(typeof selectSample === 'function' && !selectedSampleId){
+              selectSample(firstSid);
+            }
+          }
+        }catch(e){}
+        setTimeout(()=>{
+          try{ if(typeof loadCanvasFromEval === 'function') loadCanvasFromEval(); }catch(e){}
+          try{ if(typeof loadNotesFromStorage === 'function') loadNotesFromStorage(); }catch(e){}
+          try{ if(typeof loadDrawingFromStorage === 'function') loadDrawingFromStorage(); }catch(e){}
+        }, 200);
+      }, 50);
     }
     function reopenTasting(id){
       const t=state.tastings.find(x=>x.id===id); if(!t)return;
@@ -8370,6 +8400,10 @@ const pushAnagrafiche = async () => {
 
   async function pollTastings(){
     if(!db) return;
+    // V214: rispetta finestra di protezione locale (evita overwrite di pills/valutazioni
+    // appena modificate prima che il push cloud sia andato a buon fine)
+    try{ if(Date.now() < __localDirtyUntil) return; }catch(e){}
+    try{ if((window.__syncInflight||0)>0) return; }catch(e){}
     const snap = await getDocs(collection(db,'tastings'));
 
     // V146: preserva evaluations (profili/evoluzione/descrittori/preferiti) su refresh da altre istanze.
