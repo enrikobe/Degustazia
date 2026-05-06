@@ -12227,7 +12227,11 @@ document.addEventListener('DOMContentLoaded', function() {
       try {
         var ctx = getNoteContext();
         if (ctx && typeof window.queueNotesSync === 'function') {
-          var emptyNotes = { fabricJson: null, textDelta: null, textHtml: '', updatedAt: new Date().toISOString() };
+          // V219: il documento Firestore usa la chiave 'text' per il testo HTML.
+          // Solo resettare textHtml lasciava 'text' invariato e al reload
+          // l'editor ricaricava il vecchio contenuto. Aggiungiamo text:''
+          // (e per simmetria gli altri campi noti del notesV187).
+          var emptyNotes = { fabricJson: null, textDelta: null, textHtml: '', text: '', updatedAt: new Date().toISOString() };
           window.queueNotesSync(ctx.tastingId, ctx.tasterId, ctx.sampleId, emptyNotes);
           console.log('🗑️ V201fix: Note cancellate sincronizzate su cloud');
         }
