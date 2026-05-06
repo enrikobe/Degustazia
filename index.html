@@ -6766,7 +6766,8 @@ function renderAnagrafiche(){
       const components = t.liqueurComponents || [];
       function fmtVal(v){ return (typeof v === "number") ? String(v).replace(".", ",") : String(v || ""); }
 
-      let md = "\n\n# Liqueur d expedition\n\n";
+      // V220: rimosso header "# Liqueur d expedition" — esporta solo card
+      let md = "\n\n";
       liqueurs.forEach(function(lq){
         const heart = lq.favourite ? "\u2764\ufe0f " : "";
         md += "## " + heart + (lq.label || "Liqueur") + "\n";
@@ -6796,6 +6797,32 @@ function renderAnagrafiche(){
         .replace(/^_\((.+)\)_$/gm, "<p><em>($1)</em></p>")
         .replace(/\n\n/g, "<br/>");
       ev.data.vista.notesV187.text = cur + htmlMd;
+
+      // V220: genera Delta Quill da htmlMd e accodalo al textDelta esistente.
+      // Senza questo blocco, il canvas fullscreen non mostra il contenuto
+      // perche legge da textDelta, non da text (HTML).
+      try{
+        if(typeof Quill !== "undefined"){
+          const __tmpDiv = document.createElement("div");
+          __tmpDiv.style.display = "none";
+          document.body.appendChild(__tmpDiv);
+          const __tmpQuill = new Quill(__tmpDiv);
+          const __newDelta = __tmpQuill.clipboard.convert(htmlMd);
+          document.body.removeChild(__tmpDiv);
+
+          // Parse del textDelta esistente (puo essere null, oggetto, o stringa JSON)
+          let __curDelta = ev.data.vista.notesV187.textDelta;
+          if(typeof __curDelta === "string"){
+            try{ __curDelta = JSON.parse(__curDelta); }catch(e){ __curDelta = null; }
+          }
+          let __curOps = (__curDelta && Array.isArray(__curDelta.ops)) ? __curDelta.ops : [];
+
+          // Append: nuovo delta dopo l'esistente
+          const __mergedOps = __curOps.concat(__newDelta.ops || []);
+          ev.data.vista.notesV187.textDelta = { ops: __mergedOps };
+        }
+      }catch(e){ console.error("V220 textDelta build error:", e); }
+
       ev.data.vista.notesV187.updatedAt = new Date().toISOString();
       ev.updatedAt = nowIso();
 
