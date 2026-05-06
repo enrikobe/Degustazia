@@ -8884,13 +8884,39 @@ const pushAnagrafiche = async () => {
     }
 
     // 2) Tastings meta + detect deletions
+    // V218: Safeguard anti-cancellazione massiva.
+    // Calcoliamo quante tastings stiamo per cancellare. Se >= 2,
+    // abortisci il blocco delete (lasciamo lastTastingHash intatto)
+    // e logga incidente. La protezione interrompe il "domino" che
+    // il 5 mag 2026 ha cancellato 8 tastings dal cloud quando lo state
+    // locale si era ridotto per un crash di bootstrap.
     const currentIds = new Set((state.tastings||[]).map(t=>String(t.id)));
+    const toDelete = [];
     for(const [tid] of list(lastTastingHash)){
-      if(!currentIds.has(tid)){
-        // deleted locally -> delete in cloud
-        await deleteTastingDoc(tid);
-        lastTastingHash.delete(tid);
-      }
+      if(!currentIds.has(tid)) toDelete.push(tid);
+    }
+    if(toDelete.length >= 2){
+      // INCIDENTE: cancellazione massiva sospetta.
+      // Salviamo dettagli per ispezione e mostriamo warning visibile.
+      const incident = {
+        ts: new Date().toISOString(),
+        attempted: toDelete.length,
+        toDeleteIds: toDelete,
+        currentTastings: (state.tastings||[]).length,
+        knownTastings: lastTastingHash.size,
+        action: "ABORTED — runSync delete-block aborted to prevent data loss"
+      };
+      window.__syncIncident = incident;
+      console.error("[V218 SAFEGUARD]", incident);
+      try{ if(typeof toast === "function") toast("⚠ Sync sospeso: anomalia (" + toDelete.length + " tastings da cancellare). Ricarica la pagina e verifica i dati."); }catch(e){}
+      // Esci da runSync senza fare nulla di distruttivo
+      return;
+    }
+    // Cancellazione normale (al massimo 1 tasting) — il caso atteso quando
+    // l'utente cancella manualmente una degustazione dall'app.
+    for(const tid of toDelete){
+      await deleteTastingDoc(tid);
+      lastTastingHash.delete(tid);
     }
 
     for(const t of (state.tastings||[])){
