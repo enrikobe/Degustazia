@@ -1541,10 +1541,20 @@
     }
   }
 
+  // Versione CSS: incrementare quando si modifica injectStyles().
+  // Se in pagina c'è un <style> con versione diversa, viene rimpiazzato.
+  var SP_STYLES_VERSION = '4-pinch-zoom';
+
   function injectStyles() {
-    if (document.getElementById('sketchPadStyles')) return;
+    var existing = document.getElementById('sketchPadStyles');
+    if (existing) {
+      if (existing.dataset.spVersion === SP_STYLES_VERSION) return;
+      // CSS obsoleto da una versione precedente: rimpiazza
+      existing.remove();
+    }
     var st = document.createElement('style');
     st.id = 'sketchPadStyles';
+    st.dataset.spVersion = SP_STYLES_VERSION;
     st.textContent = ''
       // Disabilita selezione testo solo sugli elementi UI (pulsanti, label,
       // titoli, toolbar) — NON sul foglio o sui canvas. Su Safari iPad
@@ -1985,6 +1995,11 @@
     var wrap = document.getElementById('widgetCanvasWrap');
     if (!wrap) return false;
     if (wrap.dataset.spMounted === '1') return true; // già montato
+
+    // CRITICO: inietta CSS SketchPad anche per il widget (prima si faceva
+    // solo all'open del fullscreen, ma il widget in replace mode esiste
+    // senza che il modal sia mai aperto → CSS non veniva applicato).
+    injectStyles();
 
     // Nascondiamo il canvas Fabric originale (non lo rimuoviamo:
     // il sistema vecchio potrebbe ancora referenziarlo)
