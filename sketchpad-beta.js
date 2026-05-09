@@ -575,11 +575,10 @@
   // Renderizza una stroke "penna" o "freccia" usando quadratic curves
   // tra midpoint dei punti consecutivi (approssima una curva di Catmull-Rom).
   // Larghezza modulata per pressione (0..1) e velocità.
-  function paintPenStroke(ctx, stroke) {
+  function paintPenStroke(ctx, stroke, fromIdx, widthsCache) {
     var pts = stroke.points;
     if (pts.length === 0) return;
     if (pts.length === 1) {
-      // dot singolo
       ctx.fillStyle = stroke.color;
       ctx.beginPath();
       ctx.arc(pts[0][0], pts[0][1], stroke.size / 2, 0, Math.PI * 2);
@@ -592,26 +591,26 @@
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Calcoliamo la larghezza per ogni punto (smoothed pressure / velocity)
-    var widths = computeWidths(pts, stroke.size, stroke.simulatePressure);
+    // Larghezze: usa cache se passata, altrimenti calcola tutte
+    var widths = widthsCache || computeWidths(pts, stroke.size, stroke.simulatePressure);
+    var start = (typeof fromIdx === 'number' && fromIdx > 0) ? fromIdx : 1;
 
-    // Disegniamo segmento per segmento per supportare width variabile
-    // Trick: ogni "segmento" è un trapezio (poligono 4-vertici) tra
-    // due punti con larghezza diversa. Sembra più liscio di line() perché
-    // i bordi si raccordano con i cerchi pieni nei punti.
-    for (var i = 1; i < pts.length; i++) {
+    // Disegna solo i segmenti dal punto `start` in poi.
+    // Cerchio iniziale solo se stiamo disegnando dal vero inizio
+    if (start === 1) {
+      ctx.beginPath();
+      ctx.arc(pts[0][0], pts[0][1], widths[0] / 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    for (var i = start; i < pts.length; i++) {
       var p0 = pts[i-1], p1 = pts[i];
       var w0 = widths[i-1], w1 = widths[i];
       drawWidthSegment(ctx, p0, p1, w0, w1);
-      // cerchio pieno al punto p1 per coprire i giunti
       ctx.beginPath();
       ctx.arc(p1[0], p1[1], w1 / 2, 0, Math.PI * 2);
       ctx.fill();
     }
-    // cerchio iniziale
-    ctx.beginPath();
-    ctx.arc(pts[0][0], pts[0][1], widths[0] / 2, 0, Math.PI * 2);
-    ctx.fill();
     ctx.restore();
   }
 
@@ -870,20 +869,43 @@
     }
   }
 
-  // Disegna SOLO il tratto in corso sul canvas attivo, sopra uno snapshot
-  // del canvas pre-stroke. Evita di ridipingere tutti i tratti precedenti
-  // a ogni pointermove (causa principale del lag su tablet).
+  // Disegna SOLO il tratto in corso sul canvas attivo, sopra un buffer
+  // del canvas pre-stroke (canvas off-screen, GPU-accelerated via drawImage).
+  // Evita di ridipingere tutti i tratti precedenti a ogni pointermove.
+  // Inoltre fa rendering INCREMENTALE: dipinge solo i nuovi punti del
+  // tratto corrente, non rifà l'intero tratto a ogni frame.
   var __spActiveCanvas = null;     // canvas dove il tratto è iniziato
   var __spActiveCtx = null;
-  var __spStrokeSnapshot = null;   // ImageData del canvas pre-stroke
+  var __spPreStrokeBuffer = null;  // canvas off-screen: contenuto pre-tratto
+  var __spIncrementalBuffer = null; // canvas off-screen: pre-tratto + parte già consolidata del tratto
+  var __spIncrementalCtx = null;
+  var __spLastRenderedIdx = 0;     // ultimo punto già renderizzato sul buffer incrementale
   var __spRafPending = false;
 
-  function captureSnapshotForStroke(canvas, ctx) {
-    try {
-      __spStrokeSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    } catch(e) {
-      __spStrokeSnapshot = null; // taint? Riprovo in fallback
+  function ensureBuffer(buffer, w, h) {
+    if (!buffer) buffer = document.createElement('canvas');
+    if (buffer.width !== w || buffer.height !== h) {
+      buffer.width = w;
+      buffer.height = h;
     }
+    return buffer;
+  }
+
+  function captureSnapshotForStroke(canvas, ctx) {
+    // Crea/aggiorna i due buffer off-screen alle stesse dimensioni del canvas
+    __spPreStrokeBuffer = ensureBuffer(__spPreStrokeBuffer, canvas.width, canvas.height);
+    __spIncrementalBuffer = ensureBuffer(__spIncrementalBuffer, canvas.width, canvas.height);
+    __spIncrementalCtx = __spIncrementalBuffer.getContext('2d');
+
+    var preCtx = __spPreStrokeBuffer.getContext('2d');
+    preCtx.clearRect(0, 0, __spPreStrokeBuffer.width, __spPreStrokeBuffer.height);
+    preCtx.drawImage(canvas, 0, 0); // copia rapida GPU
+
+    // L'incrementale parte uguale al pre-stroke
+    __spIncrementalCtx.clearRect(0, 0, __spIncrementalBuffer.width, __spIncrementalBuffer.height);
+    __spIncrementalCtx.drawImage(__spPreStrokeBuffer, 0, 0);
+
+    __spLastRenderedIdx = 0;
   }
 
   function renderActiveStrokeFrame() {
@@ -891,20 +913,64 @@
     if (!__spActiveCanvas || !__spActiveCtx || !currentStroke) return;
     var canvas = __spActiveCanvas;
     var ctx = __spActiveCtx;
+    var pts = currentStroke.points;
+    var nPts = pts.length;
 
-    // Se ho lo snapshot, lo restituisco al canvas e sopra disegno il tratto
-    if (__spStrokeSnapshot) {
+    if (!__spIncrementalBuffer || !__spIncrementalCtx) {
+      // Fallback: senza buffer ridipingiamo tutto (caso edge)
+      renderStrokesOn(ctx, canvas);
+      return;
+    }
+
+    // Highlighter ed eraser: usano compositing speciale che richiede
+    // sempre un re-render completo del tratto sopra il buffer pre-stroke.
+    if (currentStroke.tool !== 'pen' && currentStroke.tool !== 'arrow') {
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.putImageData(__spStrokeSnapshot, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(__spPreStrokeBuffer, 0, 0);
       ctx.restore();
-      var sX = canvas.width / PAPER_W;
-      var sY = canvas.height / PAPER_H;
-      ctx.setTransform(sX, 0, 0, sY, 0, 0);
+      var sX1 = canvas.width / PAPER_W;
+      var sY1 = canvas.height / PAPER_H;
+      ctx.setTransform(sX1, 0, 0, sY1, 0, 0);
       paintStroke(ctx, currentStroke);
-    } else {
-      // Fallback: ridipingi tutto (caso peggiore, raro)
-      renderStrokesOn(ctx, canvas);
+      return;
+    }
+
+    // Pen / Arrow: incremental rendering.
+    // Manteniamo gli ultimi KEEP_PROVISIONAL punti come "provvisori" (verranno
+    // riconsolidati al prossimo frame, perché computeWidths fa smoothing
+    // su 3 punti — il widthing del punto N dipende da N+1).
+    var KEEP_PROVISIONAL = 2;
+    var safeUntil = nPts - KEEP_PROVISIONAL; // ultimo indice da consolidare
+
+    // Step 1: consolida i nuovi punti sul buffer incrementale
+    if (safeUntil > __spLastRenderedIdx) {
+      var sXi = __spIncrementalBuffer.width / PAPER_W;
+      var sYi = __spIncrementalBuffer.height / PAPER_H;
+      __spIncrementalCtx.setTransform(sXi, 0, 0, sYi, 0, 0);
+
+      var widths = computeWidths(pts, currentStroke.size, currentStroke.simulatePressure);
+      var startIdx = (__spLastRenderedIdx === 0) ? 1 : (__spLastRenderedIdx + 1);
+      paintPenStroke(__spIncrementalCtx, currentStroke, startIdx, widths);
+
+      __spLastRenderedIdx = safeUntil;
+    }
+
+    // Step 2: dipingi sul canvas visibile = buffer incrementale + provvisori
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(__spIncrementalBuffer, 0, 0); // GPU-fast
+    ctx.restore();
+
+    if (nPts > __spLastRenderedIdx + 1) {
+      var sXp = canvas.width / PAPER_W;
+      var sYp = canvas.height / PAPER_H;
+      ctx.setTransform(sXp, 0, 0, sYp, 0, 0);
+      var widthsP = computeWidths(pts, currentStroke.size, currentStroke.simulatePressure);
+      var startProv = Math.max(1, __spLastRenderedIdx + 1);
+      paintPenStroke(ctx, currentStroke, startProv, widthsP);
     }
   }
 
@@ -997,13 +1063,12 @@
     currentStroke.done = true;
     drawing = false;
     activePointerId = null;
-    // Cleanup snapshot
-    __spStrokeSnapshot = null;
-    var savedActiveCanvas = __spActiveCanvas;
+    // Cleanup buffer (lasciamo i canvas allocati per riuso al prossimo tratto)
+    __spLastRenderedIdx = 0;
     __spActiveCanvas = null;
     __spActiveCtx = null;
-    // Adesso ridipingi tutto correttamente (per pulire eventuali residui
-    // della modalità eraser e per aggiornare l'altro canvas se presente)
+    // Adesso ridipingi tutto correttamente: corregge il widthing finale
+    // del tratto (smoothing completo) e aggiorna l'altro canvas se presente
     redrawAll();
     currentStroke = null;
     markDirty();
