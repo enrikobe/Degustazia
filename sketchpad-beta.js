@@ -1031,15 +1031,27 @@
     try { targetCanvas.setPointerCapture(e.pointerId); } catch(_e) {}
 
     // Determina il context giusto (widget o fullscreen)
-    var ctx;
-    if (targetCanvas === drawCanvas) ctx = drawCtx;
-    else if (widget.drawCanvas === targetCanvas) ctx = widget.drawCtx;
-    else ctx = targetCanvas.getContext('2d');
+    var ctxLocal;
+    if (targetCanvas === drawCanvas) ctxLocal = drawCtx;
+    else if (widget.drawCanvas === targetCanvas) ctxLocal = widget.drawCtx;
+    else ctxLocal = targetCanvas.getContext('2d');
     __spActiveCanvas = targetCanvas;
-    __spActiveCtx = ctx;
+    __spActiveCtx = ctxLocal;
+
+    // DIAGNOSTICA dimensioni canvas (rimuovere dopo aver capito il bug zoom)
+    if (window.__SP_DEBUG_DIMS) {
+      console.log('[SketchPad/start] canvas dims:', {
+        target: (targetCanvas === drawCanvas) ? 'fullscreen' : 'widget',
+        intrinsicW: targetCanvas.width, intrinsicH: targetCanvas.height,
+        clientW: targetCanvas.clientWidth, clientH: targetCanvas.clientHeight,
+        ratioCSS: (targetCanvas.clientHeight / targetCanvas.clientWidth).toFixed(4),
+        ratioCanvas: (targetCanvas.height / targetCanvas.width).toFixed(4),
+        PAPER_RATIO: (PAPER_H / PAPER_W).toFixed(4)
+      });
+    }
 
     // Snapshot del canvas PRIMA di aggiungere il nuovo tratto
-    captureSnapshotForStroke(targetCanvas, ctx);
+    captureSnapshotForStroke(targetCanvas, ctxLocal);
 
     var sizeLogical;
     var strokeColor = color;
@@ -1119,9 +1131,13 @@
     var cssW = paperEl.clientWidth;
     var cssH = paperEl.clientHeight;
     if (cssW < 10 || cssH < 10) return; // non ancora layoutato
+    // CRITICO: ratio canvas forzato a PAPER_W:PAPER_H per evitare distorsioni
+    // se il browser layouta il paper con proporzioni leggermente diverse.
+    var canvasW = Math.round(cssW * dpr);
+    var canvasH = Math.round(canvasW * (PAPER_H / PAPER_W));
     [bgCanvas, drawCanvas].forEach(function(c) {
-      c.width = Math.round(cssW * dpr);
-      c.height = Math.round(cssH * dpr);
+      c.width = canvasW;
+      c.height = canvasH;
     });
     drawBackground();
     redrawAll();
@@ -1770,18 +1786,21 @@
     wrap.style.background = '#fdfbf7';
     wrap.style.position = 'relative';
     wrap.style.overflow = 'hidden';
-    // Fissiamo aspect ratio A4 per il widget
-    wrap.style.aspectRatio = '1240 / 1754';
-    // Per browser senza aspect-ratio: fallback height
-    if (!CSS.supports('aspect-ratio: 1 / 1')) {
-      wrap.style.height = (wrap.clientWidth * 1.4145) + 'px';
-    }
-    // Nessun width fisso: deve adattarsi al contenitore esterno
-    wrap.style.width = '100%';
-    wrap.style.maxWidth = '100%';
     wrap.style.transform = 'none'; // annulla eventuali scale del vecchio sistema
     wrap.style.transformOrigin = '';
+    // Width: si adatta al contenitore esterno
+    wrap.style.width = '100%';
+    wrap.style.maxWidth = '100%';
+    // Aspect ratio A4: prima azzeriamo height (potrebbe esserci da setup vecchio),
+    // poi impostiamo aspect-ratio. Se browser non supporta, fallback con padding-top.
     wrap.style.height = '';
+    wrap.style.aspectRatio = '1240 / 1754';
+    if (!CSS.supports('aspect-ratio: 1 / 1')) {
+      // Fallback: padding-top in % per ottenere altezza basata sulla width.
+      // 1754/1240 = 1.4145 = 141.45%
+      wrap.style.height = '0';
+      wrap.style.paddingTop = '141.45%';
+    }
 
     // Costruiamo i nostri canvas
     var bg = document.createElement('canvas');
@@ -1859,9 +1878,17 @@
     var cssW = widget.canvas.clientWidth;
     var cssH = widget.canvas.clientHeight;
     if (cssW < 10 || cssH < 10) return;
+    // CRITICO: forziamo il ratio canvas a PAPER_W:PAPER_H indipendente da
+    // come il browser ha layoutato il wrap. Se il wrap ha proporzioni
+    // leggermente diverse da 1240:1754 (per qualsiasi ragione: aspect-ratio
+    // non rispettato perfettamente, padding, ecc), il rendering verrebbe
+    // distorto perché transform usa due ratio indipendenti (W/PAPER_W e
+    // H/PAPER_H). Risolviamo derivando l'altezza canvas dalla larghezza CSS.
+    var canvasW = Math.round(cssW * dpr);
+    var canvasH = Math.round(canvasW * (PAPER_H / PAPER_W));
     [widget.bgCanvas, widget.drawCanvas].forEach(function(c) {
-      c.width = Math.round(cssW * dpr);
-      c.height = Math.round(cssH * dpr);
+      c.width = canvasW;
+      c.height = canvasH;
     });
     renderBackgroundOn(widget.bgCtx, widget.bgCanvas);
     renderStrokesOn(widget.drawCtx, widget.drawCanvas);
