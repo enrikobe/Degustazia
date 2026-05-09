@@ -1073,40 +1073,21 @@
   // ────────────────────────────────────────────────────────────────────
   var __spOriginalViewport = null;
 
-  function lockViewportForDrawing() {
-    var meta = document.querySelector('meta[name="viewport"]');
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.name = 'viewport';
-      document.head.appendChild(meta);
-    }
-    if (__spOriginalViewport === null) {
-      __spOriginalViewport = meta.getAttribute('content') || '';
-    }
-    meta.setAttribute('content',
-      'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover'
-    );
-  }
+  // Viewport lock: in passato forzavamo maximum-scale=1 per evitare un
+  // sospetto zoom Safari iPad. Si è rivelato un bug drawImage (fixato).
+  // Le funzioni restano per compatibilità ma sono no-op: l'utente può
+  // pinch-zoomare normalmente la pagina dell'app.
+  function lockViewportForDrawing() { /* no-op: vedi commento sopra */ }
+  function unlockViewport() { /* no-op */ }
 
-  function unlockViewport() {
-    if (__spOriginalViewport === null) return;
-    var meta = document.querySelector('meta[name="viewport"]');
-    if (meta) meta.setAttribute('content', __spOriginalViewport);
-    __spOriginalViewport = null;
-  }
-
-  // Listener gesture (Safari only): blocca pinch-zoom
-  function blockGesture(e) { e.preventDefault(); }
-  function installGestureBlockers() {
-    document.addEventListener('gesturestart', blockGesture, { passive: false });
-    document.addEventListener('gesturechange', blockGesture, { passive: false });
-    document.addEventListener('gestureend', blockGesture, { passive: false });
-  }
-  function uninstallGestureBlockers() {
-    document.removeEventListener('gesturestart', blockGesture);
-    document.removeEventListener('gesturechange', blockGesture);
-    document.removeEventListener('gestureend', blockGesture);
-  }
+  // Listener gesture (Safari only): in passato blocco pinch-zoom durante
+  // drawing, ma il problema "zoom" era in realtà un bug drawImage (fixato).
+  // Apple Pencil non genera gesture events (è 1 puntatore), quindi questi
+  // listener erano inutili e bloccavano scroll a 2 dita degli utenti.
+  // Le funzioni restano per compatibilità ma sono no-op.
+  var __spGestureBlockersInstalled = false;
+  function installGestureBlockers() { __spGestureBlockersInstalled = true; }
+  function uninstallGestureBlockers() { __spGestureBlockersInstalled = false; }
 
   // ──── HANDLERS GENERICI: prendono il target canvas come parametro ────
   // PALM REJECTION:
@@ -1160,9 +1141,8 @@
     // Cache rect canvas per evitare reflow Safari iPad ad ogni punto
     refreshRectCache(targetCanvas);
 
-    // ANTI-ZOOM: blocca gesture e fissa viewport per la durata del tratto
-    lockViewportForDrawing();
-    installGestureBlockers();
+    // NOTA: viewport lock e gesture blockers sono già installati al mount
+    // del widget e all'open() del modal — sono idempotenti, non ripetiamo qui
 
     // Determina il context giusto (widget o fullscreen)
     var ctxLocal;
@@ -1690,9 +1670,17 @@
       if (activePointerType === 'pen' && e.pointerType === 'pen') return;
       if (drawing) endStroke(e);
     });
-    // Belt-and-suspenders: blocca anche touchmove nativi durante drawing
-    drawCanvas.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
-    drawCanvas.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+    // Belt-and-suspenders: blocca touchmove nativi durante drawing.
+    // Lascia passare gesti a 2+ dita (scroll page / pinch utente) — NON è
+    // disegno: l'utente vuole scrollare la pagina o zoomare lo stage.
+    drawCanvas.addEventListener('touchstart', function(e) {
+      if (e.touches && e.touches.length >= 2) return; // multi-finger: scroll/zoom
+      e.preventDefault();
+    }, { passive: false });
+    drawCanvas.addEventListener('touchmove', function(e) {
+      if (e.touches && e.touches.length >= 2) return;
+      e.preventDefault();
+    }, { passive: false });
 
     // Toolbar handlers
     modal.querySelector('#spPenBtn').onclick = function() { setTool('pen'); };
@@ -2035,9 +2023,16 @@
       endStrokeOn(e);
       inputTarget = null;
     });
-    // Belt-and-suspenders: blocca touchmove nativi (iOS-safe)
-    dr.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
-    dr.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+    // Belt-and-suspenders: blocca touchmove nativi (iOS-safe).
+    // Lascia passare gesti a 2+ dita per scroll/zoom intenzionale.
+    dr.addEventListener('touchstart', function(e) {
+      if (e.touches && e.touches.length >= 2) return;
+      e.preventDefault();
+    }, { passive: false });
+    dr.addEventListener('touchmove', function(e) {
+      if (e.touches && e.touches.length >= 2) return;
+      e.preventDefault();
+    }, { passive: false });
 
     // Ridimensiona quando il widget cambia dimensione
     if (typeof ResizeObserver !== 'undefined') {
