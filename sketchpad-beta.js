@@ -1209,8 +1209,43 @@
     redrawAll();
   }
 
+  // Reset COMPLETO dello stato pointer. Usato in modo proattivo quando si
+  // rileva uno stato incoerente (es. multi-pointer attivo ma counter zero,
+  // drawing true ma currentStroke null). Garantisce che il modulo torni
+  // a uno stato sano e accetti nuovi tratti senza essere "bloccato".
+  function resetPointerState() {
+    drawing = false;
+    activePointerId = null;
+    activePointerType = null;
+    activePointersCount = 0;
+    currentStroke = null;
+    __spLastRenderedIdx = 0;
+    __spActiveCanvas = null;
+    __spActiveCtx = null;
+    clearRectCache();
+    if (__spMultiPointerActive) disableNativeGestureMode();
+  }
+
   function startStrokeOn(e, targetCanvas) {
     if (e.button !== undefined && e.button !== 0) return;
+
+    // DEFENSIVE: se lo stato pointer è incoerente, resetta.
+    // Un cancel non gestito o un pointerup smarrito potrebbe lasciare il
+    // modulo in uno stato bloccato. Rileviamo e riprendiamo.
+    if ((drawing && !currentStroke) ||
+        (__spMultiPointerActive && activePointersCount <= 0) ||
+        (activePointersCount < 0)) {
+      if (window.__SP_DEBUG_DIMS) {
+        console.warn('[SketchPad/start] inconsistent state, resetting:', {
+          drawing: drawing,
+          currentStroke: !!currentStroke,
+          multiPointerActive: __spMultiPointerActive,
+          activePointersCount: activePointersCount
+        });
+      }
+      resetPointerState();
+    }
+
     // PEN-ONLY su tablet: dito ignorato (lascia browser scrollare/zoomare)
     if (!shouldAcceptPointer(e)) {
       if (window.__SP_DEBUG_DIMS) {
@@ -1876,6 +1911,7 @@
       if (strokes.length === 0) return;
       if (!confirm('Cancellare tutto il foglio?')) return;
       strokes = [];
+      resetPointerState();
       redrawAll();
       markDirty();
       flushSaveSyncImmediate();
