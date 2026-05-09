@@ -595,7 +595,7 @@
   // Renderizza una stroke "penna" o "freccia" usando quadratic curves
   // tra midpoint dei punti consecutivi (approssima una curva di Catmull-Rom).
   // Larghezza modulata per pressione (0..1) e velocità.
-  function paintPenStroke(ctx, stroke, fromIdx, widthsCache) {
+  function paintPenStroke(ctx, stroke, fromIdx, widthsCache, toIdx) {
     var pts = stroke.points;
     if (pts.length === 0) return;
     if (pts.length === 1) {
@@ -614,8 +614,10 @@
     // Larghezze: usa cache se passata, altrimenti calcola tutte
     var widths = widthsCache || computeWidths(pts, stroke.size, stroke.simulatePressure);
     var start = (typeof fromIdx === 'number' && fromIdx > 0) ? fromIdx : 1;
+    // toIdx esclusivo (default: fino alla fine)
+    var end = (typeof toIdx === 'number') ? Math.min(toIdx, pts.length) : pts.length;
 
-    // Disegna solo i segmenti dal punto `start` in poi.
+    // Disegna solo i segmenti nel range [start, end).
     // Cerchio iniziale solo se stiamo disegnando dal vero inizio
     if (start === 1) {
       ctx.beginPath();
@@ -623,7 +625,7 @@
       ctx.fill();
     }
 
-    for (var i = start; i < pts.length; i++) {
+    for (var i = start; i < end; i++) {
       var p0 = pts[i-1], p1 = pts[i];
       var w0 = widths[i-1], w1 = widths[i];
       drawWidthSegment(ctx, p0, p1, w0, w1);
@@ -964,7 +966,12 @@
     var KEEP_PROVISIONAL = 2;
     var safeUntil = nPts - KEEP_PROVISIONAL; // ultimo indice da consolidare
 
-    // Step 1: consolida i nuovi punti sul buffer incrementale
+    // Step 1: consolida i nuovi punti sul buffer incrementale.
+    // CRITICO: il range di consolidamento è [startIdx, safeUntil+1) — cioè
+    // dipingiamo i segmenti che vanno fino al punto safeUntil incluso, MA
+    // NON oltre. Questo è essenziale perché altrimenti il buffer dipinge
+    // anche i punti provvisori, che poi vengono ridipinti sopra dal canvas
+    // visibile → doppio rendering = tratto raddoppiato di spessore.
     if (safeUntil > __spLastRenderedIdx) {
       var sXi = __spIncrementalBuffer.width / PAPER_W;
       var sYi = __spIncrementalBuffer.height / PAPER_H;
@@ -972,12 +979,13 @@
 
       var widths = computeWidths(pts, currentStroke.size, currentStroke.simulatePressure);
       var startIdx = (__spLastRenderedIdx === 0) ? 1 : (__spLastRenderedIdx + 1);
-      paintPenStroke(__spIncrementalCtx, currentStroke, startIdx, widths);
+      paintPenStroke(__spIncrementalCtx, currentStroke, startIdx, widths, safeUntil + 1);
 
       __spLastRenderedIdx = safeUntil;
     }
 
-    // Step 2: dipingi sul canvas visibile = buffer incrementale + provvisori
+    // Step 2: dipingi sul canvas visibile = buffer incrementale + provvisori.
+    // I provvisori sono i punti DOPO __spLastRenderedIdx (non ancora consolidati).
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -990,7 +998,8 @@
       ctx.setTransform(sXp, 0, 0, sYp, 0, 0);
       var widthsP = computeWidths(pts, currentStroke.size, currentStroke.simulatePressure);
       var startProv = Math.max(1, __spLastRenderedIdx + 1);
-      paintPenStroke(ctx, currentStroke, startProv, widthsP);
+      // Provvisori vanno dal primo non-consolidato fino alla fine
+      paintPenStroke(ctx, currentStroke, startProv, widthsP, nPts);
     }
   }
 
