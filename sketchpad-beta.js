@@ -315,17 +315,31 @@
     return true;
   }
 
-  // Pulizia di sicurezza: se l'utente aveva già dati SketchPad in
-  // ev.data.vista da versioni vecchie del modulo, li migriamo nel local
-  // store e li rimuoviamo dalle evaluations per evitare ulteriori errori
-  // di Firestore. Pulisce SIA lo state in memoria SIA il documento cloud
-  // (tramite update con FieldValue.delete) per evitare che il sync li
-  // reintroduca.
-  var __spCloudCleanupDone = {}; // key (tid_taid_sid) → true (cleaned in cloud)
+  // ────────────────────────────────────────────────────────────────────
+  // MIGRAZIONE & PULIZIA
+  //
+  // Due responsabilità SEPARATE:
+  //
+  // 1. migrateLegacyContamination() — AUTOMATICA, sicura, non-distruttiva:
+  //    sposta ev.data.vista.sketchPadV1 nel local store e cancella la
+  //    chiave dallo state in memoria. NON tocca il cloud. Risultato: il
+  //    bug "Nested arrays" si ferma immediatamente per le operazioni
+  //    successive perché lo state non contiene più nested arrays.
+  //
+  // 2. cleanCloudContamination() — MANUALE, distruttiva (richiede
+  //    conferma), pulisce il documento Firestore tramite FieldValue.delete.
+  //    Da chiamare via SketchPad.cleanupCloud(false) dopo aver verificato
+  //    in dry-run con SketchPad.cleanupCloud(true).
+  //
+  // Mantengo lo stesso codice in deploy: se #1 sola viene applicata,
+  // l'app smette di errorare. Se ricarichi, il sync cloud reintroduce
+  // il dato dal cloud → migrate gira di nuovo → state pulito di nuovo.
+  // È un loop benigno: meno efficiente ma 100% reversibile.
+  // ────────────────────────────────────────────────────────────────────
 
-  function migrateAndCleanLegacyContamination() {
-    if (typeof state === 'undefined' || !state || !Array.isArray(state.tastings)) return;
-    var migrated = 0, cleanedLocal = 0, cleanedCloud = 0;
+  function migrateLegacyContamination() {
+    if (typeof state === 'undefined' || !state || !Array.isArray(state.tastings)) return { migrated: 0, cleanedLocal: 0 };
+    var migrated = 0, cleanedLocal = 0;
     state.tastings.forEach(function(t) {
       if (!t.evaluations) return;
       Object.keys(t.evaluations).forEach(function(taid) {
@@ -334,7 +348,7 @@
           if (!ev || !ev.data || !ev.data.vista) return;
           var sp = ev.data.vista[STORAGE_FIELD];
           if (sp && Array.isArray(sp.strokes)) {
-            // 1. Migra a local store se non già presente o se più recente
+            // Migra a local store se non già presente o se più recente
             var key = String(t.id) + '|' + String(taid) + '|' + String(sid);
             var existing = __spLocalStore[key];
             var spTs = sp.updatedAt ? Date.parse(sp.updatedAt) : 0;
@@ -347,48 +361,111 @@
               };
               migrated++;
             }
-            // 2. Rimuovi dallo state in memoria
+            // Rimuovi dallo state in memoria (innocuo, non tocca cloud)
             delete ev.data.vista[STORAGE_FIELD];
             cleanedLocal++;
-
-            // 3. Rimuovi dal documento cloud (una sola volta per chiave)
-            var cloudKey = String(t.id) + '_' + String(taid) + '_' + String(sid);
-            if (!__spCloudCleanupDone[cloudKey]) {
-              __spCloudCleanupDone[cloudKey] = true;
-              cleanCloudEvaluation(t.id, taid, sid);
-              cleanedCloud++;
-            }
           }
         });
       });
     });
     if (cleanedLocal > 0) {
-      console.log('[SketchPad] Cleanup: migrated=' + migrated + ' cleanedLocal=' + cleanedLocal + ' cleanedCloud=' + cleanedCloud);
+      console.log('[SketchPad] Migrate (state-only, safe): migrated=' + migrated + ' cleanedLocal=' + cleanedLocal);
     }
+    return { migrated: migrated, cleanedLocal: cleanedLocal };
   }
 
-  // Rimuove ev.data.vista.sketchPadV1 dal documento Firestore evaluations
-  function cleanCloudEvaluation(tid, tasterId, sampleId) {
+  // Identifica i documenti cloud da pulire — NON modifica nulla.
+  // Usato per dry-run e per il cleanup vero.
+  function listCloudContamination(callback) {
     var db = fbDb();
-    if (!db) return;
-    try {
-      var ref = db.collection('tastings').doc(String(tid))
-                  .collection('evaluations').doc(String(tasterId) + '_' + String(sampleId));
-      // FieldValue.delete() su path nested
-      var FV = firebase.firestore.FieldValue;
-      var update = {};
-      update['data.vista.' + STORAGE_FIELD] = FV.delete();
-      ref.update(update)
-        .then(function() {
-          console.log('[SketchPad] cloud cleaned ' + tid + '/' + tasterId + '_' + sampleId);
+    if (!db || typeof state === 'undefined' || !state || !Array.isArray(state.tastings)) {
+      callback && callback([]);
+      return;
+    }
+    var tids = state.tastings.map(function(t) { return t.id; });
+    if (!tids.length) { callback && callback([]); return; }
+
+    var contaminated = [];
+    var pending = tids.length;
+    var done = function() { pending--; if (pending <= 0) callback && callback(contaminated); };
+
+    tids.forEach(function(tid) {
+      db.collection('tastings').doc(String(tid))
+        .collection('evaluations').get()
+        .then(function(snap) {
+          snap.forEach(function(d) {
+            var data = d.data() || {};
+            var sp = data.data && data.data.vista && data.data.vista[STORAGE_FIELD];
+            if (sp) {
+              var strokesCount = (sp.strokes && sp.strokes.length) || 0;
+              contaminated.push({
+                tastingId: String(tid),
+                docId: d.id,
+                strokesCount: strokesCount,
+                hasStrokesInCloudIndex: !!__spCloudIndex[String(tid) + '|' + d.id.replace('_', '|')]
+              });
+            }
+          });
+          done();
         })
         .catch(function(err) {
-          // Possibile permission-denied o doc inesistente: non fatale
-          console.warn('[SketchPad] cloud clean failed (non-fatal)', err.code, err.message);
+          console.warn('[SketchPad] listCloud error for tasting', tid, err.code);
+          done();
         });
-    } catch(e) {
-      console.warn('[SketchPad] cloud clean exception', e);
-    }
+    });
+  }
+
+  // Pulisce il documento cloud: rimuove ev.data.vista.sketchPadV1 con FieldValue.delete.
+  // dryRun=true: stampa la lista, non modifica nulla.
+  // dryRun=false: applica le modifiche.
+  function cleanCloudContamination(dryRun, callback) {
+    listCloudContamination(function(items) {
+      if (!items.length) {
+        console.log('[SketchPad] No cloud contamination found');
+        callback && callback({ found: 0, cleaned: 0, errors: 0 });
+        return;
+      }
+      console.log('[SketchPad] ' + (dryRun ? '[DRY-RUN] ' : '') + 'Found ' + items.length + ' contaminated docs:');
+      items.forEach(function(it) {
+        var safe = it.hasStrokesInCloudIndex ? '✓ in cloud index' : '⚠ NOT in cloud index';
+        console.log('  • tastings/' + it.tastingId + '/evaluations/' + it.docId + ' (' + it.strokesCount + ' strokes, ' + safe + ')');
+      });
+      if (dryRun) {
+        console.log('[SketchPad] DRY-RUN complete. Run SketchPad.cleanupCloud(false) to apply.');
+        callback && callback({ found: items.length, cleaned: 0, errors: 0, items: items });
+        return;
+      }
+      // Applica
+      var db = fbDb();
+      var FV = firebase.firestore.FieldValue;
+      var pending = items.length;
+      var cleaned = 0, errors = 0;
+      items.forEach(function(it) {
+        var ref = db.collection('tastings').doc(it.tastingId)
+                    .collection('evaluations').doc(it.docId);
+        var update = {};
+        update['data.vista.' + STORAGE_FIELD] = FV.delete();
+        ref.update(update)
+          .then(function() {
+            cleaned++;
+            console.log('[SketchPad] ✓ cleaned ' + it.tastingId + '/' + it.docId);
+            pending--;
+            if (pending <= 0) {
+              console.log('[SketchPad] Cleanup done: cleaned=' + cleaned + ' errors=' + errors);
+              callback && callback({ found: items.length, cleaned: cleaned, errors: errors });
+            }
+          })
+          .catch(function(err) {
+            errors++;
+            console.warn('[SketchPad] ✗ failed ' + it.tastingId + '/' + it.docId, err.code);
+            pending--;
+            if (pending <= 0) {
+              console.log('[SketchPad] Cleanup done: cleaned=' + cleaned + ' errors=' + errors);
+              callback && callback({ found: items.length, cleaned: cleaned, errors: errors });
+            }
+          });
+      });
+    });
   }
 
   function flushSaveSync() {
@@ -793,6 +870,54 @@
     }
   }
 
+  // Disegna SOLO il tratto in corso sul canvas attivo, sopra uno snapshot
+  // del canvas pre-stroke. Evita di ridipingere tutti i tratti precedenti
+  // a ogni pointermove (causa principale del lag su tablet).
+  var __spActiveCanvas = null;     // canvas dove il tratto è iniziato
+  var __spActiveCtx = null;
+  var __spStrokeSnapshot = null;   // ImageData del canvas pre-stroke
+  var __spRafPending = false;
+
+  function captureSnapshotForStroke(canvas, ctx) {
+    try {
+      __spStrokeSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    } catch(e) {
+      __spStrokeSnapshot = null; // taint? Riprovo in fallback
+    }
+  }
+
+  function renderActiveStrokeFrame() {
+    __spRafPending = false;
+    if (!__spActiveCanvas || !__spActiveCtx || !currentStroke) return;
+    var canvas = __spActiveCanvas;
+    var ctx = __spActiveCtx;
+
+    // Se ho lo snapshot, lo restituisco al canvas e sopra disegno il tratto
+    if (__spStrokeSnapshot) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.putImageData(__spStrokeSnapshot, 0, 0);
+      ctx.restore();
+      var sX = canvas.width / PAPER_W;
+      var sY = canvas.height / PAPER_H;
+      ctx.setTransform(sX, 0, 0, sY, 0, 0);
+      paintStroke(ctx, currentStroke);
+    } else {
+      // Fallback: ridipingi tutto (caso peggiore, raro)
+      renderStrokesOn(ctx, canvas);
+    }
+  }
+
+  function scheduleStrokeFrame() {
+    if (__spRafPending) return;
+    __spRafPending = true;
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(renderActiveStrokeFrame);
+    } else {
+      setTimeout(renderActiveStrokeFrame, 16);
+    }
+  }
+
   // ────────────────────────────────────────────────────────────────────
   // INPUT HANDLING
   // ────────────────────────────────────────────────────────────────────
@@ -819,6 +944,17 @@
     activePointerId = e.pointerId;
     try { targetCanvas.setPointerCapture(e.pointerId); } catch(_e) {}
 
+    // Determina il context giusto (widget o fullscreen)
+    var ctx;
+    if (targetCanvas === drawCanvas) ctx = drawCtx;
+    else if (widget.drawCanvas === targetCanvas) ctx = widget.drawCtx;
+    else ctx = targetCanvas.getContext('2d');
+    __spActiveCanvas = targetCanvas;
+    __spActiveCtx = ctx;
+
+    // Snapshot del canvas PRIMA di aggiungere il nuovo tratto
+    captureSnapshotForStroke(targetCanvas, ctx);
+
     var sizeLogical;
     var strokeColor = color;
     var alpha = 1;
@@ -840,6 +976,7 @@
       done: false
     };
     strokes.push(currentStroke);
+    scheduleStrokeFrame();
   }
 
   function moveStrokeOn(e, targetCanvas) {
@@ -849,7 +986,8 @@
     for (var i = 0; i < events.length; i++) {
       currentStroke.points.push(pointerToPaperFor(events[i], targetCanvas));
     }
-    redrawAll();
+    // Frame coalescing: schedulo al prossimo RAF, non disegno qui
+    scheduleStrokeFrame();
   }
 
   function endStrokeOn(e) {
@@ -859,6 +997,13 @@
     currentStroke.done = true;
     drawing = false;
     activePointerId = null;
+    // Cleanup snapshot
+    __spStrokeSnapshot = null;
+    var savedActiveCanvas = __spActiveCanvas;
+    __spActiveCanvas = null;
+    __spActiveCtx = null;
+    // Adesso ridipingi tutto correttamente (per pulire eventuali residui
+    // della modalità eraser e per aggiornare l'altro canvas se presente)
     redrawAll();
     currentStroke = null;
     markDirty();
@@ -1114,6 +1259,17 @@
     var st = document.createElement('style');
     st.id = 'sketchPadStyles';
     st.textContent = ''
+      // Disabilita selezione testo e callout iOS su TUTTO il modal e widget editabile.
+      // Pencil su iPad, in assenza di questo, seleziona pulsanti/titoli ad ogni tap.
+      // Eccezione: input/textarea/contenteditable mantengono la selezione.
+      + '.sp-modal,.sp-modal *,#widgetCanvasWrap[data-sp-mounted="1"],#widgetCanvasWrap[data-sp-mounted="1"] *{'
+      +   '-webkit-user-select:none !important;user-select:none !important;'
+      +   '-webkit-touch-callout:none !important;'
+      +   '-webkit-tap-highlight-color:transparent !important;'
+      + '}'
+      + '.sp-modal input,.sp-modal textarea,.sp-modal [contenteditable="true"]{'
+      +   '-webkit-user-select:text !important;user-select:text !important;'
+      + '}'
       + '.sp-modal{position:fixed;inset:0;background:#2a2622;z-index:9999;display:none;flex-direction:column;color:white;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}'
       + '.sp-modal.sp-visible{display:flex;}'
       + '.sp-topbar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:12px 18px;padding-top:max(12px,env(safe-area-inset-top));background:#2a2622;border-bottom:1px solid rgba(255,255,255,0.06);}'
@@ -2172,16 +2328,21 @@
     installSelectSampleHook();
     tryAddBetaButton();
 
-    // Migrazione e pulizia: appena lo state è disponibile, sposta gli
-    // eventuali sketchPadV1 dentro ev.data.vista nel local store e rimuoveli
-    // dalle evaluations (evita FirebaseError "Nested arrays").
+    // Migrazione automatica (SAFE, non-distruttiva): sposta sketchPadV1
+    // dallo state in memoria al local store, rimuove dallo state. NON
+    // tocca il cloud. Questo è sufficiente a fermare gli errori "Nested
+    // arrays" nelle operazioni successive: lo state non contiene più
+    // nested arrays. Il dato cloud resta dov'è, intatto.
+    //
+    // Per pulire anche il cloud (operazione distruttiva), chiama
+    // manualmente da console: SketchPad.cleanupCloud(true) per dry-run,
+    // poi SketchPad.cleanupCloud(false) per applicare.
     var cleanupAttempts = 0;
     var cleanupTimer = setInterval(function() {
       cleanupAttempts++;
       if (typeof state !== 'undefined' && state && Array.isArray(state.tastings) && state.tastings.length > 0) {
-        migrateAndCleanLegacyContamination();
+        migrateLegacyContamination();
       }
-      // Ripeti per i primi 30 secondi: i tasting possono caricarsi async
       if (cleanupAttempts > 60) clearInterval(cleanupTimer);
     }, 500);
 
@@ -2205,14 +2366,36 @@
       forceSync: function() { flushSaveSyncImmediate(); },
       setReplaceMode: function(on) { setReplaceMode(on); },
       isReplaceMode: isReplaceMode,
+
+      // Comandi di cleanup cloud — manuali, distruttivi.
+      // Uso tipico:
+      //   SketchPad.cleanupCloud(true)   → dry-run, stampa cosa farebbe
+      //   SketchPad.cleanupCloud(false)  → applica davvero
+      cleanupCloud: function(dryRun, callback) {
+        if (typeof dryRun !== 'boolean') {
+          console.warn('[SketchPad] Usage: SketchPad.cleanupCloud(true) for dry-run, SketchPad.cleanupCloud(false) to apply');
+          return;
+        }
+        cleanCloudContamination(dryRun, callback);
+      },
+      // Solo lista, no modifiche
+      listContamination: function(callback) {
+        listCloudContamination(function(items) {
+          console.log('[SketchPad] Contamination list:', items);
+          callback && callback(items);
+        });
+      },
+      // Forza una migrazione locale immediata (utile dopo cambio degustazione)
+      migrateNow: function() {
+        return migrateLegacyContamination();
+      },
+
       // Diagnostica anteprima nel confronto:
       scanRows: function(verbose) {
         if (verbose !== undefined) window.__SP_DEBUG_PREVIEW = !!verbose;
-        // Reset del flag spAugmented così riprocessiamo le righe
         document.querySelectorAll('tr[data-rowtype="taster"]').forEach(function(tr) {
           delete tr.dataset.spAugmented;
         });
-        // Invalida la cache del prefetch e ricarica
         __spCloudFetched = {};
         if (typeof prefetchAllVisibleTastings === 'function') {
           prefetchAllVisibleTastings(function() {
