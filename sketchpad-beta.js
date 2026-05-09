@@ -1060,29 +1060,27 @@
   // ────────────────────────────────────────────────────────────────────
   // INPUT HANDLING
   // ────────────────────────────────────────────────────────────────────
-  // CACHE rect canvas per la durata del tratto.
-  // Su iPad Safari getBoundingClientRect() forza layout reflow su ogni
-  // chiamata; chiamarlo per ogni punto Pencil (120Hz) crea lag percepibile.
-  // Misuriamo una volta a startStroke e riusiamo. Resettiamo a endStroke.
-  var __spCachedRect = null;
-  var __spCachedRectCanvas = null;
+  // CACHE rect canvas. Su iPad Safari getBoundingClientRect() forza layout
+  // reflow ad ogni chiamata. Strategia: cachiamo per canvas, e invalidiamo
+  // solo quando il canvas viene ridimensionato (via ResizeObserver hooks).
+  var __spRectCache = new WeakMap(); // canvas → rect
 
   function refreshRectCache(canvas) {
-    __spCachedRect = canvas.getBoundingClientRect();
-    __spCachedRectCanvas = canvas;
+    __spRectCache.set(canvas, canvas.getBoundingClientRect());
   }
-  function clearRectCache() {
-    __spCachedRect = null;
-    __spCachedRectCanvas = null;
+  function invalidateRectCache(canvas) {
+    if (canvas) __spRectCache.delete(canvas);
+    else __spRectCache = new WeakMap();
   }
+  // Alias per compatibilità (chiamato da resetPointerState/abortStroke/endStroke).
+  // Adesso è no-op: il rect resta cached, viene aggiornato solo su resize.
+  function clearRectCache() { /* no-op: rect persistente */ }
 
   function pointerToPaperFor(e, canvas) {
-    // Usa il rect cached se è per lo stesso canvas, altrimenti misura
-    var rect;
-    if (__spCachedRect && __spCachedRectCanvas === canvas) {
-      rect = __spCachedRect;
-    } else {
+    var rect = __spRectCache.get(canvas);
+    if (!rect) {
       rect = canvas.getBoundingClientRect();
+      __spRectCache.set(canvas, rect);
     }
     var cssX = e.clientX - rect.left;
     var cssY = e.clientY - rect.top;
@@ -1237,68 +1235,31 @@
   function startStrokeOn(e, targetCanvas) {
     if (e.button !== undefined && e.button !== 0) return;
 
-    // DEFENSIVE: se lo stato pointer è incoerente, resetta.
-    // Un cancel non gestito o un pointerup smarrito potrebbe lasciare il
-    // modulo in uno stato bloccato. Rileviamo e riprendiamo.
-    if ((drawing && !currentStroke) ||
-        (__spMultiPointerActive && activePointersCount <= 0) ||
-        (activePointersCount < 0)) {
-      if (window.__SP_DEBUG_DIMS) {
-        console.warn('[SketchPad/start] inconsistent state, resetting:', {
-          drawing: drawing,
-          currentStroke: !!currentStroke,
-          multiPointerActive: __spMultiPointerActive,
-          activePointersCount: activePointersCount
-        });
-      }
+    // Defensive reset (early stato sano). I check sono volutamente brevi.
+    if ((drawing && !currentStroke) || (__spMultiPointerActive && activePointersCount <= 0)) {
       resetPointerState();
     }
 
-    // PEN-ONLY su tablet: dito ignorato (lascia browser scrollare/zoomare)
-    if (!shouldAcceptPointer(e)) {
-      if (window.__SP_DEBUG_DIMS) {
-        console.log('[SketchPad/start] REJECTED:', {
-          pointerType: e.pointerType,
-          pressure: e.pressure,
-          isPrimary: e.isPrimary,
-          isTablet: isTablet()
-        });
-      }
-      return;
-    }
-    if (window.__SP_DEBUG_DIMS) {
-      console.log('[SketchPad/start] ACCEPTED:', {
-        pointerType: e.pointerType,
-        pressure: e.pressure,
-        isPrimary: e.isPrimary,
-        isTablet: isTablet()
-      });
-    }
-    // MULTI-POINTER: se arriva un 2° pointer simultaneo durante drawing,
-    // significa "utente vuole pinch/scroll, non disegnare". Annullo il
-    // tratto in corso e abilito gesti nativi del browser.
+    // Pen-only check (cheap inline)
+    if (!shouldAcceptPointer(e)) return;
+
+    // Multi-pointer (2 dita = scroll/zoom)
     if (drawing && activePointerType !== 'pen') {
-      // Solo se NON è una pen attiva (con pen ignoriamo polso = palm rejection)
       activePointersCount++;
       abortCurrentStroke();
       enableNativeGestureMode(targetCanvas);
       return;
     }
-    // PALM REJECTION early-path: se sta già disegnando una pen e arriva
-    // un pointerdown touch (polso), lo respingo subito con preventDefault
-    // + stopPropagation per ridurre overhead Safari iPad.
+    // Palm rejection (pen attiva + touch in arrivo = polso)
     if (drawing) {
-      if (isPalmEvent(e)) {
-        e.preventDefault();
-        e.stopPropagation();
-      } else if (e.preventDefault) {
-        e.preventDefault();
-      }
+      if (isPalmEvent(e)) { e.preventDefault(); e.stopPropagation(); }
+      else if (e.preventDefault) e.preventDefault();
       return;
     }
     if (isArchivedSafe()) return;
-    // Se gesture nativo è attivo (pinch/scroll in corso), non disegnare
     if (__spMultiPointerActive) return;
+
+    // ──── HOT PATH: setup tratto ────
     e.preventDefault();
     activePointersCount = 1;
     drawing = true;
@@ -1306,13 +1267,7 @@
     activePointerType = e.pointerType || null;
     try { targetCanvas.setPointerCapture(e.pointerId); } catch(_e) {}
 
-    // Cache rect canvas per evitare reflow Safari iPad ad ogni punto
-    refreshRectCache(targetCanvas);
-
-    // NOTA: viewport lock e gesture blockers sono già installati al mount
-    // del widget e all'open() del modal — sono idempotenti, non ripetiamo qui
-
-    // Determina il context giusto (widget o fullscreen)
+    // Determina il context giusto
     var ctxLocal;
     if (targetCanvas === drawCanvas) ctxLocal = drawCtx;
     else if (widget.drawCanvas === targetCanvas) ctxLocal = widget.drawCtx;
@@ -1320,28 +1275,8 @@
     __spActiveCanvas = targetCanvas;
     __spActiveCtx = ctxLocal;
 
-    // DIAGNOSTICA dimensioni canvas (rimuovere dopo aver capito il bug zoom)
-    if (window.__SP_DEBUG_DIMS) {
-      console.log('[SketchPad/start] canvas dims:', {
-        target: (targetCanvas === drawCanvas) ? 'fullscreen' : 'widget',
-        intrinsicW: targetCanvas.width, intrinsicH: targetCanvas.height,
-        clientW: targetCanvas.clientWidth, clientH: targetCanvas.clientHeight,
-        ratioCSS: (targetCanvas.clientHeight / targetCanvas.clientWidth).toFixed(4),
-        ratioCanvas: (targetCanvas.height / targetCanvas.width).toFixed(4),
-        PAPER_RATIO: (PAPER_H / PAPER_W).toFixed(4),
-        visualViewportScale: window.visualViewport ? window.visualViewport.scale : 'n/a',
-        visualViewportW: window.visualViewport ? window.visualViewport.width : 'n/a',
-        pointerType: e.pointerType
-      });
-    }
-
-    // RAW DRAWING: niente snapshot del canvas, niente buffer off-screen.
-    // Il canvas già contiene tutti i tratti precedenti renderizzati da
-    // redrawAll(). Aggiungiamo il nuovo tratto sopra, punto per punto.
-
-    var sizeLogical;
-    var strokeColor = color;
-    var alpha = 1;
+    // Calcola size + colore del tratto in base al tool
+    var sizeLogical, strokeColor = color, alpha = 1;
     if (tool === 'eraser') sizeLogical = strokeSize * 1.6 * 5;
     else if (tool === 'highlighter') {
       sizeLogical = strokeSize * 1.6 * 4;
@@ -1349,21 +1284,14 @@
       alpha = 0.38;
     } else sizeLogical = strokeSize * 1.6;
 
-    var isMouse = (e.pointerType === 'mouse');
     var firstPt = pointerToPaperFor(e, targetCanvas);
     currentStroke = {
-      tool: tool,
-      color: strokeColor,
-      alpha: alpha,
-      size: sizeLogical,
-      points: [firstPt],
-      simulatePressure: isMouse,
-      done: false
+      tool: tool, color: strokeColor, alpha: alpha, size: sizeLogical,
+      points: [firstPt], simulatePressure: (e.pointerType === 'mouse'), done: false
     };
     strokes.push(currentStroke);
 
-    // SETUP CTX UNA VOLTA SOLA: transform + style + lineCap.
-    // moveStrokeOn dopo non dovrà toccare nulla, solo beginPath/lineTo/stroke.
+    // Setup ctx una volta sola (transform + style + cap)
     var sX = targetCanvas.width / PAPER_W;
     var sY = targetCanvas.height / PAPER_H;
     ctxLocal.setTransform(sX, 0, 0, sY, 0, 0);
@@ -1383,10 +1311,23 @@
       ctxLocal.globalAlpha = 1;
     }
 
-    // Dot iniziale (cerchio piccolo) per gestire tap singolo senza move
+    // Dot iniziale (gestisce tap singolo senza move)
     ctxLocal.beginPath();
     ctxLocal.arc(firstPt[0], firstPt[1], sizeLogical / 2, 0, Math.PI * 2);
     ctxLocal.fill();
+
+    // Diagnostica opt-in (FUORI dal hot path, controllato solo da flag)
+    if (window.__SP_DEBUG_DIMS) __spDebugLogStart(e, targetCanvas);
+  }
+
+  // Funzione separata per non appesantire il hot path con string concat e oggetti.
+  function __spDebugLogStart(e, targetCanvas) {
+    console.log('[SketchPad/start]', {
+      target: (targetCanvas === drawCanvas) ? 'fullscreen' : 'widget',
+      pointerType: e.pointerType, pressure: e.pressure,
+      intrinsicW: targetCanvas.width, intrinsicH: targetCanvas.height,
+      clientW: targetCanvas.clientWidth, clientH: targetCanvas.clientHeight
+    });
   }
 
   function moveStrokeOn(e, targetCanvas) {
@@ -1510,13 +1451,12 @@
     var cssW = paperEl.clientWidth;
     var cssH = paperEl.clientHeight;
     if (cssW < 10 || cssH < 10) return; // non ancora layoutato
-    // CRITICO: ratio canvas forzato a PAPER_W:PAPER_H per evitare distorsioni
-    // se il browser layouta il paper con proporzioni leggermente diverse.
     var canvasW = Math.round(cssW * dpr);
     var canvasH = Math.round(canvasW * (PAPER_H / PAPER_W));
     [bgCanvas, drawCanvas].forEach(function(c) {
       c.width = canvasW;
       c.height = canvasH;
+      invalidateRectCache(c);
     });
     drawBackground();
     redrawAll();
@@ -1736,7 +1676,7 @@
 
   // Versione CSS: incrementare quando si modifica injectStyles().
   // Se in pagina c'è un <style> con versione diversa, viene rimpiazzato.
-  var SP_STYLES_VERSION = '8-readonly-widget';
+  var SP_STYLES_VERSION = '9-streamlined';
 
   function injectStyles() {
     var existing = document.getElementById('sketchPadStyles');
@@ -2306,6 +2246,7 @@
     [widget.bgCanvas, widget.drawCanvas].forEach(function(c) {
       c.width = canvasW;
       c.height = canvasH;
+      invalidateRectCache(c);
     });
     renderBackgroundOn(widget.bgCtx, widget.bgCanvas);
     renderStrokesOn(widget.drawCtx, widget.drawCanvas);
