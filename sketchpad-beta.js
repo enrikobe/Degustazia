@@ -1087,13 +1087,30 @@
   }
 
   // ──── HANDLERS GENERICI: prendono il target canvas come parametro ────
+  // PALM REJECTION:
+  // Quando l'utente disegna con la Apple Pencil e appoggia il polso, iOS
+  // genera eventi pointerdown/pointercancel di tipo 'touch' aggiuntivi.
+  // Senza protezione: il pointercancel termina il tratto pen, e il tratto
+  // appare interrotto. Soluzione: registriamo il tipo del pointer attivo
+  // (pen vs touch). Se attivo è 'pen', ignoriamo TUTTI gli eventi 'touch'
+  // (compreso pointercancel/pointerleave) per la durata del tratto.
+  var activePointerType = null; // 'pen' | 'touch' | 'mouse' | null
+
   function startStrokeOn(e, targetCanvas) {
     if (e.button !== undefined && e.button !== 0) return;
-    if (drawing) return;
+    if (drawing) {
+      // PALM REJECTION: stiamo già disegnando con un pointer.
+      // Se quello attivo è una pen e questo nuovo è touch (polso), ignoralo.
+      // Inoltre preveniamo il default per evitare che il browser interpreti
+      // come gesture (es. scroll a 2 dita).
+      if (e.preventDefault) e.preventDefault();
+      return;
+    }
     if (isArchivedSafe()) return;
     e.preventDefault();
     drawing = true;
     activePointerId = e.pointerId;
+    activePointerType = e.pointerType || null;
     try { targetCanvas.setPointerCapture(e.pointerId); } catch(_e) {}
 
     // ANTI-ZOOM: blocca gesture e fissa viewport per la durata del tratto
@@ -1118,7 +1135,8 @@
         ratioCanvas: (targetCanvas.height / targetCanvas.width).toFixed(4),
         PAPER_RATIO: (PAPER_H / PAPER_W).toFixed(4),
         visualViewportScale: window.visualViewport ? window.visualViewport.scale : 'n/a',
-        visualViewportW: window.visualViewport ? window.visualViewport.width : 'n/a'
+        visualViewportW: window.visualViewport ? window.visualViewport.width : 'n/a',
+        pointerType: e.pointerType
       });
     }
 
@@ -1150,7 +1168,12 @@
   }
 
   function moveStrokeOn(e, targetCanvas) {
-    if (!drawing || !currentStroke || e.pointerId !== activePointerId) return;
+    if (!drawing || !currentStroke) return;
+    // PALM REJECTION: ignora movimenti di pointer diversi da quello attivo
+    if (e.pointerId !== activePointerId) {
+      if (e.preventDefault) e.preventDefault();
+      return;
+    }
     e.preventDefault();
     var events = (e.getCoalescedEvents && e.getCoalescedEvents()) || [e];
     for (var i = 0; i < events.length; i++) {
@@ -1167,6 +1190,7 @@
     currentStroke.done = true;
     drawing = false;
     activePointerId = null;
+    activePointerType = null;
     // Cleanup buffer (lasciamo i canvas allocati per riuso al prossimo tratto)
     __spLastRenderedIdx = 0;
     __spActiveCanvas = null;
@@ -1597,8 +1621,22 @@
     drawCanvas.addEventListener('pointerdown', startStroke, { passive: false });
     drawCanvas.addEventListener('pointermove', moveStroke, { passive: false });
     drawCanvas.addEventListener('pointerup', endStroke);
-    drawCanvas.addEventListener('pointercancel', endStroke);
-    drawCanvas.addEventListener('pointerleave', function(e) { if (drawing) endStroke(e); });
+    // PALM REJECTION: pointercancel viene ignorato se l'input attivo è pen.
+    // iOS spara cancel sulla pencil quando rileva il polso → senza filtro
+    // il tratto si interromperebbe.
+    drawCanvas.addEventListener('pointercancel', function(e) {
+      if (activePointerType === 'pen' && e.pointerType === 'pen') {
+        // Cancel spurio iOS sulla pencil — ignora, lasciamo continuare
+        return;
+      }
+      endStroke(e);
+    });
+    drawCanvas.addEventListener('pointerleave', function(e) {
+      // Idem per pointerleave: iOS può "spostare" la pen leggermente fuori
+      // dal canvas quando appoggi il polso. Ignora se è la pen attiva.
+      if (activePointerType === 'pen' && e.pointerType === 'pen') return;
+      if (drawing) endStroke(e);
+    });
     // Belt-and-suspenders: blocca anche touchmove nativi durante drawing
     drawCanvas.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
     drawCanvas.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
@@ -1931,10 +1969,18 @@
       if (inputTarget === 'widget') { endStrokeOn(e); inputTarget = null; }
     });
     dr.addEventListener('pointercancel', function(e) {
-      if (inputTarget === 'widget') { endStrokeOn(e); inputTarget = null; }
+      if (inputTarget !== 'widget') return;
+      // PALM REJECTION: ignora cancel spurio iOS sulla pen
+      if (activePointerType === 'pen' && e.pointerType === 'pen') return;
+      endStrokeOn(e);
+      inputTarget = null;
     });
     dr.addEventListener('pointerleave', function(e) {
-      if (drawing && inputTarget === 'widget') { endStrokeOn(e); inputTarget = null; }
+      if (!drawing || inputTarget !== 'widget') return;
+      // PALM REJECTION: idem per pointerleave
+      if (activePointerType === 'pen' && e.pointerType === 'pen') return;
+      endStrokeOn(e);
+      inputTarget = null;
     });
     // Belt-and-suspenders: blocca touchmove nativi (iOS-safe)
     dr.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
