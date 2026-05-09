@@ -1020,6 +1020,56 @@
     return pointerToPaperFor(e, drawCanvas);
   }
 
+  // ────────────────────────────────────────────────────────────────────
+  // ANTI-ZOOM SAFARI iOS
+  //
+  // Su iPad/iPhone il browser può scatenare zoom (pinch o doppio tap)
+  // anche con un solo dito/pencil se interpreta gesti come "zoom view".
+  // Questo causa il "drift" che l'utente percepisce come "zoom dopo il
+  // secondo tratto". Soluzione: durante drawing su SketchPad, blocchiamo
+  // i gesture nativi a livello documento.
+  //
+  // Inoltre forziamo il <meta viewport> con maximum-scale=1 mentre il
+  // SketchPad è attivo (modal o widget editabile), e ripristiniamo il
+  // valore originale quando esce da scena.
+  // ────────────────────────────────────────────────────────────────────
+  var __spOriginalViewport = null;
+
+  function lockViewportForDrawing() {
+    var meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'viewport';
+      document.head.appendChild(meta);
+    }
+    if (__spOriginalViewport === null) {
+      __spOriginalViewport = meta.getAttribute('content') || '';
+    }
+    meta.setAttribute('content',
+      'width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover'
+    );
+  }
+
+  function unlockViewport() {
+    if (__spOriginalViewport === null) return;
+    var meta = document.querySelector('meta[name="viewport"]');
+    if (meta) meta.setAttribute('content', __spOriginalViewport);
+    __spOriginalViewport = null;
+  }
+
+  // Listener gesture (Safari only): blocca pinch-zoom
+  function blockGesture(e) { e.preventDefault(); }
+  function installGestureBlockers() {
+    document.addEventListener('gesturestart', blockGesture, { passive: false });
+    document.addEventListener('gesturechange', blockGesture, { passive: false });
+    document.addEventListener('gestureend', blockGesture, { passive: false });
+  }
+  function uninstallGestureBlockers() {
+    document.removeEventListener('gesturestart', blockGesture);
+    document.removeEventListener('gesturechange', blockGesture);
+    document.removeEventListener('gestureend', blockGesture);
+  }
+
   // ──── HANDLERS GENERICI: prendono il target canvas come parametro ────
   function startStrokeOn(e, targetCanvas) {
     if (e.button !== undefined && e.button !== 0) return;
@@ -1029,6 +1079,10 @@
     drawing = true;
     activePointerId = e.pointerId;
     try { targetCanvas.setPointerCapture(e.pointerId); } catch(_e) {}
+
+    // ANTI-ZOOM: blocca gesture e fissa viewport per la durata del tratto
+    lockViewportForDrawing();
+    installGestureBlockers();
 
     // Determina il context giusto (widget o fullscreen)
     var ctxLocal;
@@ -1046,7 +1100,9 @@
         clientW: targetCanvas.clientWidth, clientH: targetCanvas.clientHeight,
         ratioCSS: (targetCanvas.clientHeight / targetCanvas.clientWidth).toFixed(4),
         ratioCanvas: (targetCanvas.height / targetCanvas.width).toFixed(4),
-        PAPER_RATIO: (PAPER_H / PAPER_W).toFixed(4)
+        PAPER_RATIO: (PAPER_H / PAPER_W).toFixed(4),
+        visualViewportScale: window.visualViewport ? window.visualViewport.scale : 'n/a',
+        visualViewportW: window.visualViewport ? window.visualViewport.width : 'n/a'
       });
     }
 
@@ -1869,6 +1925,11 @@
     }, 50);
 
     console.log('[SketchPad] Widget editabile montato');
+    // Blocca viewport e gesture iOS al mount (il widget è una superficie
+    // di disegno permanente in replace mode; vogliamo che lo zoom Safari
+    // non interferisca dal primo tratto in poi)
+    lockViewportForDrawing();
+    installGestureBlockers();
     return true;
   }
 
