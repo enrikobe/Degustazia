@@ -1455,19 +1455,9 @@
     }
     __spActiveCanvas = null;
     __spActiveCtx = null;
-    // RAW DRAWING: niente redrawAll al rilascio. Il tratto resta esattamente
-    // come l'utente lo ha visto durante drawing. Niente "snap" cosmetico.
-    // Il sync con widget/fullscreen avviene solo a chiusura modal o cambio
-    // campione (vedi close()).
-    // Aggiorna il widget se sta osservando lo stesso campione (specchio
-    // visivo, non rendering pesante)
-    if (widget.canvas && widget.visible
-        && __spActiveCanvas !== widget.drawCanvas
-        && widget.contextKey === openContextKey) {
-      // Il widget potrebbe essere desync: lo sincronizziamo. Costa una
-      // volta sola, dopo il rilascio (no impact su fluidità drawing).
-      renderStrokesOn(widget.drawCtx, widget.drawCanvas);
-    }
+    // RAW DRAWING: niente redrawAll al rilascio. Il tratto resta com'era.
+    // Niente sync widget al rilascio: il widget è read-only e si aggiorna
+    // alla chiusura del modal (vedi close()).
     currentStroke = null;
     markDirty();
   }
@@ -1746,7 +1736,7 @@
 
   // Versione CSS: incrementare quando si modifica injectStyles().
   // Se in pagina c'è un <style> con versione diversa, viene rimpiazzato.
-  var SP_STYLES_VERSION = '7-raw-drawing';
+  var SP_STYLES_VERSION = '8-readonly-widget';
 
   function injectStyles() {
     var existing = document.getElementById('sketchPadStyles');
@@ -2244,7 +2234,9 @@
     var bg = document.createElement('canvas');
     var dr = document.createElement('canvas');
     bg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;pointer-events:none;z-index:1;';
-    dr.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;cursor:crosshair;z-index:2;touch-action:none;';
+    // WIDGET READ-ONLY: il widget mostra solo l'anteprima del fullscreen.
+    // Niente cursor:crosshair, niente touch-action:none. Tap → apre fullscreen.
+    dr.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;cursor:pointer;z-index:2;';
     bg.id = 'spWidgetBgCanvas';
     dr.id = 'spWidgetDrawCanvas';
     wrap.appendChild(bg);
@@ -2270,43 +2262,14 @@
     widget.visible = true;
     wrap.dataset.spMounted = '1';
 
-    // Pointer handlers (passive:false per permettere preventDefault contro scroll page)
-    dr.addEventListener('pointerdown', function(e) {
-      if (modal && modal.classList.contains('sp-visible')) return; // fullscreen ha la priorità
-      inputTarget = 'widget';
-      startStrokeOn(e, dr);
-    }, { passive: false });
-    dr.addEventListener('pointermove', function(e) {
-      if (inputTarget === 'widget') moveStrokeOn(e, dr);
-    }, { passive: false });
-    dr.addEventListener('pointerup', function(e) {
-      if (inputTarget === 'widget') { endStrokeOn(e); inputTarget = null; }
-      handleAnyPointerEnd(e);
+    // WIDGET READ-ONLY: tap/click sul widget apre il fullscreen.
+    // Niente pointerdown/move/up/cancel/leave: il widget non gestisce input.
+    dr.addEventListener('click', function(e) {
+      if (modal && modal.classList.contains('sp-visible')) return; // già aperto
+      e.preventDefault();
+      e.stopPropagation();
+      open();
     });
-    dr.addEventListener('pointercancel', function(e) {
-      if (inputTarget !== 'widget') { handleAnyPointerEnd(e); return; }
-      // PALM REJECTION: ignora cancel spurio iOS sulla pen
-      if (activePointerType === 'pen' && e.pointerType === 'pen') {
-        handleAnyPointerEnd(e);
-        return;
-      }
-      endStrokeOn(e);
-      inputTarget = null;
-      handleAnyPointerEnd(e);
-    });
-    dr.addEventListener('pointerleave', function(e) {
-      if (!drawing || inputTarget !== 'widget') {
-        handleAnyPointerEnd(e);
-        return;
-      }
-      // PALM REJECTION: idem per pointerleave
-      if (activePointerType === 'pen' && e.pointerType === 'pen') return;
-      endStrokeOn(e);
-      inputTarget = null;
-      handleAnyPointerEnd(e);
-    });
-    // NOTA: rimossi i listener touchstart/touchmove con preventDefault.
-    // Vedi commento analogo nel listener fullscreen.
 
     // Ridimensiona quando il widget cambia dimensione
     if (typeof ResizeObserver !== 'undefined') {
@@ -2322,12 +2285,7 @@
       loadWidgetForCurrentSample();
     }, 50);
 
-    console.log('[SketchPad] Widget editabile montato');
-    // Blocca viewport e gesture iOS al mount (il widget è una superficie
-    // di disegno permanente in replace mode; vogliamo che lo zoom Safari
-    // non interferisca dal primo tratto in poi)
-    lockViewportForDrawing();
-    installGestureBlockers();
+    console.log('[SketchPad] Widget read-only montato (tap per aprire fullscreen)');
     return true;
   }
 
