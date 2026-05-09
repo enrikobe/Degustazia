@@ -920,12 +920,16 @@
     __spIncrementalCtx = __spIncrementalBuffer.getContext('2d');
 
     var preCtx = __spPreStrokeBuffer.getContext('2d');
+    preCtx.setTransform(1, 0, 0, 1, 0, 0);
     preCtx.clearRect(0, 0, __spPreStrokeBuffer.width, __spPreStrokeBuffer.height);
-    preCtx.drawImage(canvas, 0, 0); // copia rapida GPU
+    // Dimensioni esplicite: su Safari iPad drawImage senza dimensioni
+    // può applicare scaling DPR-related causando zoom apparente dei tratti
+    preCtx.drawImage(canvas, 0, 0, __spPreStrokeBuffer.width, __spPreStrokeBuffer.height);
 
     // L'incrementale parte uguale al pre-stroke
+    __spIncrementalCtx.setTransform(1, 0, 0, 1, 0, 0);
     __spIncrementalCtx.clearRect(0, 0, __spIncrementalBuffer.width, __spIncrementalBuffer.height);
-    __spIncrementalCtx.drawImage(__spPreStrokeBuffer, 0, 0);
+    __spIncrementalCtx.drawImage(__spPreStrokeBuffer, 0, 0, __spIncrementalBuffer.width, __spIncrementalBuffer.height);
 
     __spLastRenderedIdx = 0;
   }
@@ -950,7 +954,7 @@
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(__spPreStrokeBuffer, 0, 0);
+      ctx.drawImage(__spPreStrokeBuffer, 0, 0, canvas.width, canvas.height);
       ctx.restore();
       var sX1 = canvas.width / PAPER_W;
       var sY1 = canvas.height / PAPER_H;
@@ -986,10 +990,13 @@
 
     // Step 2: dipingi sul canvas visibile = buffer incrementale + provvisori.
     // I provvisori sono i punti DOPO __spLastRenderedIdx (non ancora consolidati).
+    // CRITICO: dimensioni dst esplicite — su Safari iPad drawImage senza
+    // dimensioni di destinazione può applicare scaling DPR-related, causando
+    // i tratti vecchi (nel buffer) ad apparire ingranditi durante il drawing.
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(__spIncrementalBuffer, 0, 0); // GPU-fast
+    ctx.drawImage(__spIncrementalBuffer, 0, 0, canvas.width, canvas.height);
     ctx.restore();
 
     if (nPts > __spLastRenderedIdx + 1) {
@@ -1425,14 +1432,28 @@
     var st = document.createElement('style');
     st.id = 'sketchPadStyles';
     st.textContent = ''
-      // Disabilita selezione testo e callout iOS su TUTTO il modal e widget editabile.
-      // Pencil su iPad, in assenza di questo, seleziona pulsanti/titoli ad ogni tap.
-      // Eccezione: input/textarea/contenteditable mantengono la selezione.
-      + '.sp-modal,.sp-modal *,#widgetCanvasWrap[data-sp-mounted="1"],#widgetCanvasWrap[data-sp-mounted="1"] *{'
+      // Disabilita selezione testo solo sugli elementi UI (pulsanti, label,
+      // titoli, toolbar) — NON sul foglio o sui canvas. Su Safari iPad
+      // applicare -webkit-touch-callout:none sui canvas attiva un "magnify
+      // preview" durante drawing che zooma i tratti vecchi temporaneamente.
+      + '.sp-topbar,.sp-topbar *,'
+      + '.sp-toolbar,.sp-toolbar *,'
+      + '.sp-bottombar,.sp-bottombar *,'
+      + '.sp-btn,.sp-btn *,'
+      + '#widgetCanvasWrap[data-sp-mounted="1"] .sp-widget-overlay,'
+      + '.widget-notes-switch,.widget-notes-switch *{'
       +   '-webkit-user-select:none !important;user-select:none !important;'
       +   '-webkit-touch-callout:none !important;'
       +   '-webkit-tap-highlight-color:transparent !important;'
       + '}'
+      // Foglio e canvas: solo user-select:none (per evitare selezione testi
+      // che attraversino il foglio), ma NIENTE touch-callout/tap-highlight
+      // che provocano il bug zoom Safari iPad.
+      + '.sp-paper,.sp-paper *,'
+      + '#widgetCanvasWrap[data-sp-mounted="1"] canvas{'
+      +   '-webkit-user-select:none !important;user-select:none !important;'
+      + '}'
+      // Eccezione: input/textarea/contenteditable mantengono la selezione
       + '.sp-modal input,.sp-modal textarea,.sp-modal [contenteditable="true"]{'
       +   '-webkit-user-select:text !important;user-select:text !important;'
       + '}'
