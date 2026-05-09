@@ -75,9 +75,20 @@
 
   // Su tablet, accettiamo solo pointer di tipo 'pen'. Il dito viene
   // bypassato (lasciamo che il browser faccia scroll/pinch nativo).
+  // Caveat: alcune versioni Safari iPad possono classificare Apple Pencil
+  // come 'touch' invece di 'pen'. Riconosciamo la pen anche da pressure
+  // (pen ha pressure variabile != 0.5, dito ha sempre 0 o 0.5 di default).
   function shouldAcceptPointer(e) {
     if (!isTablet()) return true; // desktop: accetto tutto
-    return e.pointerType === 'pen';
+    if (e.pointerType === 'pen') return true;
+    // Apple Pencil su Safari iPad può apparire come 'touch' con pressure
+    // reale (variabile, !=0.5). Il dito ha pressure default 0 o 0.5.
+    // Se è touch ma con pressure variabile, probabilmente è una pen.
+    if (e.pointerType === 'touch' && typeof e.pressure === 'number'
+        && e.pressure > 0 && e.pressure !== 0.5) {
+      return true;
+    }
+    return false;
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -1154,7 +1165,25 @@
   function startStrokeOn(e, targetCanvas) {
     if (e.button !== undefined && e.button !== 0) return;
     // PEN-ONLY su tablet: dito ignorato (lascia browser scrollare/zoomare)
-    if (!shouldAcceptPointer(e)) return;
+    if (!shouldAcceptPointer(e)) {
+      if (window.__SP_DEBUG_DIMS) {
+        console.log('[SketchPad/start] REJECTED:', {
+          pointerType: e.pointerType,
+          pressure: e.pressure,
+          isPrimary: e.isPrimary,
+          isTablet: isTablet()
+        });
+      }
+      return;
+    }
+    if (window.__SP_DEBUG_DIMS) {
+      console.log('[SketchPad/start] ACCEPTED:', {
+        pointerType: e.pointerType,
+        pressure: e.pressure,
+        isPrimary: e.isPrimary,
+        isTablet: isTablet()
+      });
+    }
     // PALM REJECTION early-path: se sta già disegnando una pen e arriva
     // un pointerdown touch (polso), lo respingo subito con preventDefault
     // + stopPropagation per ridurre overhead Safari iPad.
