@@ -1144,7 +1144,7 @@
 
   // Listener pre-emptivo per rifiutare touch del polso prima del rendering pipeline.
   // Su iPad Safari, ridurre l'overhead per i pointer events di pollice/palma
-  // riduce molto il lag percepito quando il polso \u00e8 appoggiato durante drawing.
+  // riduce molto il lag percepito quando il polso è appoggiato durante drawing.
   function rejectPalmEarly(e) {
     if (isPalmEvent(e)) {
       e.preventDefault();
@@ -1152,6 +1152,61 @@
       return true;
     }
     return false;
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // MULTI-POINTER (scroll/zoom a 2 dita su tablet)
+  //
+  // Quando arriva un secondo pointer simultaneo (utente fa pinch/scroll
+  // a 2 dita), annulliamo il tratto in corso e cambiamo touch-action a
+  // 'pan-y pinch-zoom' runtime, lasciando il browser gestire i due
+  // pointer come gesto nativo. Quando entrambi rilasciati → ripristiniamo
+  // touch-action: none.
+  // ────────────────────────────────────────────────────────────────────
+  var activePointersCount = 0;
+  var __spTouchActionElems = []; // elementi con touch-action salvato
+  var __spMultiPointerActive = false;
+
+  function enableNativeGestureMode(canvas) {
+    if (__spMultiPointerActive) return;
+    __spMultiPointerActive = true;
+    __spTouchActionElems = [];
+    var elems = [canvas];
+    if (canvas && canvas.parentElement) elems.push(canvas.parentElement);
+    elems.forEach(function(el) {
+      if (!el) return;
+      __spTouchActionElems.push({ el: el, original: el.style.touchAction || '' });
+      el.style.setProperty('touch-action', 'pan-y pinch-zoom', 'important');
+    });
+  }
+  function disableNativeGestureMode() {
+    if (!__spMultiPointerActive) return;
+    __spMultiPointerActive = false;
+    __spTouchActionElems.forEach(function(item) {
+      if (item.original) {
+        item.el.style.setProperty('touch-action', item.original);
+      } else {
+        item.el.style.removeProperty('touch-action');
+      }
+    });
+    __spTouchActionElems = [];
+  }
+
+  // Annulla il tratto in corso: rimuove dall'array, redrawAll.
+  // Usato quando arriva un secondo pointer (gesto a 2 dita).
+  function abortCurrentStroke() {
+    if (!currentStroke) return;
+    var idx = strokes.indexOf(currentStroke);
+    if (idx !== -1) strokes.splice(idx, 1);
+    currentStroke = null;
+    drawing = false;
+    activePointerId = null;
+    activePointerType = null;
+    clearRectCache();
+    __spLastRenderedIdx = 0;
+    __spActiveCanvas = null;
+    __spActiveCtx = null;
+    redrawAll();
   }
 
   function startStrokeOn(e, targetCanvas) {
@@ -1176,6 +1231,16 @@
         isTablet: isTablet()
       });
     }
+    // MULTI-POINTER: se arriva un 2° pointer simultaneo durante drawing,
+    // significa "utente vuole pinch/scroll, non disegnare". Annullo il
+    // tratto in corso e abilito gesti nativi del browser.
+    if (drawing && activePointerType !== 'pen') {
+      // Solo se NON è una pen attiva (con pen ignoriamo polso = palm rejection)
+      activePointersCount++;
+      abortCurrentStroke();
+      enableNativeGestureMode(targetCanvas);
+      return;
+    }
     // PALM REJECTION early-path: se sta già disegnando una pen e arriva
     // un pointerdown touch (polso), lo respingo subito con preventDefault
     // + stopPropagation per ridurre overhead Safari iPad.
@@ -1189,7 +1254,10 @@
       return;
     }
     if (isArchivedSafe()) return;
+    // Se gesture nativo è attivo (pinch/scroll in corso), non disegnare
+    if (__spMultiPointerActive) return;
     e.preventDefault();
+    activePointersCount = 1;
     drawing = true;
     activePointerId = e.pointerId;
     activePointerType = e.pointerType || null;
@@ -1292,10 +1360,23 @@
     markDirty();
   }
 
+  // Handler unificato fine pointer (qualsiasi tipo): decrementa il count
+  // e ripristina touch-action quando entrambi i pointer sono usciti.
+  function handleAnyPointerEnd(e) {
+    if (activePointersCount > 0) activePointersCount--;
+    if (activePointersCount <= 0) {
+      activePointersCount = 0;
+      if (__spMultiPointerActive) {
+        // Tutti i pointer rilasciati: ripristina touch-action: none
+        disableNativeGestureMode();
+      }
+    }
+  }
+
   // ──── Wrapper: stroke handlers che operano sul canvas fullscreen ────
   function startStroke(e) { startStrokeOn(e, drawCanvas); }
   function moveStroke(e) { moveStrokeOn(e, drawCanvas); }
-  function endStroke(e) { endStrokeOn(e); }
+  function endStroke(e) { endStrokeOn(e); handleAnyPointerEnd(e); }
 
   // ────────────────────────────────────────────────────────────────────
   // LAYOUT (dimensioni del foglio + canvases DPR-aware)
@@ -1738,6 +1819,7 @@
       // dal canvas quando appoggi il polso. Ignora se è la pen attiva.
       if (activePointerType === 'pen' && e.pointerType === 'pen') return;
       if (drawing) endStroke(e);
+      else handleAnyPointerEnd(e); // contabilizza anche se non eravamo drawing
     });
     // NOTA: rimossi i listener touchstart/touchmove con preventDefault.
     // Su Safari iPad, preventDefault su touchstart impedisce anche la
@@ -2076,20 +2158,29 @@
     }, { passive: false });
     dr.addEventListener('pointerup', function(e) {
       if (inputTarget === 'widget') { endStrokeOn(e); inputTarget = null; }
+      handleAnyPointerEnd(e);
     });
     dr.addEventListener('pointercancel', function(e) {
-      if (inputTarget !== 'widget') return;
+      if (inputTarget !== 'widget') { handleAnyPointerEnd(e); return; }
       // PALM REJECTION: ignora cancel spurio iOS sulla pen
-      if (activePointerType === 'pen' && e.pointerType === 'pen') return;
+      if (activePointerType === 'pen' && e.pointerType === 'pen') {
+        handleAnyPointerEnd(e);
+        return;
+      }
       endStrokeOn(e);
       inputTarget = null;
+      handleAnyPointerEnd(e);
     });
     dr.addEventListener('pointerleave', function(e) {
-      if (!drawing || inputTarget !== 'widget') return;
+      if (!drawing || inputTarget !== 'widget') {
+        handleAnyPointerEnd(e);
+        return;
+      }
       // PALM REJECTION: idem per pointerleave
       if (activePointerType === 'pen' && e.pointerType === 'pen') return;
       endStrokeOn(e);
       inputTarget = null;
+      handleAnyPointerEnd(e);
     });
     // NOTA: rimossi i listener touchstart/touchmove con preventDefault.
     // Vedi commento analogo nel listener fullscreen.
