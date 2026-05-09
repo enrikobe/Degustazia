@@ -1543,7 +1543,7 @@
 
   // Versione CSS: incrementare quando si modifica injectStyles().
   // Se in pagina c'è un <style> con versione diversa, viene rimpiazzato.
-  var SP_STYLES_VERSION = '4-pinch-zoom';
+  var SP_STYLES_VERSION = '6-touch-none-stable';
 
   function injectStyles() {
     var existing = document.getElementById('sketchPadStyles');
@@ -1593,16 +1593,17 @@
       + '.sp-pill:active{transform:scale(0.97);}'
       + '.sp-pill.sp-primary{background:#a13648;border-color:#a13648;}'
       + '.sp-pill.sp-primary:hover{background:#b94459;}'
-      + '.sp-stage{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:24px 16px 110px;background:radial-gradient(ellipse at top,rgba(255,255,255,0.04),transparent 60%) #2a2622;touch-action:pan-y pinch-zoom;}'
-      + '.sp-paper{position:relative;margin:0 auto;background:#fdfbf7;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,0.35),0 4px 12px rgba(0,0,0,0.2);aspect-ratio:1240/1754;overflow:hidden;touch-action:pinch-zoom;}'
+      + '.sp-stage{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:24px 16px 110px;background:radial-gradient(ellipse at top,rgba(255,255,255,0.04),transparent 60%) #2a2622;touch-action:pan-y;}'
+      + '.sp-paper{position:relative;margin:0 auto;background:#fdfbf7;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,0.35),0 4px 12px rgba(0,0,0,0.2);aspect-ratio:1240/1754;overflow:hidden;touch-action:none;}'
       + '@supports not (aspect-ratio:1/1){.sp-paper{height:0;padding-top:141.45%;}}'
-      + '.sp-paper canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:pinch-zoom !important;}'
-      + '#spBgCanvas{z-index:1;pointer-events:none;touch-action:pinch-zoom !important;}'
-      + '#spDrawCanvas{z-index:2;cursor:crosshair;touch-action:pinch-zoom !important;}'
-      // Widget editabile: touch-action:pinch-zoom permette pinch (2 dita)
-      // ma blocca pan (1 dito) → 1 dito = disegno, 2 dita = zoom pagina.
-      + '#widgetCanvasWrap[data-sp-mounted="1"]{touch-action:pinch-zoom !important;}'
-      + '#widgetCanvasWrap[data-sp-mounted="1"] canvas{touch-action:pinch-zoom !important;}'
+      + '.sp-paper canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none !important;}'
+      + '#spBgCanvas{z-index:1;pointer-events:none;touch-action:none !important;}'
+      + '#spDrawCanvas{z-index:2;cursor:crosshair;touch-action:none !important;}'
+      // Widget editabile: touch-action:none → tutti i pointerdown vengono
+      // catturati dal mio handler, niente scroll/zoom involontario.
+      // Lo scroll/zoom a 2 dita non funziona qui — compromesso accettato.
+      + '#widgetCanvasWrap[data-sp-mounted="1"]{touch-action:none !important;}'
+      + '#widgetCanvasWrap[data-sp-mounted="1"] canvas{touch-action:none !important;}'
       + '.sp-paper-edge{position:absolute;inset:0;border-radius:6px;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.04);}'
       + '.sp-toolbar{position:absolute;bottom:max(14px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:rgba(36,32,28,0.92);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:8px;display:flex;gap:4px;align-items:center;box-shadow:0 14px 40px rgba(0,0,0,0.5);max-width:calc(100vw - 24px);overflow-x:auto;z-index:20;-webkit-overflow-scrolling:touch;scrollbar-width:none;}'
       + '.sp-toolbar::-webkit-scrollbar{display:none;}'
@@ -2038,7 +2039,7 @@
     var bg = document.createElement('canvas');
     var dr = document.createElement('canvas');
     bg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;pointer-events:none;z-index:1;';
-    dr.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;cursor:crosshair;z-index:2;touch-action:pinch-zoom;';
+    dr.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;cursor:crosshair;z-index:2;touch-action:none;';
     bg.id = 'spWidgetBgCanvas';
     dr.id = 'spWidgetDrawCanvas';
     wrap.appendChild(bg);
