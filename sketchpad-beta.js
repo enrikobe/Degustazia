@@ -73,14 +73,15 @@
     return isTabletDevice;
   }
 
-  // Su tablet, in passato accettavamo solo pointer 'pen'. Ma su iPad
-  // Safari, la Apple Pencil viene a volte classificata come 'touch'
-  // (dipende da versione iOS / config). Distinguere pen da dito via
-  // pointerType è inaffidabile. Quindi accettiamo TUTTI i pointer.
-  // Lo scroll/zoom multi-finger viene permesso da touch-action: pinch-zoom
-  // sui canvas (1 dito = disegno; 2+ dita = scroll/zoom nativo).
+  // Su tablet, accettiamo SOLO pointerType='pen' come input di disegno.
+  // Il dito non disegna — viene gestito a livello multi-pointer (scroll/pinch
+  // a 2 dita via touch-action) o ignorato. Questo evita che il polso, che
+  // arriva come 'touch', faccia partire un tratto "fantasma" prima della pen.
+  // Sul desktop accettiamo tutto (mouse, pen Wacom, ecc).
+  // Override per debug: window.__SP_FORCE_TABLET = true|false
   function shouldAcceptPointer(e) {
-    return true; // accetto sempre — la distinzione avviene a livello CSS
+    if (!isTablet()) return true;
+    return e.pointerType === 'pen';
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -1749,7 +1750,7 @@
 
   // Versione CSS: incrementare quando si modifica injectStyles().
   // Se in pagina c'è un <style> con versione diversa, viene rimpiazzato.
-  var SP_STYLES_VERSION = '9-streamlined';
+  var SP_STYLES_VERSION = '10-pen-only-tablet';
 
   function injectStyles() {
     var existing = document.getElementById('sketchPadStyles');
