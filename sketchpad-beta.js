@@ -1023,8 +1023,30 @@
   // ────────────────────────────────────────────────────────────────────
   // INPUT HANDLING
   // ────────────────────────────────────────────────────────────────────
+  // CACHE rect canvas per la durata del tratto.
+  // Su iPad Safari getBoundingClientRect() forza layout reflow su ogni
+  // chiamata; chiamarlo per ogni punto Pencil (120Hz) crea lag percepibile.
+  // Misuriamo una volta a startStroke e riusiamo. Resettiamo a endStroke.
+  var __spCachedRect = null;
+  var __spCachedRectCanvas = null;
+
+  function refreshRectCache(canvas) {
+    __spCachedRect = canvas.getBoundingClientRect();
+    __spCachedRectCanvas = canvas;
+  }
+  function clearRectCache() {
+    __spCachedRect = null;
+    __spCachedRectCanvas = null;
+  }
+
   function pointerToPaperFor(e, canvas) {
-    var rect = canvas.getBoundingClientRect();
+    // Usa il rect cached se è per lo stesso canvas, altrimenti misura
+    var rect;
+    if (__spCachedRect && __spCachedRectCanvas === canvas) {
+      rect = __spCachedRect;
+    } else {
+      rect = canvas.getBoundingClientRect();
+    }
     var cssX = e.clientX - rect.left;
     var cssY = e.clientY - rect.top;
     var x = (cssX / rect.width) * PAPER_W;
@@ -1096,14 +1118,36 @@
   // (compreso pointercancel/pointerleave) per la durata del tratto.
   var activePointerType = null; // 'pen' | 'touch' | 'mouse' | null
 
+  // Helper rapidissimo: l'evento è del polso (touch) mentre la pen è attiva?
+  // Inline-friendly, hot path dei pointermove.
+  function isPalmEvent(e) {
+    return activePointerType === 'pen' && e.pointerType === 'touch';
+  }
+
+  // Listener pre-emptivo per rifiutare touch del polso prima del rendering pipeline.
+  // Su iPad Safari, ridurre l'overhead per i pointer events di pollice/palma
+  // riduce molto il lag percepito quando il polso \u00e8 appoggiato durante drawing.
+  function rejectPalmEarly(e) {
+    if (isPalmEvent(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return true;
+    }
+    return false;
+  }
+
   function startStrokeOn(e, targetCanvas) {
     if (e.button !== undefined && e.button !== 0) return;
+    // PALM REJECTION early-path: se sta gi\u00e0 disegnando una pen e arriva
+    // un pointerdown touch (polso), lo respingo subito con preventDefault
+    // + stopPropagation per ridurre overhead Safari iPad.
     if (drawing) {
-      // PALM REJECTION: stiamo già disegnando con un pointer.
-      // Se quello attivo è una pen e questo nuovo è touch (polso), ignoralo.
-      // Inoltre preveniamo il default per evitare che il browser interpreti
-      // come gesture (es. scroll a 2 dita).
-      if (e.preventDefault) e.preventDefault();
+      if (isPalmEvent(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (e.preventDefault) {
+        e.preventDefault();
+      }
       return;
     }
     if (isArchivedSafe()) return;
@@ -1112,6 +1156,9 @@
     activePointerId = e.pointerId;
     activePointerType = e.pointerType || null;
     try { targetCanvas.setPointerCapture(e.pointerId); } catch(_e) {}
+
+    // Cache rect canvas per evitare reflow Safari iPad ad ogni punto
+    refreshRectCache(targetCanvas);
 
     // ANTI-ZOOM: blocca gesture e fissa viewport per la durata del tratto
     lockViewportForDrawing();
@@ -1169,9 +1216,14 @@
 
   function moveStrokeOn(e, targetCanvas) {
     if (!drawing || !currentStroke) return;
-    // PALM REJECTION: ignora movimenti di pointer diversi da quello attivo
+    // PALM REJECTION fast path: pointermove del polso bloccato senza ulteriore lavoro
     if (e.pointerId !== activePointerId) {
-      if (e.preventDefault) e.preventDefault();
+      if (isPalmEvent(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+      } else if (e.preventDefault) {
+        e.preventDefault();
+      }
       return;
     }
     e.preventDefault();
@@ -1191,6 +1243,7 @@
     drawing = false;
     activePointerId = null;
     activePointerType = null;
+    clearRectCache();
     // Cleanup buffer (lasciamo i canvas allocati per riuso al prossimo tratto)
     __spLastRenderedIdx = 0;
     __spActiveCanvas = null;
