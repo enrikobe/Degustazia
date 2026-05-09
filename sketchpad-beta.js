@@ -73,22 +73,14 @@
     return isTabletDevice;
   }
 
-  // Su tablet, accettiamo solo pointer di tipo 'pen'. Il dito viene
-  // bypassato (lasciamo che il browser faccia scroll/pinch nativo).
-  // Caveat: alcune versioni Safari iPad possono classificare Apple Pencil
-  // come 'touch' invece di 'pen'. Riconosciamo la pen anche da pressure
-  // (pen ha pressure variabile != 0.5, dito ha sempre 0 o 0.5 di default).
+  // Su tablet, in passato accettavamo solo pointer 'pen'. Ma su iPad
+  // Safari, la Apple Pencil viene a volte classificata come 'touch'
+  // (dipende da versione iOS / config). Distinguere pen da dito via
+  // pointerType è inaffidabile. Quindi accettiamo TUTTI i pointer.
+  // Lo scroll/zoom multi-finger viene permesso da touch-action: pinch-zoom
+  // sui canvas (1 dito = disegno; 2+ dita = scroll/zoom nativo).
   function shouldAcceptPointer(e) {
-    if (!isTablet()) return true; // desktop: accetto tutto
-    if (e.pointerType === 'pen') return true;
-    // Apple Pencil su Safari iPad può apparire come 'touch' con pressure
-    // reale (variabile, !=0.5). Il dito ha pressure default 0 o 0.5.
-    // Se è touch ma con pressure variabile, probabilmente è una pen.
-    if (e.pointerType === 'touch' && typeof e.pressure === 'number'
-        && e.pressure > 0 && e.pressure !== 0.5) {
-      return true;
-    }
-    return false;
+    return true; // accetto sempre — la distinzione avviene a livello CSS
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -1592,16 +1584,15 @@
       + '.sp-pill.sp-primary{background:#a13648;border-color:#a13648;}'
       + '.sp-pill.sp-primary:hover{background:#b94459;}'
       + '.sp-stage{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:24px 16px 110px;background:radial-gradient(ellipse at top,rgba(255,255,255,0.04),transparent 60%) #2a2622;touch-action:pan-y pinch-zoom;}'
-      + '.sp-paper{position:relative;margin:0 auto;background:#fdfbf7;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,0.35),0 4px 12px rgba(0,0,0,0.2);aspect-ratio:1240/1754;overflow:hidden;touch-action:manipulation;}'
+      + '.sp-paper{position:relative;margin:0 auto;background:#fdfbf7;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,0.35),0 4px 12px rgba(0,0,0,0.2);aspect-ratio:1240/1754;overflow:hidden;touch-action:pinch-zoom;}'
       + '@supports not (aspect-ratio:1/1){.sp-paper{height:0;padding-top:141.45%;}}'
-      + '.sp-paper canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:manipulation !important;}'
-      + '#spBgCanvas{z-index:1;pointer-events:none;touch-action:manipulation !important;}'
-      + '#spDrawCanvas{z-index:2;cursor:crosshair;touch-action:manipulation !important;}'
-      // Widget editabile: touch-action:manipulation permette dito di scrollare/
-      // pinch-zoomare la pagina; pen disegna senza interferenze (pen events
-      // non sono soggetti a touch-action come i touch events).
-      + '#widgetCanvasWrap[data-sp-mounted="1"]{touch-action:manipulation !important;}'
-      + '#widgetCanvasWrap[data-sp-mounted="1"] canvas{touch-action:manipulation !important;}'
+      + '.sp-paper canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:pinch-zoom !important;}'
+      + '#spBgCanvas{z-index:1;pointer-events:none;touch-action:pinch-zoom !important;}'
+      + '#spDrawCanvas{z-index:2;cursor:crosshair;touch-action:pinch-zoom !important;}'
+      // Widget editabile: touch-action:pinch-zoom permette pinch (2 dita)
+      // ma blocca pan (1 dito) → 1 dito = disegno, 2 dita = zoom pagina.
+      + '#widgetCanvasWrap[data-sp-mounted="1"]{touch-action:pinch-zoom !important;}'
+      + '#widgetCanvasWrap[data-sp-mounted="1"] canvas{touch-action:pinch-zoom !important;}'
       + '.sp-paper-edge{position:absolute;inset:0;border-radius:6px;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.04);}'
       + '.sp-toolbar{position:absolute;bottom:max(14px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:rgba(36,32,28,0.92);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:8px;display:flex;gap:4px;align-items:center;box-shadow:0 14px 40px rgba(0,0,0,0.5);max-width:calc(100vw - 24px);overflow-x:auto;z-index:20;-webkit-overflow-scrolling:touch;scrollbar-width:none;}'
       + '.sp-toolbar::-webkit-scrollbar{display:none;}'
@@ -2032,7 +2023,7 @@
     var bg = document.createElement('canvas');
     var dr = document.createElement('canvas');
     bg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;pointer-events:none;z-index:1;';
-    dr.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;cursor:crosshair;z-index:2;touch-action:manipulation;';
+    dr.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;cursor:crosshair;z-index:2;touch-action:pinch-zoom;';
     bg.id = 'spWidgetBgCanvas';
     dr.id = 'spWidgetDrawCanvas';
     wrap.appendChild(bg);
