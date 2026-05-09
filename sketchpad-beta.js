@@ -1670,17 +1670,11 @@
       if (activePointerType === 'pen' && e.pointerType === 'pen') return;
       if (drawing) endStroke(e);
     });
-    // Belt-and-suspenders: blocca touchmove nativi durante drawing.
-    // Lascia passare gesti a 2+ dita (scroll page / pinch utente) — NON è
-    // disegno: l'utente vuole scrollare la pagina o zoomare lo stage.
-    drawCanvas.addEventListener('touchstart', function(e) {
-      if (e.touches && e.touches.length >= 2) return; // multi-finger: scroll/zoom
-      e.preventDefault();
-    }, { passive: false });
-    drawCanvas.addEventListener('touchmove', function(e) {
-      if (e.touches && e.touches.length >= 2) return;
-      e.preventDefault();
-    }, { passive: false });
+    // NOTA: rimossi i listener touchstart/touchmove con preventDefault.
+    // Su Safari iPad, preventDefault su touchstart impedisce anche la
+    // generazione dei pointer events successivi: pencil e dito non
+    // riuscivano a disegnare. I pointerdown listener con preventDefault
+    // sono sufficienti per bloccare scroll durante drawing.
 
     // Toolbar handlers
     modal.querySelector('#spPenBtn').onclick = function() { setTool('pen'); };
@@ -2023,16 +2017,8 @@
       endStrokeOn(e);
       inputTarget = null;
     });
-    // Belt-and-suspenders: blocca touchmove nativi (iOS-safe).
-    // Lascia passare gesti a 2+ dita per scroll/zoom intenzionale.
-    dr.addEventListener('touchstart', function(e) {
-      if (e.touches && e.touches.length >= 2) return;
-      e.preventDefault();
-    }, { passive: false });
-    dr.addEventListener('touchmove', function(e) {
-      if (e.touches && e.touches.length >= 2) return;
-      e.preventDefault();
-    }, { passive: false });
+    // NOTA: rimossi i listener touchstart/touchmove con preventDefault.
+    // Vedi commento analogo nel listener fullscreen.
 
     // Ridimensiona quando il widget cambia dimensione
     if (typeof ResizeObserver !== 'undefined') {
