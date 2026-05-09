@@ -47,6 +47,40 @@
   var REPLACE_MODE_KEY = 'sketchpad_replace_mode_v1';
 
   // ────────────────────────────────────────────────────────────────────
+  // PEN-ONLY MODE su tablet
+  // Su tablet (iPad/Android pen-capable), accettiamo SOLO Apple Pencil/
+  // stilo per disegnare. Il dito viene ignorato → l'utente può scrollare
+  // / pinch-zoomare la pagina con dita libere. Esperienza identica a
+  // GoodNotes/Notability/Obsidian Canvas.
+  // Sul desktop (mouse + trackpad), tutto funziona normalmente.
+  // ────────────────────────────────────────────────────────────────────
+  var isTabletDevice = (function() {
+    try {
+      // 1. iPad (iOS 13+ si maschera come Mac, controlla maxTouchPoints)
+      var ua = navigator.userAgent || '';
+      var isIPad = /iPad/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      // 2. Android tablet
+      var isAndroidTablet = /Android/.test(ua) && !/Mobile/.test(ua);
+      // 3. Generico touch device con maxTouchPoints alto
+      var isTouchDevice = (navigator.maxTouchPoints || 0) > 1;
+      return isIPad || isAndroidTablet || (isTouchDevice && !/(Windows|Macintosh|Linux x86)/.test(ua));
+    } catch(e) { return false; }
+  })();
+  // Override manuale per debug:
+  // window.__SP_FORCE_TABLET = true|false (se settato, vince)
+  function isTablet() {
+    if (typeof window.__SP_FORCE_TABLET === 'boolean') return window.__SP_FORCE_TABLET;
+    return isTabletDevice;
+  }
+
+  // Su tablet, accettiamo solo pointer di tipo 'pen'. Il dito viene
+  // bypassato (lasciamo che il browser faccia scroll/pinch nativo).
+  function shouldAcceptPointer(e) {
+    if (!isTablet()) return true; // desktop: accetto tutto
+    return e.pointerType === 'pen';
+  }
+
+  // ────────────────────────────────────────────────────────────────────
   // REPLACE MODE
   // Quando attivo, SketchPad sostituisce il vecchio sistema in tutti i
   // punti d'accesso (Espandi, Stampa, Anteprima, Widget editabile).
@@ -1119,7 +1153,9 @@
 
   function startStrokeOn(e, targetCanvas) {
     if (e.button !== undefined && e.button !== 0) return;
-    // PALM REJECTION early-path: se sta gi\u00e0 disegnando una pen e arriva
+    // PEN-ONLY su tablet: dito ignorato (lascia browser scrollare/zoomare)
+    if (!shouldAcceptPointer(e)) return;
+    // PALM REJECTION early-path: se sta già disegnando una pen e arriva
     // un pointerdown touch (polso), lo respingo subito con preventDefault
     // + stopPropagation per ridurre overhead Safari iPad.
     if (drawing) {
@@ -1526,15 +1562,17 @@
       + '.sp-pill:active{transform:scale(0.97);}'
       + '.sp-pill.sp-primary{background:#a13648;border-color:#a13648;}'
       + '.sp-pill.sp-primary:hover{background:#b94459;}'
-      + '.sp-stage{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:24px 16px 110px;background:radial-gradient(ellipse at top,rgba(255,255,255,0.04),transparent 60%) #2a2622;touch-action:pan-y;}'
-      + '.sp-paper{position:relative;margin:0 auto;background:#fdfbf7;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,0.35),0 4px 12px rgba(0,0,0,0.2);aspect-ratio:1240/1754;overflow:hidden;touch-action:none;}'
+      + '.sp-stage{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:24px 16px 110px;background:radial-gradient(ellipse at top,rgba(255,255,255,0.04),transparent 60%) #2a2622;touch-action:pan-y pinch-zoom;}'
+      + '.sp-paper{position:relative;margin:0 auto;background:#fdfbf7;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,0.35),0 4px 12px rgba(0,0,0,0.2);aspect-ratio:1240/1754;overflow:hidden;touch-action:manipulation;}'
       + '@supports not (aspect-ratio:1/1){.sp-paper{height:0;padding-top:141.45%;}}'
-      + '.sp-paper canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none !important;}'
-      + '#spBgCanvas{z-index:1;pointer-events:none;touch-action:none !important;}'
-      + '#spDrawCanvas{z-index:2;cursor:crosshair;touch-action:none !important;}'
-      // Widget editabile in replace mode: wrap + canvas tutti con touch-action:none
-      + '#widgetCanvasWrap[data-sp-mounted="1"]{touch-action:none !important;}'
-      + '#widgetCanvasWrap[data-sp-mounted="1"] canvas{touch-action:none !important;}'
+      + '.sp-paper canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:manipulation !important;}'
+      + '#spBgCanvas{z-index:1;pointer-events:none;touch-action:manipulation !important;}'
+      + '#spDrawCanvas{z-index:2;cursor:crosshair;touch-action:manipulation !important;}'
+      // Widget editabile: touch-action:manipulation permette dito di scrollare/
+      // pinch-zoomare la pagina; pen disegna senza interferenze (pen events
+      // non sono soggetti a touch-action come i touch events).
+      + '#widgetCanvasWrap[data-sp-mounted="1"]{touch-action:manipulation !important;}'
+      + '#widgetCanvasWrap[data-sp-mounted="1"] canvas{touch-action:manipulation !important;}'
       + '.sp-paper-edge{position:absolute;inset:0;border-radius:6px;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.04);}'
       + '.sp-toolbar{position:absolute;bottom:max(14px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:rgba(36,32,28,0.92);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:8px;display:flex;gap:4px;align-items:center;box-shadow:0 14px 40px rgba(0,0,0,0.5);max-width:calc(100vw - 24px);overflow-x:auto;z-index:20;-webkit-overflow-scrolling:touch;scrollbar-width:none;}'
       + '.sp-toolbar::-webkit-scrollbar{display:none;}'
@@ -1965,7 +2003,7 @@
     var bg = document.createElement('canvas');
     var dr = document.createElement('canvas');
     bg.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;pointer-events:none;z-index:1;';
-    dr.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;cursor:crosshair;z-index:2;touch-action:none;';
+    dr.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:block;cursor:crosshair;z-index:2;touch-action:manipulation;';
     bg.id = 'spWidgetBgCanvas';
     dr.id = 'spWidgetDrawCanvas';
     wrap.appendChild(bg);
