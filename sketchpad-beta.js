@@ -1204,6 +1204,10 @@
     activePointerType = null;
     clearRectCache();
     __spLastRenderedIdx = 0;
+    if (__spActiveCtx) {
+      __spActiveCtx.globalAlpha = 1;
+      __spActiveCtx.globalCompositeOperation = 'source-over';
+    }
     __spActiveCanvas = null;
     __spActiveCtx = null;
     redrawAll();
@@ -1220,6 +1224,10 @@
     activePointersCount = 0;
     currentStroke = null;
     __spLastRenderedIdx = 0;
+    if (__spActiveCtx) {
+      __spActiveCtx.globalAlpha = 1;
+      __spActiveCtx.globalCompositeOperation = 'source-over';
+    }
     __spActiveCanvas = null;
     __spActiveCtx = null;
     clearRectCache();
@@ -1354,32 +1362,31 @@
     };
     strokes.push(currentStroke);
 
-    // Dipingi il primo punto immediatamente (cerchio di partenza)
+    // SETUP CTX UNA VOLTA SOLA: transform + style + lineCap.
+    // moveStrokeOn dopo non dovrà toccare nulla, solo beginPath/lineTo/stroke.
     var sX = targetCanvas.width / PAPER_W;
     var sY = targetCanvas.height / PAPER_H;
     ctxLocal.setTransform(sX, 0, 0, sY, 0, 0);
+    ctxLocal.lineCap = 'round';
+    ctxLocal.lineJoin = 'round';
+    ctxLocal.lineWidth = sizeLogical;
+    ctxLocal.strokeStyle = strokeColor;
+    ctxLocal.fillStyle = strokeColor;
     if (tool === 'eraser') {
-      ctxLocal.save();
       ctxLocal.globalCompositeOperation = 'destination-out';
-      ctxLocal.fillStyle = '#000';
-      ctxLocal.beginPath();
-      ctxLocal.arc(firstPt[0], firstPt[1], sizeLogical / 2, 0, Math.PI * 2);
-      ctxLocal.fill();
-      ctxLocal.restore();
+      ctxLocal.globalAlpha = 1;
     } else if (tool === 'highlighter') {
-      ctxLocal.save();
+      ctxLocal.globalCompositeOperation = 'source-over';
       ctxLocal.globalAlpha = alpha;
-      ctxLocal.fillStyle = strokeColor;
-      ctxLocal.beginPath();
-      ctxLocal.arc(firstPt[0], firstPt[1], sizeLogical / 2, 0, Math.PI * 2);
-      ctxLocal.fill();
-      ctxLocal.restore();
     } else {
-      ctxLocal.fillStyle = strokeColor;
-      ctxLocal.beginPath();
-      ctxLocal.arc(firstPt[0], firstPt[1], sizeLogical / 2, 0, Math.PI * 2);
-      ctxLocal.fill();
+      ctxLocal.globalCompositeOperation = 'source-over';
+      ctxLocal.globalAlpha = 1;
     }
+
+    // Dot iniziale (cerchio piccolo) per gestire tap singolo senza move
+    ctxLocal.beginPath();
+    ctxLocal.arc(firstPt[0], firstPt[1], sizeLogical / 2, 0, Math.PI * 2);
+    ctxLocal.fill();
   }
 
   function moveStrokeOn(e, targetCanvas) {
@@ -1396,59 +1403,38 @@
     }
     e.preventDefault();
 
-    // RAW DRAWING: dipingi i nuovi segmenti DIRETTAMENTE sul canvas attivo,
-    // senza buffer/snapshot. Massima fluidità su tablet. Al rilascio,
-    // redrawAll() ridipinge tutto correttamente con smoothing accurato.
+    // Profiler opt-in: window.__SP_PROFILE = true → logga tempo per move
+    var __t0 = window.__SP_PROFILE ? performance.now() : 0;
+
+    // RAW DRAWING ULTRA-OTTIMIZZATO:
+    // - Niente setTransform (già settato in startStroke)
+    // - Niente cerchio di raccordo (lineCap:round già lo fa)
+    // - Niente save/restore (lasciamo lo stato del context invariato)
+    // - Solo: leggi punto + stroke linea
+    var ctx = __spActiveCtx;
+    if (!ctx) return;
     var events = (e.getCoalescedEvents && e.getCoalescedEvents()) || [e];
     var pts = currentStroke.points;
-    var ctx = __spActiveCtx;
-    if (!ctx) {
-      // Fallback: se l'active ctx non è settato, usa quello del canvas
-      ctx = (targetCanvas === drawCanvas) ? drawCtx
-          : (widget.drawCanvas === targetCanvas) ? widget.drawCtx
-          : targetCanvas.getContext('2d');
-      __spActiveCtx = ctx;
-    }
-    if (!ctx) return;
+    var prevPt = pts[pts.length - 1];
 
-    // Setta transform per paper-space (idempotente, è ok rifarlo)
-    var sX = targetCanvas.width / PAPER_W;
-    var sY = targetCanvas.height / PAPER_H;
-    ctx.setTransform(sX, 0, 0, sY, 0, 0);
-
-    // Compositing per evidenziatore/gomma
-    var prevComp = ctx.globalCompositeOperation;
-    var prevAlpha = ctx.globalAlpha;
-    if (currentStroke.tool === 'eraser') {
-      ctx.globalCompositeOperation = 'destination-out';
-    } else if (currentStroke.tool === 'highlighter') {
-      ctx.globalAlpha = currentStroke.alpha || 0.38;
-    }
-    ctx.fillStyle = currentStroke.color;
-    ctx.strokeStyle = currentStroke.color;
-    ctx.lineCap = 'round';
-
-    var halfSize = currentStroke.size / 2;
-    var prevPt = pts[pts.length - 1] || null;
+    // Inizia un singolo path per tutti i segmenti coalesced (più veloce
+    // che fare beginPath/stroke per ognuno)
+    ctx.beginPath();
+    ctx.moveTo(prevPt[0], prevPt[1]);
     for (var i = 0; i < events.length; i++) {
       var pt = pointerToPaperFor(events[i], targetCanvas);
       pts.push(pt);
-      // Disegno raw: linea da prevPt a pt, con cerchio di raccordo a pt
-      if (prevPt) {
-        ctx.beginPath();
-        ctx.lineWidth = currentStroke.size;
-        ctx.moveTo(prevPt[0], prevPt[1]);
-        ctx.lineTo(pt[0], pt[1]);
-        ctx.stroke();
-      }
-      ctx.beginPath();
-      ctx.arc(pt[0], pt[1], halfSize, 0, Math.PI * 2);
-      ctx.fill();
-      prevPt = pt;
+      ctx.lineTo(pt[0], pt[1]);
     }
+    ctx.stroke();
 
-    ctx.globalCompositeOperation = prevComp;
-    ctx.globalAlpha = prevAlpha;
+    if (window.__SP_PROFILE) {
+      var __dt = performance.now() - __t0;
+      if (__dt > 4 || (window.__SP_PROFILE_ALL)) {
+        // Logga solo i frame "lenti" (>4ms) per non spammare console
+        console.log('[SP/move]', __dt.toFixed(2) + 'ms', 'coalesced:', events.length);
+      }
+    }
   }
 
   function endStrokeOn(e) {
@@ -1461,6 +1447,12 @@
     activePointerType = null;
     clearRectCache();
     __spLastRenderedIdx = 0;
+    // Ripristina context state pulito (highlighter ha lasciato globalAlpha=0.38,
+    // eraser ha lasciato globalCompositeOperation='destination-out').
+    if (__spActiveCtx) {
+      __spActiveCtx.globalAlpha = 1;
+      __spActiveCtx.globalCompositeOperation = 'source-over';
+    }
     __spActiveCanvas = null;
     __spActiveCtx = null;
     // RAW DRAWING: niente redrawAll al rilascio. Il tratto resta esattamente
