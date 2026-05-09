@@ -1460,13 +1460,22 @@
     activePointerId = null;
     activePointerType = null;
     clearRectCache();
-    // Cleanup buffer (lasciamo i canvas allocati per riuso al prossimo tratto)
     __spLastRenderedIdx = 0;
     __spActiveCanvas = null;
     __spActiveCtx = null;
-    // Adesso ridipingi tutto correttamente: corregge il widthing finale
-    // del tratto (smoothing completo) e aggiorna l'altro canvas se presente
-    redrawAll();
+    // RAW DRAWING: niente redrawAll al rilascio. Il tratto resta esattamente
+    // come l'utente lo ha visto durante drawing. Niente "snap" cosmetico.
+    // Il sync con widget/fullscreen avviene solo a chiusura modal o cambio
+    // campione (vedi close()).
+    // Aggiorna il widget se sta osservando lo stesso campione (specchio
+    // visivo, non rendering pesante)
+    if (widget.canvas && widget.visible
+        && __spActiveCanvas !== widget.drawCanvas
+        && widget.contextKey === openContextKey) {
+      // Il widget potrebbe essere desync: lo sincronizziamo. Costa una
+      // volta sola, dopo il rilascio (no impact su fluidità drawing).
+      renderStrokesOn(widget.drawCtx, widget.drawCanvas);
+    }
     currentStroke = null;
     markDirty();
   }
@@ -1503,9 +1512,19 @@
     setupCanvases();
   }
 
+  // DPR effettivo: capped a 1.5 su tablet per ridurre il numero di pixel
+  // da renderizzare. iPad retina ha DPR=2 → canvas 4x più grande del CSS,
+  // quindi 4x più pixel da scrivere ad ogni stroke. Capping a 1.5 = 56%
+  // dei pixel, ~80% di velocità in più con perdita di nitidezza minima.
+  function effectiveDPR() {
+    var raw = Math.max(1, window.devicePixelRatio || 1);
+    if (isTablet()) return Math.min(raw, 1.5);
+    return raw;
+  }
+
   function setupCanvases() {
     if (!bgCanvas || !drawCanvas || !paperEl) return;
-    var dpr = Math.max(1, window.devicePixelRatio || 1);
+    var dpr = effectiveDPR();
     var cssW = paperEl.clientWidth;
     var cssH = paperEl.clientHeight;
     if (cssW < 10 || cssH < 10) return; // non ancora layoutato
@@ -2322,7 +2341,7 @@
 
   function fitWidget() {
     if (!widget.canvas) return;
-    var dpr = Math.max(1, window.devicePixelRatio || 1);
+    var dpr = effectiveDPR();
     var cssW = widget.canvas.clientWidth;
     var cssH = widget.canvas.clientHeight;
     if (cssW < 10 || cssH < 10) return;
