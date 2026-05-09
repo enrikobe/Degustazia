@@ -11973,7 +11973,7 @@ document.addEventListener('DOMContentLoaded', function() {
       fabricCanvas.freeDrawingBrush.color = currentColor;
       fabricCanvas.freeDrawingBrush.width = STROKE_SIZES[currentStroke] || 2;
       fabricCanvas.freeDrawingBrush.limitedToCanvasSize = true;
-      fabricCanvas.freeDrawingBrush.decimate = 15;
+      fabricCanvas.freeDrawingBrush.decimate = 10;
       
       // V196: Setup object-based eraser
       setupEraserMode(fabricCanvas);
@@ -12068,21 +12068,21 @@ document.addEventListener('DOMContentLoaded', function() {
         fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
         fabricCanvas.freeDrawingBrush.color = hexToRgba(currentHighlighterColor, 0.4);
         fabricCanvas.freeDrawingBrush.width = strokeWidth * 8;
-        fabricCanvas.freeDrawingBrush.decimate = 15;
+        fabricCanvas.freeDrawingBrush.decimate = 10;
       } else if (currentTool === 'pencil') {
         fabricCanvas._isEraserMode = false;
         fabricCanvas.isDrawingMode = true;
         fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
         fabricCanvas.freeDrawingBrush.color = currentColor;
         fabricCanvas.freeDrawingBrush.width = Math.max(1, strokeWidth * 0.5);
-        fabricCanvas.freeDrawingBrush.decimate = 15;
+        fabricCanvas.freeDrawingBrush.decimate = 10;
       } else {
         fabricCanvas._isEraserMode = false;
         fabricCanvas.isDrawingMode = true;
         fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
         fabricCanvas.freeDrawingBrush.color = currentColor;
         fabricCanvas.freeDrawingBrush.width = strokeWidth;
-        fabricCanvas.freeDrawingBrush.decimate = 15;
+        fabricCanvas.freeDrawingBrush.decimate = 10;
       }
       
       if (fabricCanvas.freeDrawingBrush) {
@@ -12609,7 +12609,7 @@ document.addEventListener('DOMContentLoaded', function() {
       widgetCanvas.freeDrawingBrush.color = currentColor;
       widgetCanvas.freeDrawingBrush.width = STROKE_SIZES[currentStroke] || 2;
       widgetCanvas.freeDrawingBrush.limitedToCanvasSize = true;
-      widgetCanvas.freeDrawingBrush.decimate = 15;
+      widgetCanvas.freeDrawingBrush.decimate = 10;
       
       // V196: Setup object-based eraser for widget
       setupEraserMode(widgetCanvas);
