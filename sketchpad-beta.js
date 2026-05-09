@@ -1327,8 +1327,9 @@
       });
     }
 
-    // Snapshot del canvas PRIMA di aggiungere il nuovo tratto
-    captureSnapshotForStroke(targetCanvas, ctxLocal);
+    // RAW DRAWING: niente snapshot del canvas, niente buffer off-screen.
+    // Il canvas già contiene tutti i tratti precedenti renderizzati da
+    // redrawAll(). Aggiungiamo il nuovo tratto sopra, punto per punto.
 
     var sizeLogical;
     var strokeColor = color;
@@ -1341,17 +1342,44 @@
     } else sizeLogical = strokeSize * 1.6;
 
     var isMouse = (e.pointerType === 'mouse');
+    var firstPt = pointerToPaperFor(e, targetCanvas);
     currentStroke = {
       tool: tool,
       color: strokeColor,
       alpha: alpha,
       size: sizeLogical,
-      points: [pointerToPaperFor(e, targetCanvas)],
+      points: [firstPt],
       simulatePressure: isMouse,
       done: false
     };
     strokes.push(currentStroke);
-    scheduleStrokeFrame();
+
+    // Dipingi il primo punto immediatamente (cerchio di partenza)
+    var sX = targetCanvas.width / PAPER_W;
+    var sY = targetCanvas.height / PAPER_H;
+    ctxLocal.setTransform(sX, 0, 0, sY, 0, 0);
+    if (tool === 'eraser') {
+      ctxLocal.save();
+      ctxLocal.globalCompositeOperation = 'destination-out';
+      ctxLocal.fillStyle = '#000';
+      ctxLocal.beginPath();
+      ctxLocal.arc(firstPt[0], firstPt[1], sizeLogical / 2, 0, Math.PI * 2);
+      ctxLocal.fill();
+      ctxLocal.restore();
+    } else if (tool === 'highlighter') {
+      ctxLocal.save();
+      ctxLocal.globalAlpha = alpha;
+      ctxLocal.fillStyle = strokeColor;
+      ctxLocal.beginPath();
+      ctxLocal.arc(firstPt[0], firstPt[1], sizeLogical / 2, 0, Math.PI * 2);
+      ctxLocal.fill();
+      ctxLocal.restore();
+    } else {
+      ctxLocal.fillStyle = strokeColor;
+      ctxLocal.beginPath();
+      ctxLocal.arc(firstPt[0], firstPt[1], sizeLogical / 2, 0, Math.PI * 2);
+      ctxLocal.fill();
+    }
   }
 
   function moveStrokeOn(e, targetCanvas) {
@@ -1367,12 +1395,60 @@
       return;
     }
     e.preventDefault();
+
+    // RAW DRAWING: dipingi i nuovi segmenti DIRETTAMENTE sul canvas attivo,
+    // senza buffer/snapshot. Massima fluidità su tablet. Al rilascio,
+    // redrawAll() ridipinge tutto correttamente con smoothing accurato.
     var events = (e.getCoalescedEvents && e.getCoalescedEvents()) || [e];
-    for (var i = 0; i < events.length; i++) {
-      currentStroke.points.push(pointerToPaperFor(events[i], targetCanvas));
+    var pts = currentStroke.points;
+    var ctx = __spActiveCtx;
+    if (!ctx) {
+      // Fallback: se l'active ctx non è settato, usa quello del canvas
+      ctx = (targetCanvas === drawCanvas) ? drawCtx
+          : (widget.drawCanvas === targetCanvas) ? widget.drawCtx
+          : targetCanvas.getContext('2d');
+      __spActiveCtx = ctx;
     }
-    // Frame coalescing: schedulo al prossimo RAF, non disegno qui
-    scheduleStrokeFrame();
+    if (!ctx) return;
+
+    // Setta transform per paper-space (idempotente, è ok rifarlo)
+    var sX = targetCanvas.width / PAPER_W;
+    var sY = targetCanvas.height / PAPER_H;
+    ctx.setTransform(sX, 0, 0, sY, 0, 0);
+
+    // Compositing per evidenziatore/gomma
+    var prevComp = ctx.globalCompositeOperation;
+    var prevAlpha = ctx.globalAlpha;
+    if (currentStroke.tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+    } else if (currentStroke.tool === 'highlighter') {
+      ctx.globalAlpha = currentStroke.alpha || 0.38;
+    }
+    ctx.fillStyle = currentStroke.color;
+    ctx.strokeStyle = currentStroke.color;
+    ctx.lineCap = 'round';
+
+    var halfSize = currentStroke.size / 2;
+    var prevPt = pts[pts.length - 1] || null;
+    for (var i = 0; i < events.length; i++) {
+      var pt = pointerToPaperFor(events[i], targetCanvas);
+      pts.push(pt);
+      // Disegno raw: linea da prevPt a pt, con cerchio di raccordo a pt
+      if (prevPt) {
+        ctx.beginPath();
+        ctx.lineWidth = currentStroke.size;
+        ctx.moveTo(prevPt[0], prevPt[1]);
+        ctx.lineTo(pt[0], pt[1]);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(pt[0], pt[1], halfSize, 0, Math.PI * 2);
+      ctx.fill();
+      prevPt = pt;
+    }
+
+    ctx.globalCompositeOperation = prevComp;
+    ctx.globalAlpha = prevAlpha;
   }
 
   function endStrokeOn(e) {
@@ -1659,7 +1735,7 @@
 
   // Versione CSS: incrementare quando si modifica injectStyles().
   // Se in pagina c'è un <style> con versione diversa, viene rimpiazzato.
-  var SP_STYLES_VERSION = '6-touch-none-stable';
+  var SP_STYLES_VERSION = '7-raw-drawing';
 
   function injectStyles() {
     var existing = document.getElementById('sketchPadStyles');
