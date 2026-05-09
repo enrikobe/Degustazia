@@ -476,10 +476,23 @@
   }
   function flushSaveInternal(immediate) {
     if (!dirty) return;
-    if (!openContextKey) return;
+    // Se openContextKey non è settato, prova a derivarlo dal context corrente.
+    // Necessario quando si disegna nel widget senza mai aver aperto il fullscreen.
+    var targetKey = openContextKey;
+    if (!targetKey && widget.canvas && widget.contextKey) {
+      targetKey = widget.contextKey;
+    }
+    if (!targetKey) {
+      var fallbackCtx = getCtx();
+      if (fallbackCtx) targetKey = fallbackCtx.key;
+    }
+    if (!targetKey) {
+      console.warn('[SketchPad] no context for flush, skip save');
+      return;
+    }
     var ctx = getCtx();
-    if (!ctx || ctx.key !== openContextKey) {
-      console.warn('[SketchPad] context changed before flush, skip save');
+    if (!ctx || ctx.key !== targetKey) {
+      console.warn('[SketchPad] context changed before flush, skip save', { wanted: targetKey, current: ctx && ctx.key });
       dirty = false;
       return;
     }
@@ -504,6 +517,13 @@
 
   function markDirty() {
     dirty = true;
+    // Se l'utente ha disegnato senza che openContextKey sia stato impostato
+    // (es. drawing diretto nel widget al primo accesso), lo settiamo ora
+    // dal context corrente.
+    if (!openContextKey) {
+      var c = getCtx();
+      if (c) openContextKey = c.key;
+    }
     var ind = document.getElementById('spDirtyDot');
     if (ind) ind.style.opacity = '1';
     scheduleSave();
@@ -1350,9 +1370,12 @@
       + '.sp-stage{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:24px 16px 110px;background:radial-gradient(ellipse at top,rgba(255,255,255,0.04),transparent 60%) #2a2622;touch-action:pan-y;}'
       + '.sp-paper{position:relative;margin:0 auto;background:#fdfbf7;border-radius:6px;box-shadow:0 12px 40px rgba(0,0,0,0.35),0 4px 12px rgba(0,0,0,0.2);aspect-ratio:1240/1754;overflow:hidden;touch-action:none;}'
       + '@supports not (aspect-ratio:1/1){.sp-paper{height:0;padding-top:141.45%;}}'
-      + '.sp-paper canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;}'
-      + '#spBgCanvas{z-index:1;pointer-events:none;}'
-      + '#spDrawCanvas{z-index:2;cursor:crosshair;}'
+      + '.sp-paper canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block;touch-action:none !important;}'
+      + '#spBgCanvas{z-index:1;pointer-events:none;touch-action:none !important;}'
+      + '#spDrawCanvas{z-index:2;cursor:crosshair;touch-action:none !important;}'
+      // Widget editabile in replace mode: wrap + canvas tutti con touch-action:none
+      + '#widgetCanvasWrap[data-sp-mounted="1"]{touch-action:none !important;}'
+      + '#widgetCanvasWrap[data-sp-mounted="1"] canvas{touch-action:none !important;}'
       + '.sp-paper-edge{position:absolute;inset:0;border-radius:6px;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.04);}'
       + '.sp-toolbar{position:absolute;bottom:max(14px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:rgba(36,32,28,0.92);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:8px;display:flex;gap:4px;align-items:center;box-shadow:0 14px 40px rgba(0,0,0,0.5);max-width:calc(100vw - 24px);overflow-x:auto;z-index:20;-webkit-overflow-scrolling:touch;scrollbar-width:none;}'
       + '.sp-toolbar::-webkit-scrollbar{display:none;}'
@@ -1468,12 +1491,15 @@
     paperEl = modal.querySelector('#spPaper');
     stageEl = modal.querySelector('#spStage');
 
-    // Pointer
-    drawCanvas.addEventListener('pointerdown', startStroke);
-    drawCanvas.addEventListener('pointermove', moveStroke);
+    // Pointer (passive:false così preventDefault funziona durante scroll-triggered touches)
+    drawCanvas.addEventListener('pointerdown', startStroke, { passive: false });
+    drawCanvas.addEventListener('pointermove', moveStroke, { passive: false });
     drawCanvas.addEventListener('pointerup', endStroke);
     drawCanvas.addEventListener('pointercancel', endStroke);
     drawCanvas.addEventListener('pointerleave', function(e) { if (drawing) endStroke(e); });
+    // Belt-and-suspenders: blocca anche touchmove nativi durante drawing
+    drawCanvas.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
+    drawCanvas.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
 
     // Toolbar handlers
     modal.querySelector('#spPenBtn').onclick = function() { setTool('pen'); };
@@ -1787,15 +1813,15 @@
     widget.visible = true;
     wrap.dataset.spMounted = '1';
 
-    // Pointer handlers
+    // Pointer handlers (passive:false per permettere preventDefault contro scroll page)
     dr.addEventListener('pointerdown', function(e) {
       if (modal && modal.classList.contains('sp-visible')) return; // fullscreen ha la priorità
       inputTarget = 'widget';
       startStrokeOn(e, dr);
-    });
+    }, { passive: false });
     dr.addEventListener('pointermove', function(e) {
       if (inputTarget === 'widget') moveStrokeOn(e, dr);
-    });
+    }, { passive: false });
     dr.addEventListener('pointerup', function(e) {
       if (inputTarget === 'widget') { endStrokeOn(e); inputTarget = null; }
     });
@@ -1805,6 +1831,9 @@
     dr.addEventListener('pointerleave', function(e) {
       if (drawing && inputTarget === 'widget') { endStrokeOn(e); inputTarget = null; }
     });
+    // Belt-and-suspenders: blocca touchmove nativi (iOS-safe)
+    dr.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
+    dr.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
 
     // Ridimensiona quando il widget cambia dimensione
     if (typeof ResizeObserver !== 'undefined') {
@@ -1893,17 +1922,20 @@
   // Quando il widget è in replace mode, deve seguire il cambio campione
   // anche QUANDO il fullscreen è chiuso. Aggiungiamo un poll dedicato.
   var __widgetPollLast = null, __widgetPollTimer = null;
+  var __widgetPollInited = false;
   function startWidgetSamplePoll() {
     stopWidgetSamplePoll();
-    __widgetPollLast = (typeof selectedSampleId !== 'undefined') ? selectedSampleId : null;
+    __widgetPollInited = false;
+    __widgetPollLast = null; // forziamo un primo trigger anche se selectedSampleId è già settato
     __widgetPollTimer = setInterval(function() {
       if (!widget.canvas || !isReplaceMode()) return;
       var cur = (typeof selectedSampleId !== 'undefined') ? selectedSampleId : null;
-      if (cur !== __widgetPollLast) {
-        // Salva il campione che stavamo editando, poi carica il nuovo
+      // Al primo giro o ad ogni cambio: salva il vecchio se dirty, carica il nuovo
+      if (!__widgetPollInited || cur !== __widgetPollLast) {
         if (dirty) flushSaveSyncImmediate();
         __widgetPollLast = cur;
-        loadWidgetForCurrentSample();
+        __widgetPollInited = true;
+        if (cur) loadWidgetForCurrentSample();
       }
     }, 300);
   }
